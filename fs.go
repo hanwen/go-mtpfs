@@ -16,11 +16,12 @@ type DeviceFs struct {
 	dev  *Device
 }
 
-/*
- DeviceFs is a simple filesystem interface to an MTP device. It
- should be wrapped in a Locking(Raw)FileSystem to make sure it is
- threadsafe.
+/* DeviceFs is a simple filesystem interface to an MTP device. It
+should be wrapped in a Locking(Raw)FileSystem to make sure it is
+threadsafe.  The file system assumes the device does not touch the
+storage.
 */
+
 func NewDeviceFs(d *Device) *DeviceFs {
 	root := rootNode{}
 	fs := &DeviceFs{root: &root, dev: d}
@@ -46,8 +47,8 @@ func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
 	return &folderNode{
 		fileNode: fileNode{
 			storageId: storage,
-			id: id,
-			fs: fs,
+			id:        id,
+			fs:        fs,
 		},
 	}
 }
@@ -55,17 +56,17 @@ func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
 func (fs *DeviceFs) newFile(file *File) *fileNode {
 	n := &fileNode{
 		storageId: file.StorageId(),
-		id: file.Id(),
-		file: file,
-		fs: fs,
+		id:        file.Id(),
+		file:      file,
+		fs:        fs,
 	}
-	
+
 	return n
 }
 
 type rootNode struct {
 	fuse.DefaultFsNode
-	fs  *DeviceFs
+	fs *DeviceFs
 }
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
@@ -82,11 +83,11 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 type fileNode struct {
 	fuse.DefaultFsNode
 	storageId uint32
-	id      uint32
-	file    *File
-	fs      *DeviceFs
-	dirty bool
-	
+	id        uint32
+	file      *File
+	fs        *DeviceFs
+	dirty     bool
+
 	backing string
 }
 
@@ -101,22 +102,22 @@ func (n *fileNode) send() error {
 	if !n.dirty {
 		return nil
 	}
-	
+
 	if n.backing == "" {
 		log.Panicf("sending file without backing store: %q", n.file.Name())
 	}
-	
+
 	fi, err := os.Stat(n.backing)
 	if err != nil {
 		log.Println("could not do GetAttr on close.", err)
 		return err
 	}
-	
+
 	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
-	if n.file.Id() != 0 { 
+	if n.file.Id() != 0 {
 		n.fs.dev.DeleteObject(n.file.Id())
 	}
-	
+
 	n.file.SetFilesize(uint64(fi.Size()))
 
 	f, err := os.Open(n.backing)
@@ -129,7 +130,7 @@ func (n *fileNode) send() error {
 	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
 	dt := time.Now().Sub(start)
 	log.Printf("Sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
-		dt.Nanoseconds()/1e6, 1e3 * float64(fi.Size())/float64(dt.Nanoseconds()))
+		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
 	return err
 }
@@ -140,7 +141,7 @@ func (n *fileNode) fetch() error {
 	if n.backing != "" {
 		return nil
 	}
-	
+
 	f, err := ioutil.TempFile("", "go-mtpfs")
 	if err != nil {
 		return err
@@ -148,7 +149,7 @@ func (n *fileNode) fetch() error {
 
 	defer f.Close()
 	log.Println("fetching to", f.Name())
-	
+
 	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
 	if err == nil {
 		n.backing = f.Name()
@@ -163,10 +164,10 @@ func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, co
 		return nil, fuse.ToStatus(err)
 	}
 
-	if flags & fuse.O_ANYWRITE != 0 {
+	if flags&fuse.O_ANYWRITE != 0 {
 		p := &pendingFile{
 			LoopbackFile: fuse.LoopbackFile{File: f},
-			node: n,
+			node:         n,
 		}
 		return p, fuse.OK
 	}
@@ -178,7 +179,7 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 	n.file.filesize = 0
 	if file != nil {
 		return file.Truncate(size)
-	} else if n.backing !=  "" {
+	} else if n.backing != "" {
 		return fuse.ToStatus(os.Truncate(n.backing, int64(size)))
 	}
 	return fuse.OK
@@ -210,7 +211,7 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 		// TODO - fix mtimes for directories too. 
 		return
 	}
-	
+
 	n.file.SetMtime(time.Unix(0, MtimeNs))
 	// TODO - if we have no dirty backing store, should set object property.
 	return fuse.OK
@@ -238,7 +239,7 @@ func (n *folderNode) fetch() {
 	}
 	n.files = map[string]*File{}
 	n.folders = map[string]uint32{}
-	
+
 	l := n.fs.dev.FilesAndFolders(n.storageId, n.id)
 	for _, f := range l {
 		if f.Filetype() == FILETYPE_FOLDER {
@@ -249,11 +250,10 @@ func (n *folderNode) fetch() {
 	}
 }
 
-
 func (n *folderNode) OpenDir(context *fuse.Context) (stream chan fuse.DirEntry, status fuse.Status) {
 	n.fetch()
-	
-	stream = make(chan fuse.DirEntry, len(n.folders) + len(n.files))
+
+	stream = make(chan fuse.DirEntry, len(n.folders)+len(n.files))
 	for n := range n.folders {
 		stream <- fuse.DirEntry{Name: n, Mode: fuse.S_IFDIR | 0755}
 	}
@@ -300,7 +300,7 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 	return a, f, fuse.OK
 }
 
-func (n *folderNode) Unlink(name string, c *fuse.Context) (fuse.Status) {
+func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 	n.fetch()
 	f := n.files[name]
 	if f == nil {
@@ -315,9 +315,9 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) (fuse.Status) {
 	return fuse.OK
 }
 
-func (n *folderNode) Rmdir(name string, c *fuse.Context) (fuse.Status) {
+func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	n.fetch()
-	
+
 	id := n.folders[name]
 	if id == 0 {
 		return fuse.ENOENT
@@ -348,20 +348,19 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	fn.backing = f.Name()
 	n.files[name] = fn.file
 	n.Inode().New(false, fn)
-	
+
 	p := &pendingFile{
 		LoopbackFile: fuse.LoopbackFile{File: f},
-		node: fn,
+		node:         fn,
 	}
 
 	a := &fuse.Attr{
 		Mode: fuse.S_IFREG | 0644,
 	}
 	a.SetTimes(&now, &now, &now)
-	
+
 	return p, a, fn, fuse.OK
 }
-
 
 ////////////////
 // writing files.
@@ -386,7 +385,7 @@ func (p *pendingFile) Flush() fuse.Status {
 	if !code.Ok() {
 		return code
 	}
-	
+
 	s := fuse.ToStatus(p.node.send())
 	if s == fuse.ENOSYS {
 		return fuse.EIO

@@ -1,8 +1,9 @@
 package main
+
 import (
 	"flag"
-	"log"
 	"github.com/hanwen/go-fuse/fuse"
+	"log"
 )
 
 func main() {
@@ -24,17 +25,17 @@ func main() {
 	for _, d := range devs {
 		log.Printf("device %v: ", d)
 	}
-	if len(devs) == 0 {	
+	if len(devs) == 0 {
 		log.Fatal("no device found.  Try replugging it.")
 	}
-	if len(devs) > 1 {	
+	if len(devs) > 1 {
 		log.Fatal("must have exactly one device")
 	}
-	
+
 	rdev := devs[0]
 
 	dev, err := rdev.Open()
-	if err !=  nil {
+	if err != nil {
 		log.Fatalf("rdev.open: %v", err)
 	}
 	defer dev.Release()
@@ -48,19 +49,18 @@ func main() {
 	if len(dev.ListStorage()) == 0 {
 		log.Fatalf("No storages found.  Try replugging the device or resetting its transport mode.")
 	}
-	
+
 	fs := NewDeviceFs(dev)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
-	
+
 	mount := fuse.NewMountState(rawFs)
 	if err := mount.Mount(mountpoint, nil); err != nil {
 		log.Fatalf("mount failed: %v", err)
 	}
-	
+
 	conn.Debug = *fsdebug
 	mount.Debug = *fsdebug
 	log.Println("starting FUSE.")
 	mount.Loop()
 }
-

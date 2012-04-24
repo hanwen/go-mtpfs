@@ -1,8 +1,8 @@
 package main
 
 import (
-	"log"
 	"fmt"
+	"log"
 	"reflect"
 	"time"
 	"unsafe"
@@ -12,8 +12,7 @@ import (
 // #include <libmtp.h>
 import "C"
 
-var _ = log.Println 
-
+var _ = log.Println
 
 /*
 This file has a partial cgo wrapping for libmtp, so users should
@@ -37,7 +36,7 @@ const FILETYPE_FOLDER = int(C.LIBMTP_FILETYPE_FOLDER)
 const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
 
 func (e MtpError) Error() string {
-	switch (e) {
+	switch e {
 	case C.LIBMTP_ERROR_CONNECTING:
 		return "error connecting"
 	case C.LIBMTP_ERROR_MEMORY_ALLOCATION:
@@ -66,19 +65,19 @@ func (d *RawDevice) String() string {
 		vendor = C.GoString(d.device_entry.vendor)
 	}
 	product := "unknown"
-	if d.device_entry.product != nil {	
+	if d.device_entry.product != nil {
 		product = C.GoString(d.device_entry.product)
 	}
-	
-        return fmt.Sprintf("%s: %s (%04x:%04x) @ bus %d, dev %d\n",
+
+	return fmt.Sprintf("%s: %s (%04x:%04x) @ bus %d, dev %d\n",
 		vendor, product,
-                d.device_entry.vendor_id,
-                d.device_entry.product_id,
-                d.bus_location,
-                d.devnum)
+		d.device_entry.vendor_id,
+		d.device_entry.product_id,
+		d.bus_location,
+		d.devnum)
 }
 
-func (d *Device) me() (*C.LIBMTP_mtpdevice_t) {
+func (d *Device) me() *C.LIBMTP_mtpdevice_t {
 	return (*C.LIBMTP_mtpdevice_t)(d)
 }
 
@@ -143,7 +142,7 @@ func (d *Device) FilesAndFolders(storageId uint32, parentId uint32) (files []*Fi
 
 func (d *Device) FolderList(s *DeviceStorage) (folders []*Folder) {
 	folder := C.LIBMTP_Get_Folder_List_For_Storage(d.me(), s.id)
-	for f := (*Folder)(folder); f != nil; f = (*Folder)(f.sibling) { 
+	for f := (*Folder)(folder); f != nil; f = (*Folder)(f.sibling) {
 		folders = append(folders, f)
 	}
 	return folders
@@ -244,12 +243,12 @@ func Detect() (devs []*RawDevice, err error) {
 	}
 	slice := &reflect.SliceHeader{uintptr(unsafe.Pointer(rawdevices)), int(numrawdevices), int(numrawdevices)}
 	rdevs := *(*[]RawDevice)(unsafe.Pointer(slice))
-	
+
 	for _, d := range rdevs {
 		newD := d
 		devs = append(devs, &newD)
 	}
-	
+
 	// todo dealloc rawdevices
 	return devs, nil
 }
@@ -270,4 +269,3 @@ func NewFile(id uint32, parent uint32, storage_id uint32, filename string, size 
 func (f *File) Destroy() {
 	C.LIBMTP_destroy_file_t(f.me())
 }
-
