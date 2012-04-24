@@ -27,6 +27,15 @@ type DeviceStorage C.LIBMTP_devicestorage_t
 type Folder C.LIBMTP_folder_t
 type File C.LIBMTP_file_t
 
+const NOPARENT_ID = 0xFFFFFFFF
+const DEBUG_PTP = int(C.LIBMTP_DEBUG_PTP)
+const DEBUG_PLST = int(C.LIBMTP_DEBUG_PLST)
+const DEBUG_USB = int(C.LIBMTP_DEBUG_USB)
+const DEBUG_DATA = int(C.LIBMTP_DEBUG_DATA)
+const DEBUG_ALL = int(C.LIBMTP_DEBUG_ALL)
+const FILETYPE_FOLDER = int(C.LIBMTP_FILETYPE_FOLDER)
+const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
+
 func (e MtpError) Error() string {
 	switch (e) {
 	case C.LIBMTP_ERROR_CONNECTING:
@@ -147,6 +156,10 @@ func (d *Device) ListStorage() (storages []*DeviceStorage) {
 	return
 }
 
+func (f *File) me() *C.LIBMTP_file_t {
+	return (*C.LIBMTP_file_t)(f)
+}
+
 func (d *File) StorageId() uint32 {
 	return uint32(d.storage_id)
 }
@@ -214,13 +227,6 @@ func Init() {
 	C.LIBMTP_Init()
 }
 
-const DEBUG_PTP = int(C.LIBMTP_DEBUG_PTP)
-const DEBUG_PLST = int(C.LIBMTP_DEBUG_PLST)
-const DEBUG_USB = int(C.LIBMTP_DEBUG_USB)
-const DEBUG_DATA = int(C.LIBMTP_DEBUG_DATA)
-const DEBUG_ALL = int(C.LIBMTP_DEBUG_ALL)
-const FILETYPE_FOLDER = int(C.LIBMTP_FILETYPE_FOLDER)
-
 func SetDebug(mask int) {
 	C.LIBMTP_Set_Debug(C.int(mask))
 }
@@ -261,5 +267,7 @@ func NewFile(id uint32, parent uint32, storage_id uint32, filename string, size 
 	return (*File)(f)
 }
 
+func (f *File) Destroy() {
+	C.LIBMTP_destroy_file_t(f.me())
+}
 
-const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
