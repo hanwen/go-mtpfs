@@ -8,13 +8,26 @@ import (
 	"time"
 )
 
+
 var _ = log.Println
 
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	root *RootNode
 	dev  *Device
-	backingData []string
+}
+
+/*
+ DeviceFs is a simple filesystem interface to an MTP device. It
+ should be wrapped in a Locking(Raw)FileSystem to make sure it is
+ threadsafe.
+*/
+
+func NewDeviceFs(d *Device) *DeviceFs {
+	root := RootNode{}
+	fs := &DeviceFs{root: &root, dev: d}
+	root.fs = fs
+	return fs
 }
 
 func (fs *DeviceFs) Root() fuse.FsNode {
@@ -56,18 +69,7 @@ type RootNode struct {
 	fs  *DeviceFs
 }
 
-func NewDeviceFs(d *Device) *DeviceFs {
-	root := RootNode{}
-	fs := &DeviceFs{root: &root, dev: d}
-	root.fs = fs
-	return fs
-}
 
-func (fs *DeviceFs) OnUnmount() {
-	for _, name :=  range fs.backingData {
-		os.Remove(name)
-	}
-}
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for _, s := range fs.dev.ListStorage() {
@@ -94,6 +96,12 @@ type FolderNode struct {
 	FileNode
 	files   map[string]*File
 	folders map[string]uint32
+}
+
+func (n *FolderNode) OnForget() {
+	if n.backing != "" {
+		os.Remove(n.backing)
+	}
 }
 
 func (n *FolderNode) fetch() {
@@ -135,7 +143,11 @@ func (n *FileNode) send() error {
 	}
 	defer f.Close()
 
+	start := time.Now()
 	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
+	dt := time.Now().Sub(start)
+	log.Printf("Sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
+		dt.Nanoseconds()/1e6, 1e3 * float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
 	return err
 }
@@ -154,8 +166,6 @@ func (n *FileNode) fetch() error {
 
 	defer f.Close()
 	log.Println("fetching to", f.Name())
-	
-	n.fs.backingData = append(n.fs.backingData, f.Name())
 	
 	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
 	if err == nil {
@@ -310,8 +320,8 @@ func (n *FolderNode) Create(name string, flags uint32, mode uint32, context *fus
 		file: NewFile(0, n.id, n.storageId, name,
 			0, now, FILETYPE_UNKNOWN),
 		fs: n.fs,
-		backing: f.Name(),
 	}
+	fn.backing = f.Name()
 	n.files[name] = fn.file
 	n.Inode().New(false, fn)
 	
