@@ -111,8 +111,9 @@ func (n *FileNode) send() error {
 	if !n.dirty {
 		return nil
 	}
+	
 	if n.backing == "" {
-		log.Panicf("sending file without backing store", n)
+		log.Panicf("sending file without backing store: %q", n.file.Name())
 	}
 	
 	fi, err := os.Stat(n.backing)
@@ -202,6 +203,22 @@ func (n *FileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 	}, fuse.OK
 }
 
+func (n *FileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (code fuse.Status) {
+	// Get rid of pesky messages from cp -a.
+	return fuse.OK
+}
+
+func (n *FileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context *fuse.Context) (code fuse.Status) {
+	if n.file == nil {
+		// TODO - fix mtimes for directories too. 
+		return
+	}
+	
+	n.file.SetMtime(time.Unix(0, MtimeNs))
+	// TODO - if we have no dirty backing store, should set object property.
+	return fuse.OK
+}
+
 func (n *FolderNode) OpenDir(context *fuse.Context) (stream chan fuse.DirEntry, status fuse.Status) {
 	stream = make(chan fuse.DirEntry, len(n.folders) + len(n.files))
 	for n := range n.folders {
@@ -274,6 +291,7 @@ func (n *FolderNode) Create(name string, flags uint32, mode uint32, context *fus
 		file: NewFile(0, n.id, n.storageId, name,
 			0, now, FILETYPE_UNKNOWN),
 		fs: n.fs,
+		backing: f.Name(),
 	}
 	n.files[name] = fn.file
 	n.Inode().New(false, fn)

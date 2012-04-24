@@ -144,6 +144,14 @@ func (d *File) StorageId() uint32 {
 	return uint32(d.storage_id)
 }
 
+func (f *File) Mtime() time.Time {
+	return time.Unix(int64(f.modificationdate), 0)
+}
+
+func (f *File) SetMtime(t time.Time) {
+	f.modificationdate = C.time_t(t.Unix())
+}
+
 func (f *File) SetFilesize(sz uint64) {
 	f.filesize = C.uint64_t(sz)
 }
@@ -245,5 +253,6 @@ func NewFile(id uint32, parent uint32, storage_id uint32, filename string, size 
 	f.filetype = C.LIBMTP_filetype_t(fileType)
 	return (*File)(f)
 }
+
 
 const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
