@@ -1,3 +1,7 @@
+// Copyright 2012 Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -206,7 +210,7 @@ func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 		t := n.file.Mtime()
 		if n.dirty {
 			t = fi.ModTime()
-		} 
+		}
 		a.SetTimes(&t, &t, &t)
 	} else if n.file != nil {
 		a.Size = uint64(n.file.filesize)
@@ -232,7 +236,7 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 	if n.file == nil {
 		return
 	}
-	
+
 	// Unfortunately, we can't set the modtime; it's READONLY in
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
@@ -303,7 +307,7 @@ func (n *folderNode) getChild(name string) (f *File, isFolder bool) {
 
 func (n *folderNode) basenameRename(oldName string, newName string) error {
 	file, isFolder := n.getChild(oldName)
-	
+
 	err := n.fs.dev.SetFileName(file, newName)
 	if err != nil {
 		return err
@@ -331,9 +335,9 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	}
 	fn.fetch()
 	n.fetch()
-	
+
 	if f, _ := n.getChild(newName); f != nil {
-		if fn != n { 
+		if fn != n {
 			log.Println("old folder already has child %q", newName)
 			return fuse.ENOSYS
 		} else {
@@ -344,7 +348,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	if fn != n {
 		return fuse.ENOSYS
 	}
-	
+
 	if newName != oldName {
 		err := n.basenameRename(oldName, newName)
 		if err != nil {
@@ -371,7 +375,7 @@ func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, 
 
 	if node != nil {
 		n.Inode().AddChild(name, n.Inode().New(true, node))
-		
+
 		a, s := node.GetAttr(nil, context)
 		return a, node, s
 	}
@@ -406,14 +410,14 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 	if !n.fetch() {
 		return fuse.EIO
 	}
-	
+
 	f, isFolder := n.getChild(name)
 	if f == nil {
 		return fuse.ENOENT
 	}
 	err := n.fs.dev.DeleteObject(f.Id())
 	if err != nil {
-		log.Printf("DeleteObject failed: %v", err)	
+		log.Printf("DeleteObject failed: %v", err)
 		return fuse.EIO
 	}
 	n.Inode().RmChild(name)
