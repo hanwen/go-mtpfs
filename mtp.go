@@ -1,4 +1,5 @@
 package main
+
 import (
 	"log"
 	"fmt"
@@ -12,6 +13,12 @@ import (
 import "C"
 
 var _ = log.Println 
+
+
+/*
+This file has a partial cgo wrapping for libmtp, so users should
+never have to call import "C"
+*/
 
 type Device C.LIBMTP_mtpdevice_t
 type MtpError C.LIBMTP_error_number_t

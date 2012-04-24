@@ -49,7 +49,7 @@ func main() {
 	}
 	
 	fs := NewDeviceFs(dev)
-	conn := fuse.NewFileSystemConnector(fs, nil)
+	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 	
 	mount := fuse.NewMountState(rawFs)

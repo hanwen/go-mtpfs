@@ -203,6 +203,11 @@ func (n *FileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 	}, fuse.OK
 }
 
+func (n *FileNode) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
+	// Get rid of pesky messages from cp -a.
+	return fuse.OK
+}
+
 func (n *FileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (code fuse.Status) {
 	// Get rid of pesky messages from cp -a.
 	return fuse.OK
