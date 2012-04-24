@@ -85,6 +85,7 @@ type FileNode struct {
 	id      uint32
 	file    *File
 	fs      *DeviceFs
+	dirty bool
 	
 	backing string
 }
@@ -106,6 +107,37 @@ func (n *FolderNode) fetch() {
 	}
 }
 
+func (n *FileNode) send() error {
+	if !n.dirty {
+		return nil
+	}
+	if n.backing == "" {
+		log.Panicf("sending file without backing store", n)
+	}
+	
+	fi, err := os.Stat(n.backing)
+	if err != nil {
+		log.Println("could not do GetAttr on close.", err)
+		return err
+	}
+	
+	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
+	if n.file.Id() != 0 { 
+		n.fs.dev.DeleteObject(n.file.Id())
+	}
+	
+	n.file.SetFilesize(uint64(fi.Size()))
+
+	f, err := os.Open(n.backing)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
+	n.dirty = false
+	return err
+}
 
 // PTP supports partial fetch (not exposed in libmtp), but we might as
 // well get the whole thing.
@@ -132,23 +164,38 @@ func (n *FileNode) fetch() error {
 }
 
 func (n *FileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	if flags & fuse.O_ANYWRITE != 0 {
-		return nil, fuse.EROFS
-	}
-
 	n.fetch()
-	f, err := os.Open(n.backing)
+	f, err := os.OpenFile(n.backing, int(flags), 0644)
 	if err != nil {
 		return nil, fuse.ToStatus(err)
 	}
+
+	if flags & fuse.O_ANYWRITE != 0 {
+		p := &PendingFile{
+			LoopbackFile: fuse.LoopbackFile{File: f},
+			node: n,
+		}
+		return p, fuse.OK
+	}
 	return &fuse.LoopbackFile{File: f}, fuse.OK
+}
+
+func (n *FileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
+	// TODO - setup a flush to device?
+	n.file.filesize = 0
+	if file != nil {
+		return file.Truncate(size)
+	} else if n.backing !=  "" {
+		return fuse.ToStatus(os.Truncate(n.backing, int64(size)))
+	}
+	return fuse.OK
 }
 
 func (n *FileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr, code fuse.Status) {
 	if file != nil {
 		return file.GetAttr()
 	}
-	
+	// TODO - read n.backing
 	return &fuse.Attr{
 		Mode: fuse.S_IFREG | 0644,
 		Size: uint64(n.file.filesize),
@@ -249,19 +296,31 @@ type PendingFile struct {
 	node *FileNode
 }
 
+func (p *PendingFile) Write(input *fuse.WriteIn, data []byte) (uint32, fuse.Status) {
+	p.node.dirty = true
+	return p.LoopbackFile.Write(input, data)
+}
+
+func (p *PendingFile) Truncate(size uint64) fuse.Status {
+	p.node.dirty = true
+	return p.LoopbackFile.Truncate(size)
+}
+
+
 func (p *PendingFile) Flush() fuse.Status {
-	// Send to device. Release would be better, but we want to report errors.
-	a, code := p.LoopbackFile.GetAttr()
+	code := p.LoopbackFile.Flush()
 	if !code.Ok() {
-		log.Println("could not do GetAttr on close.", code)
 		return code
 	}
 	
-	p.node.file.SetFilesize(a.Size)
-	err := p.node.fs.dev.SendFromFileDescriptor(p.node.file, p.LoopbackFile.File.Fd())
-	flushCode := p.LoopbackFile.Flush()
-	if err == nil {
-		return flushCode
+	s := fuse.ToStatus(p.node.send())
+	if s == fuse.ENOSYS {
+		return fuse.EIO
 	}
-	return fuse.ToStatus(err)
+	return s
+}
+
+func (p *PendingFile) Release() {
+	p.LoopbackFile.Release()
+	p.node.send()
 }
