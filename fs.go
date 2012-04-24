@@ -10,6 +10,7 @@ import (
 
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
+	backingDir string
 	root *rootNode
 	dev  *Device
 }
@@ -17,12 +18,12 @@ type DeviceFs struct {
 /* DeviceFs is a simple filesystem interface to an MTP device. It
 should be wrapped in a Locking(Raw)FileSystem to make sure it is
 threadsafe.  The file system assumes the device does not touch the
-storage.
-*/
+storage.  Arguments are the opened mtp device and a directory for the
+backing store. */
 
-func NewDeviceFs(d *Device) *DeviceFs {
+func NewDeviceFs(d *Device, dir string) *DeviceFs {
 	root := rootNode{}
-	fs := &DeviceFs{root: &root, dev: d}
+	fs := &DeviceFs{root: &root, dev: d, backingDir: dir}
 	root.fs = fs
 	return fs
 }
@@ -138,7 +139,7 @@ func (n *fileNode) fetch() error {
 		return nil
 	}
 
-	f, err := ioutil.TempFile("", "go-mtpfs")
+	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
 		return err
 	}
@@ -219,13 +220,6 @@ type folderNode struct {
 	fileNode
 	files   map[string]*File
 	folders map[string]uint32
-}
-
-func (n *folderNode) OnForget() {
-	n.fileNode.OnForget()
-	if n.backing != "" {
-		os.Remove(n.backing)
-	}
 }
 
 func (n *folderNode) fetch() {
@@ -328,7 +322,7 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 
 func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
 	n.fetch()
-	f, err := ioutil.TempFile("", "go-mtpfs")
+	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
 		return nil, nil, nil, fuse.ToStatus(err)
 

@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"github.com/hanwen/go-fuse/fuse"
+	"io/ioutil"
 	"log"
+	"os"
 )
 
 func main() {
@@ -50,7 +52,11 @@ func main() {
 		log.Fatalf("No storages found.  Try replugging the device or resetting its transport mode.")
 	}
 
-	fs := NewDeviceFs(dev)
+	backing, err := ioutil.TempDir("", "go-mtpfs")
+	if err != nil {
+		log.Fatalf("TempDir failed: %v", err)
+	}
+	fs := NewDeviceFs(dev, backing)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 
@@ -63,4 +69,5 @@ func main() {
 	mount.Debug = *fsdebug
 	log.Println("starting FUSE.")
 	mount.Loop()
+	os.RemoveAll(backing)
 }
