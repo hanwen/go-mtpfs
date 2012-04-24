@@ -107,23 +107,21 @@ func (n *fileNode) send() error {
 
 	fi, err := os.Stat(n.backing)
 	if err != nil {
-		log.Println("could not do GetAttr on close.", err)
+		log.Printf("could not do stat for send: %v", err)
 		return err
 	}
-
-	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
-	if n.file.Id() != 0 {
-		n.fs.dev.DeleteObject(n.file.Id())
-	}
-
-	n.file.SetFilesize(uint64(fi.Size()))
-
 	f, err := os.Open(n.backing)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
+	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
+	if n.file.Id() != 0 {
+		// Apparently, you can't overwrite things in MTP.
+		n.fs.dev.DeleteObject(n.file.Id())
+	}
+	n.file.SetFilesize(uint64(fi.Size()))
 	start := time.Now()
 	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
 	dt := time.Now().Sub(start)
