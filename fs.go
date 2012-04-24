@@ -265,6 +265,20 @@ func (n *FolderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 	return a, f, fuse.OK
 }
 
+func (n *FolderNode) Unlink(name string, c *fuse.Context) (fuse.Status) {
+	f := n.files[name]
+	if f == nil {
+		return fuse.ENOENT
+	}
+	err := n.fs.dev.DeleteObject(f.Id())
+	if err != nil {
+		return fuse.EIO
+	}
+	n.Inode().RmChild(name)
+	delete(n.files, name)
+	return fuse.OK
+}
+
 func (n *FolderNode) Rmdir(name string, c *fuse.Context) (fuse.Status) {
 	id := n.folders[name]
 	if id == 0 {
