@@ -36,16 +36,16 @@ func main() {
 	if err !=  nil {
 		log.Fatalf("rdev.open: %v", err)
 	}
-	log.Println("opened")
 	defer dev.Release()
 	dev.Reset()
-
-	name := dev.FriendlyName()
-	log.Println("Friendly name", name)
 
 	dev.GetStorage(0)
 	for _, s := range dev.ListStorage() {
 		log.Printf("storage ID %d: %s", s.Id(), s.Description())
+	}
+
+	if len(dev.ListStorage()) == 0 {
+		log.Fatalf("No storages found.  Try replugging the device or resetting its transport mode.")
 	}
 	
 	fs := NewDeviceFs(dev)
