@@ -98,10 +98,6 @@ type fileNode struct {
 	dirty bool
 }
 
-func (n *fileNode) Deletable() bool {
-	return false
-}
-
 func (n *fileNode) OnForget() {
 	if n.file != nil {
 		n.file.Destroy()
@@ -251,6 +247,11 @@ type folderNode struct {
 	fileNode
 	files   map[string]*File
 	folders map[string]*File
+}
+
+// Keep the root nodes for all device storages alive.
+func (n *folderNode) Deletable() bool {
+	return n.id != NOPARENT_ID
 }
 
 // Fetches data from device returns false on failure.
