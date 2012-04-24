@@ -2,13 +2,10 @@ package main
 import (
 	"flag"
 	"log"
-	"runtime"
 	"github.com/hanwen/go-fuse/fuse"
 )
 
 func main() {
-	runtime.LockOSThread()
-
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
 	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging")
 	flag.Parse()
@@ -27,9 +24,13 @@ func main() {
 	for _, d := range devs {
 		log.Printf("device %v: ", d)
 	}
-	if len(devs) != 1 {
+	if len(devs) == 0 {	
+		log.Fatal("no device found.  Try replugging it.")
+	}
+	if len(devs) > 1 {	
 		log.Fatal("must have exactly one device")
 	}
+	
 	rdev := devs[0]
 
 	dev, err := rdev.Open()
@@ -59,7 +60,7 @@ func main() {
 	
 	conn.Debug = *fsdebug
 	mount.Debug = *fsdebug
-	log.Println("starting FUSE loop")
+	log.Println("starting FUSE.")
 	mount.Loop()
 }
 
