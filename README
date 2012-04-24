@@ -1,0 +1,17 @@
+
+Go-mtpfs is a simple FUSE filesystem that I wrote because mtpfs was
+very unstable for me. 
+
+It will expose all storage areas of a device in the mount, and only
+reads file metadata as needed, making it mount more quickly.
+
+It has been tested on Galaxy Nexus (ICS) and Motorola Xoom (HC), with
+libmtp 1.1.3.
+
+Usage:
+
+  mkdir xoom
+  go-mtpfs xoom &
+  cp -a ~/Music/Some-Album xoom/Music/
+  fusermount -u xoom
+
