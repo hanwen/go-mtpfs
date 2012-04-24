@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-
 var _ = log.Println
 
 type DeviceFs struct {
@@ -43,12 +42,6 @@ func (fs *DeviceFs) Root() fuse.FsNode {
 	return fs.root
 }
 
-func (fs *DeviceFs) fetchNewFolder(id uint32, storage uint32) *folderNode {
-	f := fs.newFolder(id, storage)
-	f.fetch()
-	return f
-}
-
 func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
 	return &folderNode{
 		fileNode: fileNode{
@@ -56,11 +49,8 @@ func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
 			id: id,
 			fs: fs,
 		},
-		files:   map[string]*File{},
-		folders: map[string]uint32{},
 	}
 }
-
 
 func (fs *DeviceFs) newFile(file *File) *fileNode {
 	n := &fileNode{
@@ -80,11 +70,14 @@ type rootNode struct {
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for _, s := range fs.dev.ListStorage() {
-		folder := fs.fetchNewFolder(NOPARENT_ID, s.Id())
+		folder := fs.newFolder(NOPARENT_ID, s.Id())
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)
 	}
 }
+
+////////////////
+// files
 
 type fileNode struct {
 	fuse.DefaultFsNode
@@ -101,30 +94,6 @@ func (n *fileNode) OnForget() {
 	if n.file != nil {
 		n.file.Destroy()
 		n.file = nil
-	}
-}
-
-type folderNode struct {
-	fileNode
-	files   map[string]*File
-	folders map[string]uint32
-}
-
-func (n *folderNode) OnForget() {
-	n.fileNode.OnForget()
-	if n.backing != "" {
-		os.Remove(n.backing)
-	}
-}
-
-func (n *folderNode) fetch() {
-	l := n.fs.dev.FilesAndFolders(n.storageId, n.id)
-	for _, f := range l {
-		if f.Filetype() == FILETYPE_FOLDER {
-			n.folders[f.Name()] = f.Id()
-		} else {
-			n.files[f.Name()] = f
-		}
 	}
 }
 
@@ -247,7 +216,43 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 	return fuse.OK
 }
 
+//////////////////
+// folders
+
+type folderNode struct {
+	fileNode
+	files   map[string]*File
+	folders map[string]uint32
+}
+
+func (n *folderNode) OnForget() {
+	n.fileNode.OnForget()
+	if n.backing != "" {
+		os.Remove(n.backing)
+	}
+}
+
+func (n *folderNode) fetch() {
+	if n.files != nil {
+		return
+	}
+	n.files = map[string]*File{}
+	n.folders = map[string]uint32{}
+	
+	l := n.fs.dev.FilesAndFolders(n.storageId, n.id)
+	for _, f := range l {
+		if f.Filetype() == FILETYPE_FOLDER {
+			n.folders[f.Name()] = f.Id()
+		} else {
+			n.files[f.Name()] = f
+		}
+	}
+}
+
+
 func (n *folderNode) OpenDir(context *fuse.Context) (stream chan fuse.DirEntry, status fuse.Status) {
+	n.fetch()
+	
 	stream = make(chan fuse.DirEntry, len(n.folders) + len(n.files))
 	for n := range n.folders {
 		stream <- fuse.DirEntry{Name: n, Mode: fuse.S_IFDIR | 0755}
@@ -264,11 +269,12 @@ func (n *folderNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.At
 }
 
 func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
+	n.fetch()
 	f := n.files[name]
 	if f != nil {
 		node = n.fs.newFile(f)
 	} else if folderId := n.folders[name]; folderId != 0 {
-		node = n.fs.fetchNewFolder(folderId, n.storageId)
+		node = n.fs.newFolder(folderId, n.storageId)
 	}
 
 	if node != nil {
@@ -280,6 +286,7 @@ func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, 
 }
 
 func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fuse.Attr, fuse.FsNode, fuse.Status) {
+	n.fetch()
 	newId := n.fs.dev.CreateFolder(n.id, name, n.storageId)
 	if newId == 0 {
 		return nil, nil, fuse.EIO
@@ -294,6 +301,7 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 }
 
 func (n *folderNode) Unlink(name string, c *fuse.Context) (fuse.Status) {
+	n.fetch()
 	f := n.files[name]
 	if f == nil {
 		return fuse.ENOENT
@@ -308,6 +316,8 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) (fuse.Status) {
 }
 
 func (n *folderNode) Rmdir(name string, c *fuse.Context) (fuse.Status) {
+	n.fetch()
+	
 	id := n.folders[name]
 	if id == 0 {
 		return fuse.ENOENT
@@ -322,6 +332,7 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) (fuse.Status) {
 }
 
 func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
+	n.fetch()
 	f, err := ioutil.TempFile("", "go-mtpfs")
 	if err != nil {
 		return nil, nil, nil, fuse.ToStatus(err)
@@ -350,6 +361,10 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	
 	return p, a, fn, fuse.OK
 }
+
+
+////////////////
+// writing files.
 
 type pendingFile struct {
 	fuse.LoopbackFile
