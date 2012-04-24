@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-var _ = log.Println
-
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	root *rootNode
@@ -148,7 +146,6 @@ func (n *fileNode) fetch() error {
 	}
 
 	defer f.Close()
-	log.Println("fetching to", f.Name())
 
 	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
 	if err == nil {
