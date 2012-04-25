@@ -49,7 +49,7 @@ func main() {
 	}
 
 	if len(dev.ListStorage()) == 0 {
-		log.Fatalf("No storages found.  Try replugging the device or resetting its transport mode.")
+		log.Fatalf("No storages found.  Try unlocking the device.")
 	}
 
 	backing, err := ioutil.TempDir("", "go-mtpfs")
