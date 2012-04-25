@@ -34,7 +34,6 @@ TODO:
 - We leak memory given by LIBMTP.
 - Renaming
 - Something intelligent with playlists/pictures, maybe?
-- Figure out why this only works at < 10mb/s
 - Statfs?
 
 */
@@ -81,13 +80,18 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 
 type fileNode struct {
 	fuse.DefaultFsNode
+	fs        *DeviceFs
+
 	storageId uint32
 	id        uint32
-	file      *File
-	fs        *DeviceFs
-	dirty     bool
 
+	// Underlying mtp file. Maybe nil for the root of a storage.
+	file      *File
+
+	// local file containing the contents.
 	backing string
+	// If set, the backing file was changed.
+	dirty bool
 }
 
 func (n *fileNode) OnForget() {
@@ -171,8 +175,6 @@ func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, co
 }
 
 func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
-	// TODO - setup a flush to device?
-	n.file.filesize = 0
 	if file != nil {
 		return file.Truncate(size)
 	} else if n.backing != "" {
@@ -185,11 +187,25 @@ func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 	if file != nil {
 		return file.GetAttr()
 	}
-	// TODO - read n.backing
-	return &fuse.Attr{
-		Mode: fuse.S_IFREG | 0644,
-		Size: uint64(n.file.filesize),
-	}, fuse.OK
+	
+	a := &fuse.Attr{Mode: fuse.S_IFREG | 0644}
+	
+	if n.backing != "" {
+		fi, err := os.Stat(n.backing)
+		if err != nil {
+			return nil, fuse.ToStatus(err)
+		}
+		a.Size = uint64(fi.Size())
+		t := fi.ModTime()
+		a.SetTimes(&t, &t, &t)
+	} else if n.file != nil {
+		a.Size = uint64(n.file.filesize)
+
+		t := n.file.Mtime()
+		a.SetTimes(&t, &t, &t)
+	} 
+
+        return a, fuse.OK
 }
 
 func (n *fileNode) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
