@@ -35,7 +35,6 @@ const DEBUG_ALL = int(C.LIBMTP_DEBUG_ALL)
 const FILETYPE_FOLDER = int(C.LIBMTP_FILETYPE_FOLDER)
 const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
 
-
 func Init() {
 	C.LIBMTP_Init()
 }
@@ -93,7 +92,6 @@ func (r *RawDevice) Open() (*Device, error) {
 	}
 	return (*Device)(dev), nil
 }
-
 
 func (d *RawDevice) String() string {
 	vendor := "unknown"
@@ -282,4 +280,3 @@ func (d *File) Filetype() int {
 func (d *File) Name() string {
 	return C.GoString(d.filename)
 }
-

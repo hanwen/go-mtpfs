@@ -11,8 +11,8 @@ import (
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	backingDir string
-	root *rootNode
-	dev  *Device
+	root       *rootNode
+	dev        *Device
 }
 
 /* DeviceFs is a simple filesystem interface to an MTP device. It
@@ -81,13 +81,13 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 
 type fileNode struct {
 	fuse.DefaultFsNode
-	fs        *DeviceFs
+	fs *DeviceFs
 
 	storageId uint32
 	id        uint32
 
 	// Underlying mtp file. Maybe nil for the root of a storage.
-	file      *File
+	file *File
 
 	// local file containing the contents.
 	backing string
@@ -188,9 +188,9 @@ func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 	if file != nil {
 		return file.GetAttr()
 	}
-	
+
 	a := &fuse.Attr{Mode: fuse.S_IFREG | 0644}
-	
+
 	if n.backing != "" {
 		fi, err := os.Stat(n.backing)
 		if err != nil {
@@ -204,9 +204,9 @@ func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 
 		t := n.file.Mtime()
 		a.SetTimes(&t, &t, &t)
-	} 
+	}
 
-        return a, fuse.OK
+	return a, fuse.OK
 }
 
 func (n *fileNode) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
