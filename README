@@ -15,3 +15,6 @@ Usage:
   cp -a ~/Music/Some-Album xoom/Music/
   fusermount -u xoom
 
+After a file is closed (eg. if "cp" completes), it is safe to unplug
+the device; the filesystem then will continue to function, but
+generates I/O errors when it reads from or writes to the device.

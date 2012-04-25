@@ -125,7 +125,10 @@ func (n *fileNode) send() error {
 	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
 	if n.file.Id() != 0 {
 		// Apparently, you can't overwrite things in MTP.
-		n.fs.dev.DeleteObject(n.file.Id())
+		err := n.fs.dev.DeleteObject(n.file.Id())
+		if err != nil {
+			return err
+		}
 	}
 	n.file.SetFilesize(uint64(fi.Size()))
 	start := time.Now()
