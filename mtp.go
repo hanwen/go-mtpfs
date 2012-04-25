@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -20,6 +21,7 @@ never have to call import "C"
 */
 
 type Device C.LIBMTP_mtpdevice_t
+type Error C.LIBMTP_error_t
 type MtpError C.LIBMTP_error_number_t
 type RawDevice C.LIBMTP_raw_device_t
 type DeviceStorage C.LIBMTP_devicestorage_t
@@ -122,47 +124,32 @@ func (d *Device) Release() {
 	C.LIBMTP_Release_Device(d.me())
 }
 
-func (d *Device) Reset() error {
-	code := C.LIBMTP_Reset_Device(d.me())
-	if code != 0 {
-		return fmt.Errorf("reset: error")
+func (d *Device) ErrorStack() error {
+	var messages []string
+	for p := C.LIBMTP_Get_Errorstack(d.me()); p != nil; p = p.next {
+		messages = append(messages, C.GoString(p.error_text))
 	}
-
-	return nil
-}
-
-func (d *Device) ClearErrorstack() {
+	if len(messages) == 0 {
+		return nil
+	}
 	C.LIBMTP_Clear_Errorstack(d.me())
-}
-
-func (d *Device) DumpErrorstack() {
-	C.LIBMTP_Dump_Errorstack(d.me())
-}
-
-func (d *Device) FriendlyName() string {
-	n := C.LIBMTP_Get_Friendlyname(d.me())
-	if n == nil {
-		return "(null)"
-	}
-
-	// todo free n
-	return C.GoString(n)
+	return fmt.Errorf("%s", strings.Join(messages, "\n"))
 }
 
 func (d *Device) GetStorage(sortOrder int) error {
 	err := C.LIBMTP_Get_Storage(d.me(), C.int(sortOrder))
 	if err != 0 {
-		return fmt.Errorf("GetStorage: fail")
+		return d.ErrorStack()
 	}
 	return nil
 }
 
-func (d *Device) FilesAndFolders(storageId uint32, parentId uint32) (files []*File) {
+func (d *Device) FilesAndFolders(storageId uint32, parentId uint32) (files []*File, err error) {
 	file := C.LIBMTP_Get_Files_And_Folders(d.me(), C.uint32_t(storageId), C.uint32_t(parentId))
 	for f := (*File)(file); f != nil; f = (*File)(f.next) {
 		files = append(files, f)
 	}
-	return files
+	return files, d.ErrorStack()
 }
 
 func (d *Device) FolderList(s *DeviceStorage) (folders []*Folder) {
@@ -179,37 +166,39 @@ func (d *Device) ListStorage() (storages []*DeviceStorage) {
 	}
 	return
 }
-func (d *Device) Filemetadata(id uint32) *File {
-	return (*File)(C.LIBMTP_Get_Filemetadata(d.me(), C.uint32_t(id)))
+func (d *Device) Filemetadata(id uint32) (*File, error) {
+	f := (C.LIBMTP_Get_Filemetadata(d.me(), C.uint32_t(id)))
+	return (*File)(f), d.ErrorStack()
 }
 
 func (d *Device) GetFileToFileDescriptor(id uint32, fd uintptr) error {
-	errno := C.LIBMTP_Get_File_To_File_Descriptor(d.me(), C.uint32_t(id), C.int(fd), nil, nil)
-	if errno != 0 {
-		return fmt.Errorf("GetFileToFileDescriptor: error")
+	code := C.LIBMTP_Get_File_To_File_Descriptor(d.me(), C.uint32_t(id), C.int(fd), nil, nil)
+	if code != 0 {
+		return d.ErrorStack()
 	}
 
 	return nil
 }
 
 func (d *Device) SendFromFileDescriptor(file *File, fd uintptr) error {
-	errno := C.LIBMTP_Send_File_From_File_Descriptor(d.me(), C.int(fd), (*C.LIBMTP_file_t)(file), nil, nil)
-	if errno != 0 {
-		return fmt.Errorf("SendFromFileDescriptor: error")
+	code := C.LIBMTP_Send_File_From_File_Descriptor(d.me(), C.int(fd), (*C.LIBMTP_file_t)(file), nil, nil)
+	if code != 0 {
+		return d.ErrorStack()
 	}
 
 	return nil
 }
 
 // TODO should return modified name.
-func (d *Device) CreateFolder(parent uint32, name string, storage uint32) uint32 {
-	return uint32(C.LIBMTP_Create_Folder(d.me(), C.CString(name), C.uint32_t(parent), C.uint32_t(storage)))
+func (d *Device) CreateFolder(parent uint32, name string, storage uint32) (uint32, error) {
+	id := C.LIBMTP_Create_Folder(d.me(), C.CString(name), C.uint32_t(parent), C.uint32_t(storage))
+	return uint32(id), d.ErrorStack()
 }
 
 func (d *Device) DeleteObject(id uint32) error {
 	c := C.LIBMTP_Delete_Object(d.me(), C.uint32_t(id))
 	if c != 0 {
-		return fmt.Errorf("DeleteObject failed")
+		return d.ErrorStack()
 	}
 	return nil
 }

@@ -238,14 +238,19 @@ type folderNode struct {
 	folders map[string]*File
 }
 
-func (n *folderNode) fetch() {
+// Fetches data from device returns false on failure.
+func (n *folderNode) fetch() bool {
 	if n.files != nil {
-		return
+		return true
 	}
+	l, err := n.fs.dev.FilesAndFolders(n.storageId, n.id)
+	if err != nil {
+		log.Printf("FilesAndFolders failed: %v", err)
+		return false
+	}
+
 	n.files = map[string]*File{}
 	n.folders = map[string]*File{}
-
-	l := n.fs.dev.FilesAndFolders(n.storageId, n.id)
 	for _, f := range l {
 		if f.Filetype() == FILETYPE_FOLDER {
 			n.folders[f.Name()] = f
@@ -253,10 +258,13 @@ func (n *folderNode) fetch() {
 			n.files[f.Name()] = f
 		}
 	}
+	return true
 }
 
 func (n *folderNode) OpenDir(context *fuse.Context) (stream chan fuse.DirEntry, status fuse.Status) {
-	n.fetch()
+	if !n.fetch() {
+		return nil, fuse.EIO
+	}
 
 	stream = make(chan fuse.DirEntry, len(n.folders)+len(n.files))
 	for n := range n.folders {
@@ -274,7 +282,9 @@ func (n *folderNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.At
 }
 
 func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
-	n.fetch()
+	if !n.fetch() {
+		return nil, nil, fuse.EIO
+	}
 	f := n.files[name]
 	if f != nil {
 		node = n.fs.newFile(f)
@@ -293,17 +303,20 @@ func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, 
 }
 
 func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fuse.Attr, fuse.FsNode, fuse.Status) {
-	n.fetch()
-	newId := n.fs.dev.CreateFolder(n.id, name, n.storageId)
-	if newId == 0 {
+	if !n.fetch() {
+		return nil, nil, fuse.EIO
+	}
+	newId, err := n.fs.dev.CreateFolder(n.id, name, n.storageId)
+	if err != nil {
+		log.Printf("CreateFolder failed: %v", err)
 		return nil, nil, fuse.EIO
 	}
 
 	f := n.fs.newFolder(newId, n.storageId)
 	n.Inode().New(true, f)
 
-	if meta := n.fs.dev.Filemetadata(newId); meta == nil {
-		log.Println("could fetch metadata for new directory %q", name)
+	if meta, err := n.fs.dev.Filemetadata(newId); err != nil {
+		log.Printf("Filemetadata failed for directory %q: %v", name, err)
 		return nil, nil, fuse.EIO
 	} else {
 		n.folders[name] = meta
@@ -314,13 +327,16 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 }
 
 func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
-	n.fetch()
+	if !n.fetch() {
+		return fuse.EIO
+	}
 	f := n.files[name]
 	if f == nil {
 		return fuse.ENOENT
 	}
 	err := n.fs.dev.DeleteObject(f.Id())
 	if err != nil {
+		log.Printf("DeleteObject failed: %v", err)	
 		return fuse.EIO
 	}
 	n.Inode().RmChild(name)
@@ -329,7 +345,9 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 }
 
 func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
-	n.fetch()
+	if !n.fetch() {
+		return fuse.EIO
+	}
 
 	folderObj := n.folders[name]
 	if folderObj == nil {
@@ -337,6 +355,7 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	}
 	err := n.fs.dev.DeleteObject(folderObj.Id())
 	if err != nil {
+		log.Printf("DeleteObject failed: %v", err)	
 		return fuse.EIO
 	}
 	n.Inode().RmChild(name)
@@ -345,7 +364,9 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 }
 
 func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
-	n.fetch()
+	if !n.fetch() {
+		return nil, nil, nil, fuse.EIO
+	}
 	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
 		return nil, nil, nil, fuse.ToStatus(err)
