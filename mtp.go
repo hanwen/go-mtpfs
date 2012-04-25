@@ -35,6 +35,38 @@ const DEBUG_ALL = int(C.LIBMTP_DEBUG_ALL)
 const FILETYPE_FOLDER = int(C.LIBMTP_FILETYPE_FOLDER)
 const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
 
+
+func Init() {
+	C.LIBMTP_Init()
+}
+
+func SetDebug(mask int) {
+	C.LIBMTP_Set_Debug(C.int(mask))
+}
+
+func Detect() (devs []*RawDevice, err error) {
+	var rawdevices *C.LIBMTP_raw_device_t
+	var numrawdevices C.int
+
+	errno := MtpError(C.LIBMTP_Detect_Raw_Devices(&rawdevices, &numrawdevices))
+	if errno == C.LIBMTP_ERROR_NO_DEVICE_ATTACHED {
+		return nil, nil
+	}
+	if errno != C.LIBMTP_ERROR_NONE {
+		return nil, errno
+	}
+	slice := &reflect.SliceHeader{uintptr(unsafe.Pointer(rawdevices)), int(numrawdevices), int(numrawdevices)}
+	rdevs := *(*[]RawDevice)(unsafe.Pointer(slice))
+
+	for _, d := range rdevs {
+		newD := d
+		devs = append(devs, &newD)
+	}
+
+	// todo dealloc rawdevices
+	return devs, nil
+}
+
 func (e MtpError) Error() string {
 	switch e {
 	case C.LIBMTP_ERROR_CONNECTING:
@@ -47,6 +79,9 @@ func (e MtpError) Error() string {
 	return "unknown error"
 }
 
+////////////////
+// Raw devices.
+
 func (r *RawDevice) me() *C.LIBMTP_raw_device_t {
 	return (*C.LIBMTP_raw_device_t)(r)
 }
@@ -58,6 +93,7 @@ func (r *RawDevice) Open() (*Device, error) {
 	}
 	return (*Device)(dev), nil
 }
+
 
 func (d *RawDevice) String() string {
 	vendor := "unknown"
@@ -76,6 +112,9 @@ func (d *RawDevice) String() string {
 		d.bus_location,
 		d.devnum)
 }
+
+////////////////
+// Device
 
 func (d *Device) me() *C.LIBMTP_mtpdevice_t {
 	return (*C.LIBMTP_mtpdevice_t)(d)
@@ -120,18 +159,6 @@ func (d *Device) GetStorage(sortOrder int) error {
 	return nil
 }
 
-func (d *DeviceStorage) me() *C.LIBMTP_devicestorage_t {
-	return (*C.LIBMTP_devicestorage_t)(d)
-}
-
-func (d *DeviceStorage) Id() uint32 {
-	return uint32(d.me().id)
-}
-
-func (d *DeviceStorage) Description() string {
-	return C.GoString(d.StorageDescription)
-}
-
 func (d *Device) FilesAndFolders(storageId uint32, parentId uint32) (files []*File) {
 	file := C.LIBMTP_Get_Files_And_Folders(d.me(), C.uint32_t(storageId), C.uint32_t(parentId))
 	for f := (*File)(file); f != nil; f = (*File)(f.next) {
@@ -154,39 +181,6 @@ func (d *Device) ListStorage() (storages []*DeviceStorage) {
 	}
 	return
 }
-
-func (f *File) me() *C.LIBMTP_file_t {
-	return (*C.LIBMTP_file_t)(f)
-}
-
-func (d *File) StorageId() uint32 {
-	return uint32(d.storage_id)
-}
-
-func (f *File) Mtime() time.Time {
-	return time.Unix(int64(f.modificationdate), 0)
-}
-
-func (f *File) SetMtime(t time.Time) {
-	f.modificationdate = C.time_t(t.Unix())
-}
-
-func (f *File) SetFilesize(sz uint64) {
-	f.filesize = C.uint64_t(sz)
-}
-
-func (d *File) Id() uint32 {
-	return uint32(d.item_id)
-}
-
-func (d *File) Filetype() int {
-	return int(d.filetype)
-}
-
-func (d *File) Name() string {
-	return C.GoString(d.filename)
-}
-
 func (d *Device) Filemetadata(id uint32) *File {
 	return (*File)(C.LIBMTP_Get_Filemetadata(d.me(), C.uint32_t(id)))
 }
@@ -222,36 +216,23 @@ func (d *Device) DeleteObject(id uint32) error {
 	return nil
 }
 
-func Init() {
-	C.LIBMTP_Init()
+////////////////
+// DeviceStorage
+
+func (d *DeviceStorage) me() *C.LIBMTP_devicestorage_t {
+	return (*C.LIBMTP_devicestorage_t)(d)
 }
 
-func SetDebug(mask int) {
-	C.LIBMTP_Set_Debug(C.int(mask))
+func (d *DeviceStorage) Id() uint32 {
+	return uint32(d.me().id)
 }
 
-func Detect() (devs []*RawDevice, err error) {
-	var rawdevices *C.LIBMTP_raw_device_t
-	var numrawdevices C.int
-
-	errno := MtpError(C.LIBMTP_Detect_Raw_Devices(&rawdevices, &numrawdevices))
-	if errno == C.LIBMTP_ERROR_NO_DEVICE_ATTACHED {
-		return nil, nil
-	}
-	if errno != C.LIBMTP_ERROR_NONE {
-		return nil, errno
-	}
-	slice := &reflect.SliceHeader{uintptr(unsafe.Pointer(rawdevices)), int(numrawdevices), int(numrawdevices)}
-	rdevs := *(*[]RawDevice)(unsafe.Pointer(slice))
-
-	for _, d := range rdevs {
-		newD := d
-		devs = append(devs, &newD)
-	}
-
-	// todo dealloc rawdevices
-	return devs, nil
+func (d *DeviceStorage) Description() string {
+	return C.GoString(d.StorageDescription)
 }
+
+////////////////
+// Files.
 
 func NewFile(id uint32, parent uint32, storage_id uint32, filename string, size uint64,
 	mtime time.Time, fileType int) *File {
@@ -269,3 +250,36 @@ func NewFile(id uint32, parent uint32, storage_id uint32, filename string, size 
 func (f *File) Destroy() {
 	C.LIBMTP_destroy_file_t(f.me())
 }
+
+func (f *File) me() *C.LIBMTP_file_t {
+	return (*C.LIBMTP_file_t)(f)
+}
+
+func (d *File) StorageId() uint32 {
+	return uint32(d.storage_id)
+}
+
+func (f *File) Mtime() time.Time {
+	return time.Unix(int64(f.modificationdate), 0)
+}
+
+func (f *File) SetMtime(t time.Time) {
+	f.modificationdate = C.time_t(t.Unix())
+}
+
+func (f *File) SetFilesize(sz uint64) {
+	f.filesize = C.uint64_t(sz)
+}
+
+func (d *File) Id() uint32 {
+	return uint32(d.item_id)
+}
+
+func (d *File) Filetype() int {
+	return int(d.filetype)
+}
+
+func (d *File) Name() string {
+	return C.GoString(d.filename)
+}
+
