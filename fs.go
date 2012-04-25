@@ -35,6 +35,7 @@ TODO:
 - Renaming
 - Something intelligent with playlists/pictures, maybe?
 - Statfs?
+- expose properties as xattrs?
 
 */
 func (fs *DeviceFs) Root() fuse.FsNode {
@@ -220,7 +221,6 @@ func (n *fileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (c
 
 func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context *fuse.Context) (code fuse.Status) {
 	if n.file == nil {
-		// TODO - fix mtimes for directories too. 
 		return
 	}
 
@@ -235,7 +235,7 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 type folderNode struct {
 	fileNode
 	files   map[string]*File
-	folders map[string]uint32
+	folders map[string]*File
 }
 
 func (n *folderNode) fetch() {
@@ -243,12 +243,12 @@ func (n *folderNode) fetch() {
 		return
 	}
 	n.files = map[string]*File{}
-	n.folders = map[string]uint32{}
+	n.folders = map[string]*File{}
 
 	l := n.fs.dev.FilesAndFolders(n.storageId, n.id)
 	for _, f := range l {
 		if f.Filetype() == FILETYPE_FOLDER {
-			n.folders[f.Name()] = f.Id()
+			n.folders[f.Name()] = f
 		} else {
 			n.files[f.Name()] = f
 		}
@@ -278,8 +278,10 @@ func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, 
 	f := n.files[name]
 	if f != nil {
 		node = n.fs.newFile(f)
-	} else if folderId := n.folders[name]; folderId != 0 {
-		node = n.fs.newFolder(folderId, n.storageId)
+	} else if folder := n.folders[name]; folder != nil {
+		fNode := n.fs.newFolder(folder.Id(), n.storageId)
+		fNode.file = folder
+		node = fNode
 	}
 
 	if node != nil {
@@ -299,10 +301,16 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 
 	f := n.fs.newFolder(newId, n.storageId)
 	n.Inode().New(true, f)
-	n.folders[name] = newId
 
-	a := &fuse.Attr{Mode: fuse.S_IFDIR | 0755}
-	return a, f, fuse.OK
+	if meta := n.fs.dev.Filemetadata(newId); meta == nil {
+		log.Println("could fetch metadata for new directory %q", name)
+		return nil, nil, fuse.EIO
+	} else {
+		n.folders[name] = meta
+	}
+
+	a, code := f.GetAttr(nil, context)
+	return a, f, code
 }
 
 func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
@@ -323,11 +331,11 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	n.fetch()
 
-	id := n.folders[name]
-	if id == 0 {
+	folderObj := n.folders[name]
+	if folderObj == nil {
 		return fuse.ENOENT
 	}
-	err := n.fs.dev.DeleteObject(id)
+	err := n.fs.dev.DeleteObject(folderObj.Id())
 	if err != nil {
 		return fuse.EIO
 	}
