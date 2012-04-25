@@ -20,6 +20,8 @@ This file has a partial cgo wrapping for libmtp, so users should
 never have to call import "C"
 */
 
+// TODO - we leak C strings all over the place.
+	
 type Device C.LIBMTP_mtpdevice_t
 type Error C.LIBMTP_error_t
 type MtpError C.LIBMTP_error_number_t
@@ -189,10 +191,19 @@ func (d *Device) SendFromFileDescriptor(file *File, fd uintptr) error {
 	return nil
 }
 
-// TODO should return modified name.
 func (d *Device) CreateFolder(parent uint32, name string, storage uint32) (uint32, error) {
-	id := C.LIBMTP_Create_Folder(d.me(), C.CString(name), C.uint32_t(parent), C.uint32_t(storage))
+	cname := C.CString(name)
+	id := C.LIBMTP_Create_Folder(d.me(), cname, C.uint32_t(parent), C.uint32_t(storage))
+
+	if newName := C.GoString(cname); newName != name {
+		log.Println("Folder name changed to %q", newName)
+	}
 	return uint32(id), d.ErrorStack()
+}
+
+func (d *Device) SetFileName(f *File, name string) error {
+	C.LIBMTP_Set_File_Name(d.me(), f.me(), C.CString(name))
+	return d.ErrorStack()
 }
 
 func (d *Device) DeleteObject(id uint32) error {
