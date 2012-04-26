@@ -11,6 +11,7 @@ import (
 
 // #cgo LDFLAGS: -lmtp -L/usr/local/lib
 // #include <libmtp.h>
+// #include <stdlib.h>
 import "C"
 
 var _ = log.Println
@@ -198,6 +199,7 @@ func (d *Device) CreateFolder(parent uint32, name string, storage uint32) (uint3
 	if newName := C.GoString(cname); newName != name {
 		log.Println("Folder name changed to %q", newName)
 	}
+	C.free(unsafe.Pointer(cname))
 	return uint32(id), d.ErrorStack()
 }
 
@@ -217,8 +219,11 @@ func (d *Device) DeleteObject(id uint32) error {
 func (d *Device) GetStringFromObject(id uint32, prop int) (string, error) {
 	mId := C.uint32_t(id)
 	mProp := C.LIBMTP_property_t(prop)
-	result := C.LIBMTP_Get_String_From_Object(d.me(), mId,  mProp)
-	return C.GoString(result), d.ErrorStack()
+	cstr := C.LIBMTP_Get_String_From_Object(d.me(), mId,  mProp)
+	result := C.GoString(cstr)
+	C.free(unsafe.Pointer(cstr))
+
+	return result, d.ErrorStack()
 }
 
 func (d *Device) GetIntFromObject(id uint32, prop int, bits int) (uint64, error) {
