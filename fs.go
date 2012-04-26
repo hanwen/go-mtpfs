@@ -203,7 +203,10 @@ func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr
 			return nil, fuse.ToStatus(err)
 		}
 		a.Size = uint64(fi.Size())
-		t := fi.ModTime()
+		t := n.file.Mtime()
+		if n.dirty {
+			t = fi.ModTime()
+		} 
 		a.SetTimes(&t, &t, &t)
 	} else if n.file != nil {
 		a.Size = uint64(n.file.filesize)
@@ -229,10 +232,11 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 	if n.file == nil {
 		return
 	}
-
+	
+	// Unfortunately, we can't set the modtime; it's READONLY in
+	// the Android MTP implementation. We just change the time in
+	// the mount, but this is not persisted.
 	n.file.SetMtime(time.Unix(0, MtimeNs))
-	// TODO - if we have no dirty backing store, should set the
-	// object property.
 	return fuse.OK
 }
 
