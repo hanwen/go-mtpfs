@@ -1,3 +1,4 @@
+INTRODUCTION
 
 Go-mtpfs is a simple FUSE filesystem that I wrote because mtpfs was
 very unstable for me. 
@@ -8,7 +9,25 @@ reads file metadata as needed, making it mount more quickly.
 It has been tested on Galaxy Nexus (ICS) and Motorola Xoom (HC), with
 libmtp 1.1.3.
 
-Usage:
+
+COMPILATION
+
+* Install the Go compiler suite
+
+* Then run
+
+    mkdir /tmp/go 
+    export GOPATH=/tmp/go
+    go get github.com/hanwen/go-mtpfs
+
+  /tmp/go/bin/go-mtpfs will then contain the program binary.
+
+* A 32-bit linux x86 binary is at
+
+  http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
+
+
+USAGE
 
   mkdir xoom
   go-mtpfs xoom &
@@ -18,3 +37,9 @@ Usage:
 After a file is closed (eg. if "cp" completes), it is safe to unplug
 the device; the filesystem then will continue to function, but
 generates I/O errors when it reads from or writes to the device.
+
+
+FEEDBACK
+
+You can send your feedback through the issue tracker at
+https://github.com/hanwen/go-mtpfs
