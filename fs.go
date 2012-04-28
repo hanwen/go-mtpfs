@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -113,11 +114,14 @@ func (n *fileNode) send() error {
 	if n.backing == "" {
 		log.Panicf("sending file without backing store: %q", n.file.Name())
 	}
-
 	fi, err := os.Stat(n.backing)
 	if err != nil {
 		log.Printf("could not do stat for send: %v", err)
 		return err
+	}
+	if fi.Size() == 0 {
+		log.Printf("cannot send 0 byte file %q", n.file.Name())
+		return syscall.EINVAL
 	}
 	f, err := os.Open(n.backing)
 	if err != nil {
@@ -125,6 +129,9 @@ func (n *fileNode) send() error {
 	}
 	defer f.Close()
 
+	if n.file.Name() == "" {
+		return nil
+	}
 	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
 	if n.file.Id() != 0 {
 		// Apparently, you can't overwrite things in MTP.
@@ -403,10 +410,15 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 	if f == nil {
 		return fuse.ENOENT
 	}
-	err := n.fs.dev.DeleteObject(f.Id())
-	if err != nil {
-		log.Printf("DeleteObject failed: %v", err)
-		return fuse.EIO
+
+	if f.Id() != 0 {
+		err := n.fs.dev.DeleteObject(f.Id())
+		if err != nil {
+			log.Printf("DeleteObject failed: %v", err)
+			return fuse.EIO
+		}
+	} else {
+		f.SetName("")
 	}
 	n.Inode().RmChild(name)
 
@@ -433,6 +445,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		file: NewFile(0, n.id, n.storageId, name,
 			0, now, FILETYPE_UNKNOWN),
 		fs: n.fs,
+		dirty: true,
 	}
 	fn.backing = f.Name()
 	n.children[name] = fn.file

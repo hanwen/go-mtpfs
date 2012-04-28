@@ -317,3 +317,9 @@ func (d *File) Filetype() int {
 func (d *File) Name() string {
 	return C.GoString(d.filename)
 }
+
+func (f *File) SetName(n string) {
+	old := f.filename
+	C.free(unsafe.Pointer(old))
+	f.filename = C.CString(n)
+}

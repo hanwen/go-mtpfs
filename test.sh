@@ -20,6 +20,10 @@ test $(cat "$root/mtpfs-test/test.txt") == "hello"
 touch "$root/mtpfs-test/test.txt"
 echo something else > "$root/mtpfs-test/test.txt"
 
+# can't send zero bytes file.
+! touch "$root/mtpfs-test/zerobytes.txt"
+rm "$root/mtpfs-test/zerobytes.txt"
+
 mv "$root/mtpfs-test/test.txt" "$root/mtpfs-test/test2.txt"
 ! test -f  "$root/mtpfs-test/test.txt"
 test -f  "$root/mtpfs-test/test2.txt"
@@ -41,5 +45,5 @@ test -d  "$root/mtpfs-test/create"
 test -f  "$root/mtpfs-test/test2.txt"
 test -f  "$root/mtpfs-test/dest.txt"
 ! test -f  "$root/mtpfs-test/src.txt"
-
+! test -f  "$root/mtpfs-test/zerobytes.txt"
 fusermount -u $mount
