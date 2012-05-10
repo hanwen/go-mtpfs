@@ -278,21 +278,20 @@ func (n *folderNode) fetch() bool {
 	return true
 }
 
-func (n *folderNode) OpenDir(context *fuse.Context) (stream chan fuse.DirEntry, status fuse.Status) {
+func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, status fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
 
-	stream = make(chan fuse.DirEntry, len(n.children))
+	stream = make([]fuse.DirEntry, 0, len(n.children))
 	for n, f := range n.children {
 		mode := fuse.S_IFREG | 0644
 		if f.Filetype() == FILETYPE_FOLDER {
 			mode = fuse.S_IFDIR | 0755
 		}
 		
-		stream <- fuse.DirEntry{Name: n, Mode: uint32(mode)}
+		stream = append(stream, fuse.DirEntry{Name: n, Mode: uint32(mode)})
 	}
-	close(stream)
 	return stream, fuse.OK
 }
 
