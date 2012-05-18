@@ -22,7 +22,7 @@ COMPILATION
 
   /tmp/go/bin/go-mtpfs will then contain the program binary.
 
-* A 32-bit linux x86 binary is at
+* A 32 and 64-bit linux x86 binaries are at
 
   http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
 
