@@ -199,9 +199,7 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 
 func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
 	if file != nil {
-		a, c := file.GetAttr()
-		*out = *a
-		return c
+		return file.GetAttr(out)
 	}
 
 	out.Mode = fuse.S_IFREG | 0644
