@@ -197,32 +197,34 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 	return fuse.OK
 }
 
-func (n *fileNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr, code fuse.Status) {
+func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
 	if file != nil {
-		return file.GetAttr()
+		a, c := file.GetAttr()
+		*out = *a
+		return c
 	}
 
-	a := &fuse.Attr{Mode: fuse.S_IFREG | 0644}
+	out.Mode = fuse.S_IFREG | 0644
 
 	if n.backing != "" {
 		fi, err := os.Stat(n.backing)
 		if err != nil {
-			return nil, fuse.ToStatus(err)
+			return fuse.ToStatus(err)
 		}
-		a.Size = uint64(fi.Size())
+		out.Size = uint64(fi.Size())
 		t := n.file.Mtime()
 		if n.dirty {
 			t = fi.ModTime()
 		}
-		a.SetTimes(&t, &t, &t)
+		out.SetTimes(&t, &t, &t)
 	} else if n.file != nil {
-		a.Size = uint64(n.file.filesize)
+		out.Size = uint64(n.file.filesize)
 
 		t := n.file.Mtime()
-		a.SetTimes(&t, &t, &t)
+		out.SetTimes(&t, &t, &t)
 	}
 
-	return a, fuse.OK
+	return fuse.OK
 }
 
 func (n *fileNode) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
@@ -295,8 +297,9 @@ func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, sta
 	return stream, fuse.OK
 }
 
-func (n *folderNode) GetAttr(file fuse.File, context *fuse.Context) (fi *fuse.Attr, code fuse.Status) {
-	return &fuse.Attr{Mode: fuse.S_IFDIR | 0755}, fuse.OK
+func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
+	out.Mode = fuse.S_IFDIR | 0755
+	return fuse.OK
 }
 
 func (n *folderNode) getChild(name string) (*File) {
@@ -353,13 +356,13 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	return fuse.OK
 }
 
-func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
+func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node fuse.FsNode, code fuse.Status) {
 	if !n.fetch() {
-		return nil, nil, fuse.EIO
+		return nil, fuse.EIO
 	}
 	f := n.children[name]
 	if f == nil {
-		return nil, nil, fuse.ENOENT
+		return nil, fuse.ENOENT
 	}
 
 	if f.Filetype() == FILETYPE_FOLDER {
@@ -371,19 +374,18 @@ func (n *folderNode) Lookup(name string, context *fuse.Context) (fi *fuse.Attr, 
 	}
 
 	n.Inode().AddChild(name, n.Inode().New(true, node))
-
-	a, s := node.GetAttr(nil, context)
-	return a, node, s
+	s := node.GetAttr(out, nil, context)
+	return node, s
 }
 
-func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fuse.Attr, fuse.FsNode, fuse.Status) {
+func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fuse.FsNode, fuse.Status) {
 	if !n.fetch() {
-		return nil, nil, fuse.EIO
+		return nil, fuse.EIO
 	}
 	newId, err := n.fs.dev.CreateFolder(n.id, name, n.storageId)
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
-		return nil, nil, fuse.EIO
+		return nil, fuse.EIO
 	}
 
 	f := n.fs.newFolder(newId, n.storageId)
@@ -391,13 +393,11 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*fu
 
 	if meta, err := n.fs.dev.Filemetadata(newId); err != nil {
 		log.Printf("Filemetadata failed for directory %q: %v", name, err)
-		return nil, nil, fuse.EIO
+		return nil, fuse.EIO
 	} else {
 		n.children[name] = meta
 	}
-
-	a, code := f.GetAttr(nil, context)
-	return a, f, code
+	return f, fuse.OK
 }
 
 func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
@@ -429,13 +429,13 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	return n.Unlink(name, c)
 }
 
-func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, fi *fuse.Attr, node fuse.FsNode, code fuse.Status) {
+func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, node fuse.FsNode, code fuse.Status) {
 	if !n.fetch() {
-		return nil, nil, nil, fuse.EIO
+		return nil, nil, fuse.EIO
 	}
 	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
-		return nil, nil, nil, fuse.ToStatus(err)
+		return nil, nil, fuse.ToStatus(err)
 
 	}
 	now := time.Now()
@@ -455,12 +455,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		node:         fn,
 	}
 
-	a := &fuse.Attr{
-		Mode: fuse.S_IFREG | 0644,
-	}
-	a.SetTimes(&now, &now, &now)
-
-	return p, a, fn, fuse.OK
+	return p, fn, fuse.OK
 }
 
 ////////////////
