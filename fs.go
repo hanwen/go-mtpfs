@@ -289,7 +289,7 @@ func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, sta
 		if f.Filetype() == FILETYPE_FOLDER {
 			mode = fuse.S_IFDIR | 0755
 		}
-		
+
 		stream = append(stream, fuse.DirEntry{Name: n, Mode: uint32(mode)})
 	}
 	return stream, fuse.OK
@@ -464,9 +464,9 @@ type pendingFile struct {
 	node *fileNode
 }
 
-func (p *pendingFile) Write(input *fuse.WriteIn, data []byte) (uint32, fuse.Status) {
+func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	p.node.dirty = true
-	return p.LoopbackFile.Write(input, data)
+	return p.LoopbackFile.Write(data, off)
 }
 
 func (p *pendingFile) Truncate(size uint64) fuse.Status {
