@@ -38,12 +38,29 @@ TODO:
 
 - Moving between directories
 - Something intelligent with playlists/pictures, maybe?
-- Statfs?
 - expose properties as xattrs?
 
 */
 func (fs *DeviceFs) Root() fuse.FsNode {
 	return fs.root
+}
+
+func (fs *DeviceFs) statFs() *fuse.StatfsOut {
+	total := uint64(0)
+	free := uint64(0)
+	for _, s := range fs.dev.ListStorage() {
+		total += uint64(s.MaxCapacity)
+		free += uint64(s.FreeSpaceInBytes)
+	}
+	
+	bs := uint64(1024)
+
+	return &fuse.StatfsOut{
+		Bsize: uint32(bs), 
+		Blocks: total/bs,
+		Bavail: free/bs,
+		Bfree: free/bs,
+	}
 }
 
 func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
@@ -72,6 +89,10 @@ type rootNode struct {
 	fs *DeviceFs
 }
 
+func (n *rootNode) StatFs() *fuse.StatfsOut {
+	return n.fs.statFs()
+}
+
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for _, s := range fs.dev.ListStorage() {
 		folder := fs.newFolder(NOPARENT_ID, s.Id())
@@ -97,6 +118,10 @@ type fileNode struct {
 	backing string
 	// If set, the backing file was changed.
 	dirty bool
+}
+
+func (n *fileNode) StatFs() *fuse.StatfsOut {
+	return n.fs.statFs()
 }
 
 func (n *fileNode) OnForget() {
@@ -491,3 +516,5 @@ func (p *pendingFile) Release() {
 	p.LoopbackFile.Release()
 	p.node.send()
 }
+
+
