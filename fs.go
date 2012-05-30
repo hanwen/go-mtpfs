@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/hanwen/go-fuse/fuse"
 	"io/ioutil"
 	"log"
@@ -43,6 +44,10 @@ TODO:
 */
 func (fs *DeviceFs) Root() fuse.FsNode {
 	return fs.root
+}
+
+func (fs *DeviceFs) String() string {
+	return fmt.Sprintf("DeviceFs(%s)", fs.dev.ModelName())
 }
 
 func (fs *DeviceFs) statFs() *fuse.StatfsOut {

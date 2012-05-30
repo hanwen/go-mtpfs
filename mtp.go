@@ -196,6 +196,13 @@ func (d *Device) SendFromFileDescriptor(file *File, fd uintptr) error {
 	return nil
 }
 
+func (d *Device) ModelName() (name string) {
+	cname := C.LIBMTP_Get_Modelname(d.me())
+	name = C.GoString(cname)
+	C.free(unsafe.Pointer(cname))
+	return name
+}
+
 func (d *Device) CreateFolder(parent uint32, name string, storage uint32) (uint32, error) {
 	cname := C.CString(name)
 	id := C.LIBMTP_Create_Folder(d.me(), cname, C.uint32_t(parent), C.uint32_t(storage))
