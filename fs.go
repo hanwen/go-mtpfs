@@ -46,6 +46,54 @@ func (fs *DeviceFs) Root() fuse.FsNode {
 	return fs.root
 }
 
+func (fs *DeviceFs) trimUnused(todo int64, node *fuse.Inode) (done int64) {
+	for _, ch := range node.Children() {
+		if done > todo {
+			break
+		}
+
+		if fn, ok := ch.FsNode().(*fileNode); ok {
+			done += fn.trim()
+		} else if ch.IsDir() {
+			done += fs.trimUnused(todo - done, ch)
+		}
+	}
+	return
+}
+
+func (fs *DeviceFs) freeBacking() (int64, error) {
+	t := syscall.Statfs_t{}
+	err := syscall.Statfs(fs.backingDir, &t)
+	if err != nil {
+		return 0, err
+	}
+	
+	return int64(t.Bfree * uint64(t.Bsize)), nil
+}
+
+func (fs *DeviceFs) ensureFreeSpace(want int64) error {
+	free, err := fs.freeBacking()
+	if err != nil {
+		return err
+	}
+	if free > want {
+		return nil
+	}
+
+	todo := want - free + 10*1024
+	fs.trimUnused(todo, fs.root.Inode())
+	
+	free, err = fs.freeBacking()
+	if err != nil {
+		return err
+	}
+	if free > want {
+		return nil
+	}
+
+	return fmt.Errorf("not enough space. Have %d, want %d", free, want)
+}
+
 func (fs *DeviceFs) String() string {
 	return fmt.Sprintf("DeviceFs(%s)", fs.dev.ModelName())
 }
@@ -121,6 +169,7 @@ type fileNode struct {
 
 	// local file containing the contents.
 	backing string
+	
 	// If set, the backing file was changed.
 	dirty bool
 }
@@ -177,8 +226,34 @@ func (n *fileNode) send() error {
 	log.Printf("Sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
+
+	// This is a heuristic, but if doing a large copy, we want to
+	// leave space for the next file.  It would be better if
+	// userspace did fallocate and FUSE would support it.
+	n.fs.ensureFreeSpace(fi.Size())
 	return err
 }
+
+// Drop backing data if unused. Returns freed up space.
+func (n *fileNode) trim() int64 {
+	if n.dirty || n.backing == "" || n.Inode().AnyFile() != nil {
+		return 0
+	}
+	
+	fi, err := os.Stat(n.backing)
+	if err != nil {
+		return 0
+	}
+
+	log.Printf("removing local cache for %q, %d bytes", n.file.Name(), fi.Size())
+	err = os.Remove(n.backing)
+	if err != nil {
+		return 0
+	}
+	n.backing = ""
+	return fi.Size()
+}
+
 
 // PTP supports partial fetch (not exposed in libmtp), but we might as
 // well get the whole thing.
@@ -186,7 +261,11 @@ func (n *fileNode) fetch() error {
 	if n.backing != "" {
 		return nil
 	}
-
+	sz := int64(n.file.filesize)
+	if err := n.fs.ensureFreeSpace(sz); err != nil {
+		return err
+	}
+	
 	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
 		return err
@@ -194,10 +273,14 @@ func (n *fileNode) fetch() error {
 
 	defer f.Close()
 
+	start := time.Now()
 	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
 	if err == nil {
 		n.backing = f.Name()
 	}
+	dt := time.Now().Sub(start)
+	log.Printf("Fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
+		dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	return err
 }
 
