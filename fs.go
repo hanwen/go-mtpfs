@@ -172,6 +172,10 @@ type fileNode struct {
 	
 	// If set, the backing file was changed.
 	dirty bool
+
+	// If set, there was some error writing to the backing store;
+	// don't flush file to device.
+	error fuse.Status
 }
 
 func (n *fileNode) StatFs() *fuse.StatfsOut {
@@ -193,6 +197,17 @@ func (n *fileNode) send() error {
 	if n.backing == "" {
 		log.Panicf("sending file without backing store: %q", n.file.Name())
 	}
+
+	if !n.error.Ok() {
+		n.dirty = false
+		os.Remove(n.backing)
+		n.backing = ""
+		n.error = fuse.OK
+		n.file.filesize = 0
+		log.Printf("not sending file %q due to write errors", n.file.Name())
+		return fuse.EIO // TODO - send back n.error
+	}
+	
 	fi, err := os.Stat(n.backing)
 	if err != nil {
 		log.Printf("could not do stat for send: %v", err)
@@ -211,7 +226,7 @@ func (n *fileNode) send() error {
 	if n.file.Name() == "" {
 		return nil
 	}
-	log.Printf("Sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
+	log.Printf("sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
 	if n.file.Id() != 0 {
 		// Apparently, you can't overwrite things in MTP.
 		err := n.fs.dev.DeleteObject(n.file.Id())
@@ -223,7 +238,7 @@ func (n *fileNode) send() error {
 	start := time.Now()
 	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
 	dt := time.Now().Sub(start)
-	log.Printf("Sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
+	log.Printf("sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
 
@@ -279,7 +294,7 @@ func (n *fileNode) fetch() error {
 		n.backing = f.Name()
 	}
 	dt := time.Now().Sub(start)
-	log.Printf("Fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
+	log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
 		dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	return err
 }
@@ -579,12 +594,20 @@ type pendingFile struct {
 
 func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	p.node.dirty = true
-	return p.LoopbackFile.Write(data, off)
+	n, code := p.LoopbackFile.Write(data, off)
+	if !code.Ok() {
+		p.node.error = code
+	}
+	return n, code
 }
 
 func (p *pendingFile) Truncate(size uint64) fuse.Status {
 	p.node.dirty = true
-	return p.LoopbackFile.Truncate(size)
+	code := p.LoopbackFile.Truncate(size)
+	if code.Ok() && size == 0 {
+		p.node.error = fuse.OK
+	}
+	return code
 }
 
 func (p *pendingFile) Flush() fuse.Status {
