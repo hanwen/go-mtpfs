@@ -15,6 +15,7 @@ import (
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
 	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging")
+	backing := flag.String("backing-dir", "/tmp", "backing store for locally cached files.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -54,11 +55,22 @@ func main() {
 		log.Fatalf("No storages found.  Try unlocking the device.")
 	}
 
-	backing, err := ioutil.TempDir("", "go-mtpfs")
-	if err != nil {
-		log.Fatalf("TempDir failed: %v", err)
+	if *backing == "" {
+		*backing, err = ioutil.TempDir("", "go-mtpfs")
+		if err != nil {
+			log.Fatalf("TempDir failed: %v", err)
+		}
+	} else {
+		*backing = *backing + "/go-mtpfs"
+		err = os.Mkdir(*backing, 0700)
+		if err != nil {
+			log.Fatalf("Mkdir failed: %v", err)
+		}
 	}
-	fs := NewDeviceFs(dev, backing)
+	log.Println("backing data", *backing)
+	defer os.RemoveAll(*backing)
+		
+	fs := NewDeviceFs(dev, *backing)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 
@@ -71,5 +83,4 @@ func main() {
 	mount.Debug = *fsdebug
 	log.Println("starting FUSE.")
 	mount.Loop()
-	os.RemoveAll(backing)
 }
