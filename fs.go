@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -157,6 +158,23 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)
 	}
+}
+
+
+const forbidden = ":*?\"<>|"
+func SanitizeDosName(name string) string{
+	if strings.IndexAny(name, forbidden) == -1 {
+		return name
+	}
+	dest := make([]byte, len(name))
+	for _, c := range name {
+		if strings.Contains(forbidden, c) {
+			dest = append(dest, '_')
+		} else {
+			dest = append(dest, c)
+		}
+	}
+	return string(dest)
 }
 
 ////////////////
