@@ -261,6 +261,15 @@ const DateModified = C.LIBMTP_PROPERTY_DateModified
 ////////////////
 // DeviceStorage
 
+func (d *DeviceStorage) IsHierarchical() bool {
+	return d.FilesystemType == 0x02
+}
+
+func (d *DeviceStorage) IsRemovable() bool {
+	return (d.StorageType == 0x02 || // PTP_ST_RemovableROM
+		d.StorageType == 0x04) // C.PTP_ST_RemovableRAM
+}
+
 func (d *DeviceStorage) me() *C.LIBMTP_devicestorage_t {
 	return (*C.LIBMTP_devicestorage_t)(d)
 }

@@ -148,6 +148,11 @@ func (n *rootNode) StatFs() *fuse.StatfsOut {
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for _, s := range fs.dev.ListStorage() {
+		if !s.IsHierarchical() {
+			log.Printf("skipping non hierarchical storage %q", s.Description())
+			continue
+		}
+		
 		folder := fs.newFolder(NOPARENT_ID, s.Id())
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)
@@ -205,7 +210,7 @@ func (n *fileNode) send() error {
 		n.error = fuse.OK
 		n.file.filesize = 0
 		log.Printf("not sending file %q due to write errors", n.file.Name())
-		return fuse.EIO // TODO - send back n.error
+		return syscall.EIO // TODO - send back n.error
 	}
 	
 	fi, err := os.Stat(n.backing)
