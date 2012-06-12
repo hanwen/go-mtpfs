@@ -15,7 +15,7 @@ import (
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
 	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging")
-	backing := flag.String("backing-dir", "/tmp", "backing store for locally cached files.")
+	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
