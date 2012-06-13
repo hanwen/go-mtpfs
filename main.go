@@ -69,7 +69,7 @@ func main() {
 	}
 	log.Println("backing data", *backing)
 	defer os.RemoveAll(*backing)
-		
+
 	fs := NewDeviceFs(dev, *backing)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)

@@ -56,7 +56,7 @@ func (fs *DeviceFs) trimUnused(todo int64, node *fuse.Inode) (done int64) {
 		if fn, ok := ch.FsNode().(*fileNode); ok {
 			done += fn.trim()
 		} else if ch.IsDir() {
-			done += fs.trimUnused(todo - done, ch)
+			done += fs.trimUnused(todo-done, ch)
 		}
 	}
 	return
@@ -68,7 +68,7 @@ func (fs *DeviceFs) freeBacking() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return int64(t.Bfree * uint64(t.Bsize)), nil
 }
 
@@ -83,7 +83,7 @@ func (fs *DeviceFs) ensureFreeSpace(want int64) error {
 
 	todo := want - free + 10*1024
 	fs.trimUnused(todo, fs.root.Inode())
-	
+
 	free, err = fs.freeBacking()
 	if err != nil {
 		return err
@@ -106,14 +106,14 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 		total += uint64(s.MaxCapacity)
 		free += uint64(s.FreeSpaceInBytes)
 	}
-	
+
 	bs := uint64(1024)
 
 	return &fuse.StatfsOut{
-		Bsize: uint32(bs), 
-		Blocks: total/bs,
-		Bavail: free/bs,
-		Bfree: free/bs,
+		Bsize:  uint32(bs),
+		Blocks: total / bs,
+		Bavail: free / bs,
+		Bfree:  free / bs,
 	}
 }
 
@@ -121,8 +121,8 @@ func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
 	return &folderNode{
 		fileNode: fileNode{
 			storage: ds,
-			id:        id,
-			fs:        fs,
+			id:      id,
+			fs:      fs,
 		},
 	}
 }
@@ -133,9 +133,9 @@ func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
 	}
 	n := &fileNode{
 		storage: store,
-		id:        file.Id(),
-		file:      file,
-		fs:        fs,
+		id:      file.Id(),
+		file:    file,
+		fs:      fs,
 	}
 
 	return n
@@ -156,16 +156,16 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 			log.Printf("skipping non hierarchical storage %q", s.Description())
 			continue
 		}
-		
+
 		folder := fs.newFolder(NOPARENT_ID, s)
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)
 	}
 }
 
-
 const forbidden = ":*?\"<>|"
-func SanitizeDosName(name string) string{
+
+func SanitizeDosName(name string) string {
 	if strings.IndexAny(name, forbidden) == -1 {
 		return name
 	}
@@ -187,16 +187,15 @@ type fileNode struct {
 	fuse.DefaultFsNode
 	fs *DeviceFs
 
-
-	storage   *DeviceStorage
-	id        uint32
+	storage *DeviceStorage
+	id      uint32
 
 	// Underlying mtp file. Maybe nil for the root of a storage.
 	file *File
 
 	// local file containing the contents.
 	backing string
-	
+
 	// If set, the backing file was changed.
 	dirty bool
 
@@ -234,7 +233,7 @@ func (n *fileNode) send() error {
 		log.Printf("not sending file %q due to write errors", n.file.Name())
 		return syscall.EIO // TODO - send back n.error
 	}
-	
+
 	fi, err := os.Stat(n.backing)
 	if err != nil {
 		log.Printf("could not do stat for send: %v", err)
@@ -281,7 +280,7 @@ func (n *fileNode) trim() int64 {
 	if n.dirty || n.backing == "" || n.Inode().AnyFile() != nil {
 		return 0
 	}
-	
+
 	fi, err := os.Stat(n.backing)
 	if err != nil {
 		return 0
@@ -296,7 +295,6 @@ func (n *fileNode) trim() int64 {
 	return fi.Size()
 }
 
-
 // PTP supports partial fetch (not exposed in libmtp), but we might as
 // well get the whole thing.
 func (n *fileNode) fetch() error {
@@ -307,7 +305,7 @@ func (n *fileNode) fetch() error {
 	if err := n.fs.ensureFreeSpace(sz); err != nil {
 		return err
 	}
-	
+
 	f, err := ioutil.TempFile(n.fs.backingDir, "")
 	if err != nil {
 		return err
@@ -407,7 +405,7 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 
 type folderNode struct {
 	fileNode
-	children   map[string]*File
+	children map[string]*File
 }
 
 // Keep the root nodes for all device storages alive.
@@ -455,7 +453,7 @@ func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Conte
 	return fuse.OK
 }
 
-func (n *folderNode) getChild(name string) (*File) {
+func (n *folderNode) getChild(name string) *File {
 	return n.children[name]
 }
 
@@ -478,7 +476,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 }
 
 func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
-	fn, ok := newParent.(*folderNode);
+	fn, ok := newParent.(*folderNode)
 	if !ok {
 		return fuse.ENOSYS
 	}
@@ -596,7 +594,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		storage: n.storage,
 		file: NewFile(0, n.id, n.storage.Id(), name,
 			0, now, FILETYPE_UNKNOWN),
-		fs: n.fs,
+		fs:    n.fs,
 		dirty: true,
 	}
 	fn.backing = f.Name()
@@ -654,5 +652,3 @@ func (p *pendingFile) Release() {
 	p.LoopbackFile.Release()
 	p.node.send()
 }
-
-
