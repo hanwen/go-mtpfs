@@ -117,19 +117,22 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	}
 }
 
-func (fs *DeviceFs) newFolder(id uint32, storage uint32) *folderNode {
+func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
 	return &folderNode{
 		fileNode: fileNode{
-			storageId: storage,
+			storage: ds,
 			id:        id,
 			fs:        fs,
 		},
 	}
 }
 
-func (fs *DeviceFs) newFile(file *File) *fileNode {
+func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
+	if file.StorageId() != store.Id() {
+		panic("storage mismatch.")
+	}
 	n := &fileNode{
-		storageId: file.StorageId(),
+		storage: store,
 		id:        file.Id(),
 		file:      file,
 		fs:        fs,
@@ -154,7 +157,7 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 			continue
 		}
 		
-		folder := fs.newFolder(NOPARENT_ID, s.Id())
+		folder := fs.newFolder(NOPARENT_ID, s)
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)
 	}
@@ -167,8 +170,8 @@ func SanitizeDosName(name string) string{
 		return name
 	}
 	dest := make([]byte, len(name))
-	for _, c := range name {
-		if strings.Contains(forbidden, c) {
+	for _, c := range []byte(name) {
+		if strings.Contains(forbidden, string(c)) {
 			dest = append(dest, '_')
 		} else {
 			dest = append(dest, c)
@@ -184,7 +187,8 @@ type fileNode struct {
 	fuse.DefaultFsNode
 	fs *DeviceFs
 
-	storageId uint32
+
+	storage   *DeviceStorage
 	id        uint32
 
 	// Underlying mtp file. Maybe nil for the root of a storage.
@@ -416,7 +420,7 @@ func (n *folderNode) fetch() bool {
 	if n.children != nil {
 		return true
 	}
-	l, err := n.fs.dev.FilesAndFolders(n.storageId, n.id)
+	l, err := n.fs.dev.FilesAndFolders(n.storage.Id(), n.id)
 	if err != nil {
 		log.Printf("FilesAndFolders failed: %v", err)
 		return false
@@ -515,11 +519,11 @@ func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) 
 	}
 
 	if f.Filetype() == FILETYPE_FOLDER {
-		fNode := n.fs.newFolder(f.Id(), n.storageId)
+		fNode := n.fs.newFolder(f.Id(), n.storage)
 		fNode.file = f
 		node = fNode
 	} else {
-		node = n.fs.newFile(f)
+		node = n.fs.newFile(f, n.storage)
 	}
 
 	n.Inode().AddChild(name, n.Inode().New(true, node))
@@ -531,13 +535,13 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	newId, err := n.fs.dev.CreateFolder(n.id, name, n.storageId)
+	newId, err := n.fs.dev.CreateFolder(n.id, name, n.storage.Id())
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
 		return nil, fuse.EIO
 	}
 
-	f := n.fs.newFolder(newId, n.storageId)
+	f := n.fs.newFolder(newId, n.storage)
 	n.Inode().AddChild(name, n.Inode().New(true, f))
 
 	if meta, err := n.fs.dev.Filemetadata(newId); err != nil {
@@ -589,8 +593,8 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	}
 	now := time.Now()
 	fn := &fileNode{
-		storageId: n.storageId,
-		file: NewFile(0, n.id, n.storageId, name,
+		storage: n.storage,
+		file: NewFile(0, n.id, n.storage.Id(), name,
 			0, now, FILETYPE_UNKNOWN),
 		fs: n.fs,
 		dirty: true,
