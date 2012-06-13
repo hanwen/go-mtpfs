@@ -283,10 +283,13 @@ func (n *fileNode) send() error {
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
 
-	// This is a heuristic, but if doing a large copy, we want to
-	// leave space for the next file.  It would be better if
-	// userspace did fallocate and FUSE would support it.
-	n.fs.ensureFreeSpace(fi.Size())
+	// We could leave the file for future reading, but the
+	// management of free space is a hassle when doing large
+	// copies.
+	if len(n.Inode().Files(0)) == 1 {
+		os.Remove(n.backing)
+		n.backing = ""
+	}
 	return err
 }
 
