@@ -16,6 +16,7 @@ func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
 	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging")
 	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
+	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -70,7 +71,11 @@ func main() {
 	log.Println("backing data", *backing)
 	defer os.RemoveAll(*backing)
 
-	fs := NewDeviceFs(dev, *backing)
+	opts := DeviceFsOptions{
+		Dir:           *backing,
+		RemovableVFat: *vfat,
+	}
+	fs := NewDeviceFs(dev, &opts)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 

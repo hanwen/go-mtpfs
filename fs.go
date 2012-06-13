@@ -15,11 +15,18 @@ import (
 	"time"
 )
 
+type DeviceFsOptions struct {
+	Dir           string
+	RemovableVFat bool
+}
+
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	backingDir string
 	root       *rootNode
 	dev        *Device
+
+	options *DeviceFsOptions
 }
 
 /* DeviceFs is a simple filesystem interface to an MTP device. It
@@ -28,9 +35,11 @@ threadsafe.  The file system assumes the device does not touch the
 storage.  Arguments are the opened mtp device and a directory for the
 backing store. */
 
-func NewDeviceFs(d *Device, dir string) *DeviceFs {
+func NewDeviceFs(d *Device, options *DeviceFsOptions) *DeviceFs {
+	o := *options
+
 	root := rootNode{}
-	fs := &DeviceFs{root: &root, dev: d, backingDir: dir}
+	fs := &DeviceFs{root: &root, dev: d, options: &o}
 	root.fs = fs
 	return fs
 }
@@ -64,7 +73,7 @@ func (fs *DeviceFs) trimUnused(todo int64, node *fuse.Inode) (done int64) {
 
 func (fs *DeviceFs) freeBacking() (int64, error) {
 	t := syscall.Statfs_t{}
-	err := syscall.Statfs(fs.backingDir, &t)
+	err := syscall.Statfs(fs.options.Dir, &t)
 	if err != nil {
 		return 0, err
 	}
@@ -170,11 +179,11 @@ func SanitizeDosName(name string) string {
 		return name
 	}
 	dest := make([]byte, len(name))
-	for _, c := range []byte(name) {
-		if strings.Contains(forbidden, string(c)) {
-			dest = append(dest, '_')
+	for i := 0; i < len(name); i++ {
+		if strings.Contains(forbidden, string(name[i])) {
+			dest[i] = '_'
 		} else {
-			dest = append(dest, c)
+			dest[i] = name[i]
 		}
 	}
 	return string(dest)
@@ -252,6 +261,11 @@ func (n *fileNode) send() error {
 	if n.file.Name() == "" {
 		return nil
 	}
+
+	if n.storage.IsRemovable() && n.fs.options.RemovableVFat {
+		n.file.SetName(SanitizeDosName(n.file.Name()))
+	}
+
 	log.Printf("sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
 	if n.file.Id() != 0 {
 		// Apparently, you can't overwrite things in MTP.
@@ -262,6 +276,7 @@ func (n *fileNode) send() error {
 	}
 	n.file.SetFilesize(uint64(fi.Size()))
 	start := time.Now()
+
 	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
 	dt := time.Now().Sub(start)
 	log.Printf("sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
@@ -306,7 +321,7 @@ func (n *fileNode) fetch() error {
 		return err
 	}
 
-	f, err := ioutil.TempFile(n.fs.backingDir, "")
+	f, err := ioutil.TempFile(n.fs.options.Dir, "")
 	if err != nil {
 		return err
 	}
@@ -584,7 +599,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	if !n.fetch() {
 		return nil, nil, fuse.EIO
 	}
-	f, err := ioutil.TempFile(n.fs.backingDir, "")
+	f, err := ioutil.TempFile(n.fs.options.Dir, "")
 	if err != nil {
 		return nil, nil, fuse.ToStatus(err)
 
