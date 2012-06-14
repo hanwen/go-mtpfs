@@ -336,12 +336,13 @@ func (n *fileNode) fetch() error {
 	dt := time.Now().Sub(start)
 	if err == nil {
 		n.backing = f.Name()
+		n.dirty = false
 		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
 			dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	} else {
 		log.Printf("error fetching: %v", err)
 	}
-	
+
 	return err
 }
 
