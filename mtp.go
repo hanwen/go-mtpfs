@@ -332,6 +332,10 @@ func (d *File) Id() uint32 {
 	return uint32(d.item_id)
 }
 
+func (d *File) SetId(id uint32) {
+	d.item_id = C.uint32_t(id)
+}
+
 func (d *File) Filetype() int {
 	return int(d.filetype)
 }
