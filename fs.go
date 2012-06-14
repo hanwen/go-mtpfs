@@ -138,7 +138,7 @@ func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
 
 func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
 	if file.StorageId() != store.Id() {
-		panic("storage mismatch.")
+		log.Panicf("storage mismatch file %s on %d, storage %d", file.Name(), file.StorageId(), store.Id())
 	}
 	n := &fileNode{
 		storage: store,
@@ -333,12 +333,15 @@ func (n *fileNode) fetch() error {
 
 	start := time.Now()
 	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
+	dt := time.Now().Sub(start)
 	if err == nil {
 		n.backing = f.Name()
+		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
+			dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
+	} else {
+		log.Printf("error fetching: %v", err)
 	}
-	dt := time.Now().Sub(start)
-	log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
-		dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
+	
 	return err
 }
 
