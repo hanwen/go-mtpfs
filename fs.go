@@ -342,13 +342,17 @@ func (n *fileNode) fetch() error {
 			dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	} else {
 		log.Printf("error fetching: %v", err)
+		err = syscall.EIO
 	}
 
 	return err
 }
 
 func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	n.fetch()
+	err := n.fetch()
+	if err != nil {
+		return nil, fuse.ToStatus(err)
+	}
 	f, err := os.OpenFile(n.backing, int(flags), 0644)
 	if err != nil {
 		return nil, fuse.ToStatus(err)
