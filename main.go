@@ -14,7 +14,7 @@ import (
 
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
-	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging")
+	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging. 1=PTP, 2=PLST, 4=USB, 8=DATA")
 	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	flag.Parse()
