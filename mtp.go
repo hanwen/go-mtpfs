@@ -46,6 +46,11 @@ const FILETYPE_UNKNOWN = C.LIBMTP_FILETYPE_UNKNOWN
 
 func Init() {
 	C.LIBMTP_Init()
+	log.Printf("compiled against libmtp %s", MtpVersion())
+}
+
+func MtpVersion() string {
+	return C.LIBMTP_VERSION_STRING
 }
 
 func SetDebug(mask int) {
