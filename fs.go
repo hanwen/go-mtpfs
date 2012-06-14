@@ -138,7 +138,7 @@ func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
 
 func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
 	if file.StorageId() != store.Id() {
-		log.Logf("storage mismatch file %s on %d, parent storage %d",
+		log.Printf("storage mismatch file %s on %d, parent storage %d",
 			file.Name(), file.StorageId(), store.Id())
 	}
 	n := &fileNode{
