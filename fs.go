@@ -453,7 +453,7 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 
 type folderNode struct {
 	fileNode
-	children map[string]*File
+	fetched bool
 }
 
 // Keep the root nodes for all device storages alive.
@@ -463,19 +463,31 @@ func (n *folderNode) Deletable() bool {
 
 // Fetches data from device returns false on failure.
 func (n *folderNode) fetch() bool {
-	if n.children != nil {
+	if n.fetched {
 		return true
 	}
+
 	l, err := n.fs.dev.FilesAndFolders(n.storage.Id(), n.Id())
 	if err != nil {
 		log.Printf("FilesAndFolders failed: %v", err)
 		return false
 	}
 
-	n.children = map[string]*File{}
 	for _, f := range l {
-		n.children[f.Name()] = f
+		var node fuse.FsNode
+		isdir := f.Filetype() == FILETYPE_FOLDER
+		if isdir {
+			fNode := n.fs.newFolder(f.Id(), n.storage)
+			fNode.fileFolder = f
+			node = fNode
+		} else {
+			node = n.fs.newFile(f, n.storage)
+		}
+
+		n.Inode().AddChild(f.Name(), n.Inode().New(isdir, node))
 	}
+
+	n.fetched = true
 	return true
 }
 
@@ -484,16 +496,7 @@ func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, sta
 		return nil, fuse.EIO
 	}
 
-	stream = make([]fuse.DirEntry, 0, len(n.children))
-	for n, f := range n.children {
-		mode := fuse.S_IFREG | 0644
-		if f.Filetype() == FILETYPE_FOLDER {
-			mode = fuse.S_IFDIR | 0755
-		}
-
-		stream = append(stream, fuse.DirEntry{Name: n, Mode: uint32(mode)})
-	}
-	return stream, fuse.OK
+	return n.DefaultFsNode.OpenDir(context)
 }
 
 func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
@@ -501,24 +504,26 @@ func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Conte
 	return fuse.OK
 }
 
-func (n *folderNode) getChild(name string) *File {
-	return n.children[name]
+func mtpFile(n *fuse.Inode) *File {
+	switch f := n.FsNode().(type) {
+	case *fileNode:
+		return f.File()
+	case *folderNode:
+		return f.File()
+	}
+	return nil
 }
 
 func (n *folderNode) basenameRename(oldName string, newName string) error {
-	file := n.getChild(oldName)
+	ch := n.Inode().GetChild(oldName)
 
-	err := n.fs.dev.SetFileName(file, newName)
+	mFile := mtpFile(ch)
+	err := n.fs.dev.SetFileName(mFile, newName)
 	if err != nil {
 		return err
 	}
 
-	delete(n.children, oldName)
-	n.children[newName] = file
-	ch := n.Inode().RmChild(oldName)
-	if ch == nil {
-		log.Panicf("child is not there for %q: got %v", oldName, n.Inode().Children())
-	}
+	n.Inode().RmChild(oldName)
 	n.Inode().AddChild(newName, ch)
 	return nil
 }
@@ -531,7 +536,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	fn.fetch()
 	n.fetch()
 
-	if f := n.getChild(newName); f != nil {
+	if f := n.Inode().GetChild(newName); f != nil {
 		if fn != n {
 			// TODO - delete destination?
 			log.Println("old folder already has child %q", newName)
@@ -560,22 +565,13 @@ func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) 
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	f := n.children[name]
-	if f == nil {
+	ch := n.Inode().GetChild(name)
+	if ch == nil {
 		return nil, fuse.ENOENT
 	}
 
-	if f.Filetype() == FILETYPE_FOLDER {
-		fNode := n.fs.newFolder(f.Id(), n.storage)
-		fNode.fileFolder = f
-		node = fNode
-	} else {
-		node = n.fs.newFile(f, n.storage)
-	}
-
-	n.Inode().AddChild(name, n.Inode().New(true, node))
-	s := node.GetAttr(out, nil, context)
-	return node, s
+	s := ch.FsNode().GetAttr(out, nil, context)
+	return ch.FsNode(), s
 }
 
 func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fuse.FsNode, fuse.Status) {
@@ -595,8 +591,9 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 		log.Printf("Filemetadata failed for directory %q: %v", name, err)
 		return nil, fuse.EIO
 	} else {
-		n.children[name] = meta
+		f.fileFolder = meta
 	}
+
 	return f, fuse.OK
 }
 
@@ -605,11 +602,12 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 		return fuse.EIO
 	}
 
-	f := n.getChild(name)
-	if f == nil {
+	ch := n.Inode().GetChild(name)
+	if ch == nil {
 		return fuse.ENOENT
 	}
 
+	f := mtpFile(ch)
 	if f.Id() != 0 {
 		err := n.fs.dev.DeleteObject(f.Id())
 		if err != nil {
@@ -620,8 +618,6 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 		f.SetName("")
 	}
 	n.Inode().RmChild(name)
-
-	delete(n.children, name)
 	return fuse.OK
 }
 
@@ -648,7 +644,6 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		dirty:      true,
 	}
 	fn.backing = f.Name()
-	n.children[name] = mtpFile
 	n.Inode().AddChild(name, n.Inode().New(false, fn))
 
 	p := &pendingFile{
