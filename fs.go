@@ -518,11 +518,14 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 	ch := n.Inode().GetChild(oldName)
 
 	mFile := mtpFile(ch)
-	err := n.fs.dev.SetFileName(mFile, newName)
-	if err != nil {
-		return err
-	}
 
+	if mFile.Id() != 0 {
+		// Only rename on device if it was sent already.
+		err := n.fs.dev.SetFileName(mFile, newName)
+		if err != nil {
+			return err
+		}
+	}
 	n.Inode().RmChild(oldName)
 	n.Inode().AddChild(newName, ch)
 	return nil
