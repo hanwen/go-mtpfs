@@ -129,9 +129,9 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
 	return &folderNode{
 		fileNode: fileNode{
-			storage: ds,
-			id:      id,
-			fs:      fs,
+			storage:    ds,
+			fileFolder: &folder{id},
+			fs:         fs,
 		},
 	}
 }
@@ -142,10 +142,9 @@ func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
 			file.Name(), file.StorageId(), store.Id())
 	}
 	n := &fileNode{
-		storage: store,
-		id:      file.Id(),
-		file:    file,
-		fs:      fs,
+		storage:    store,
+		fileFolder: file,
+		fs:         fs,
 	}
 
 	return n
@@ -193,15 +192,18 @@ func SanitizeDosName(name string) string {
 ////////////////
 // files
 
+type folder struct {
+	id uint32
+}
+
 type fileNode struct {
 	fuse.DefaultFsNode
 	fs *DeviceFs
 
 	storage *DeviceStorage
-	id      uint32
 
-	// Underlying mtp file. Maybe nil for the root of a storage.
-	file *File
+        // mtp *File (for files) or a *folder.
+	fileFolder interface{}
 
 	// local file containing the contents.
 	backing string
@@ -214,14 +216,29 @@ type fileNode struct {
 	error fuse.Status
 }
 
+func (n *fileNode) File() *File {
+	f, _ := n.fileFolder.(*File)
+	return f
+}
+
+func (n *fileNode) Id() uint32 {
+	f, ok := n.fileFolder.(*File)
+	if ok {
+		return f.Id()
+	}
+
+	folder := n.fileFolder.(*folder)
+	return folder.id
+}
+
 func (n *fileNode) StatFs() *fuse.StatfsOut {
 	return n.fs.statFs()
 }
 
 func (n *fileNode) OnForget() {
-	if n.file != nil {
-		n.file.Destroy()
-		n.file = nil
+	if n.File() != nil {
+		n.File().Destroy()
+		n.fileFolder = nil
 	}
 }
 
@@ -230,8 +247,9 @@ func (n *fileNode) send() error {
 		return nil
 	}
 
+	f := n.File()
 	if n.backing == "" {
-		log.Panicf("sending file without backing store: %q", n.file.Name())
+		log.Panicf("sending file without backing store: %q", f.Name())
 	}
 
 	if !n.error.Ok() {
@@ -239,8 +257,8 @@ func (n *fileNode) send() error {
 		os.Remove(n.backing)
 		n.backing = ""
 		n.error = fuse.OK
-		n.file.filesize = 0
-		log.Printf("not sending file %q due to write errors", n.file.Name())
+		f.filesize = 0
+		log.Printf("not sending file %q due to write errors", f.Name())
 		return syscall.EIO // TODO - send back n.error
 	}
 
@@ -250,35 +268,38 @@ func (n *fileNode) send() error {
 		return err
 	}
 	if fi.Size() == 0 {
-		log.Printf("cannot send 0 byte file %q", n.file.Name())
+		log.Printf("cannot send 0 byte file %q", f.Name())
 		return syscall.EINVAL
 	}
-	f, err := os.Open(n.backing)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
-	if n.file.Name() == "" {
+	if f.Name() == "" {
 		return nil
 	}
 
 	if n.storage.IsRemovable() && n.fs.options.RemovableVFat {
-		n.file.SetName(SanitizeDosName(n.file.Name()))
+		f.SetName(SanitizeDosName(f.Name()))
 	}
 
-	log.Printf("sending file %q to device: %d bytes.", n.file.Name(), fi.Size())
-	if n.file.Id() != 0 {
+	backing, err := os.Open(n.backing)
+	if err != nil {
+		return err
+	}
+	defer backing.Close()
+
+	log.Printf("sending file %q to device: %d bytes.", f.Name(), fi.Size())
+	if id := f.Id(); id != 0 {
 		// Apparently, you can't overwrite things in MTP.
-		err := n.fs.dev.DeleteObject(n.file.Id())
+		err := n.fs.dev.DeleteObject(id)
 		if err != nil {
 			return err
 		}
+		f.SetId(0)
 	}
-	n.file.SetFilesize(uint64(fi.Size()))
+
+	f.SetFilesize(uint64(fi.Size()))
 	start := time.Now()
 
-	err = n.fs.dev.SendFromFileDescriptor(n.file, f.Fd())
+	err = n.fs.dev.SendFromFileDescriptor(f, backing.Fd())
 	dt := time.Now().Sub(start)
 	log.Printf("sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
@@ -305,7 +326,7 @@ func (n *fileNode) trim() int64 {
 		return 0
 	}
 
-	log.Printf("removing local cache for %q, %d bytes", n.file.Name(), fi.Size())
+	log.Printf("removing local cache for %q, %d bytes", n.File().Name(), fi.Size())
 	err = os.Remove(n.backing)
 	if err != nil {
 		return 0
@@ -320,7 +341,7 @@ func (n *fileNode) fetch() error {
 	if n.backing != "" {
 		return nil
 	}
-	sz := int64(n.file.filesize)
+	sz := int64(n.File().filesize)
 	if err := n.fs.ensureFreeSpace(sz); err != nil {
 		return err
 	}
@@ -333,12 +354,12 @@ func (n *fileNode) fetch() error {
 	defer f.Close()
 
 	start := time.Now()
-	err = n.fs.dev.GetFileToFileDescriptor(n.id, f.Fd())
+	err = n.fs.dev.GetFileToFileDescriptor(n.Id(), f.Fd())
 	dt := time.Now().Sub(start)
 	if err == nil {
 		n.backing = f.Name()
 		n.dirty = false
-		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.file.Name(), sz,
+		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.File().Name(), sz,
 			dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	} else {
 		log.Printf("error fetching: %v", err)
@@ -383,22 +404,22 @@ func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context
 	}
 
 	out.Mode = fuse.S_IFREG | 0644
-
+	f := n.File()
 	if n.backing != "" {
 		fi, err := os.Stat(n.backing)
 		if err != nil {
 			return fuse.ToStatus(err)
 		}
 		out.Size = uint64(fi.Size())
-		t := n.file.Mtime()
+		t := f.Mtime()
 		if n.dirty {
 			t = fi.ModTime()
 		}
 		out.SetTimes(&t, &t, &t)
-	} else if n.file != nil {
-		out.Size = uint64(n.file.filesize)
+	} else if f != nil {
+		out.Size = uint64(f.filesize)
 
-		t := n.file.Mtime()
+		t := f.Mtime()
 		out.SetTimes(&t, &t, &t)
 	}
 
@@ -416,14 +437,14 @@ func (n *fileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (c
 }
 
 func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context *fuse.Context) (code fuse.Status) {
-	if n.file == nil {
+	if n.File() == nil {
 		return
 	}
 
 	// Unfortunately, we can't set the modtime; it's READONLY in
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
-	n.file.SetMtime(time.Unix(0, MtimeNs))
+	n.File().SetMtime(time.Unix(0, MtimeNs))
 	return fuse.OK
 }
 
@@ -437,7 +458,7 @@ type folderNode struct {
 
 // Keep the root nodes for all device storages alive.
 func (n *folderNode) Deletable() bool {
-	return n.id != NOPARENT_ID
+	return n.Id() != NOPARENT_ID
 }
 
 // Fetches data from device returns false on failure.
@@ -445,7 +466,7 @@ func (n *folderNode) fetch() bool {
 	if n.children != nil {
 		return true
 	}
-	l, err := n.fs.dev.FilesAndFolders(n.storage.Id(), n.id)
+	l, err := n.fs.dev.FilesAndFolders(n.storage.Id(), n.Id())
 	if err != nil {
 		log.Printf("FilesAndFolders failed: %v", err)
 		return false
@@ -512,6 +533,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 
 	if f := n.getChild(newName); f != nil {
 		if fn != n {
+			// TODO - delete destination?
 			log.Println("old folder already has child %q", newName)
 			return fuse.ENOSYS
 		} else {
@@ -545,7 +567,7 @@ func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) 
 
 	if f.Filetype() == FILETYPE_FOLDER {
 		fNode := n.fs.newFolder(f.Id(), n.storage)
-		fNode.file = f
+		fNode.fileFolder = f
 		node = fNode
 	} else {
 		node = n.fs.newFile(f, n.storage)
@@ -560,7 +582,7 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	newId, err := n.fs.dev.CreateFolder(n.id, name, n.storage.Id())
+	newId, err := n.fs.dev.CreateFolder(n.Id(), name, n.storage.Id())
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
 		return nil, fuse.EIO
@@ -617,15 +639,16 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 
 	}
 	now := time.Now()
+
+	mtpFile := NewFile(0, n.Id(), n.storage.Id(), name, 0, now, FILETYPE_UNKNOWN)
 	fn := &fileNode{
-		storage: n.storage,
-		file: NewFile(0, n.id, n.storage.Id(), name,
-			0, now, FILETYPE_UNKNOWN),
-		fs:    n.fs,
-		dirty: true,
+		storage:    n.storage,
+		fileFolder: mtpFile,
+		fs:         n.fs,
+		dirty:      true,
 	}
 	fn.backing = f.Name()
-	n.children[name] = fn.file
+	n.children[name] = mtpFile
 	n.Inode().AddChild(name, n.Inode().New(false, fn))
 
 	p := &pendingFile{

@@ -3,6 +3,7 @@
 set -eux
 storage="Internal Storage"
 mount=$(mktemp -d)
+localfile=$(mktemp)
 root="$mount/$storage"
 delay="sleep 2"
 ./go-mtpfs -fs-debug $mount &
@@ -34,6 +35,10 @@ mv "$root/mtpfs-test/src.txt" "$root/mtpfs-test/dest.txt"
 test -f  "$root/mtpfs-test/dest.txt"
 ! test -f  "$root/mtpfs-test/src.txt"
 
+echo hoi > $localfile
+cp $localfile "$root/mtpfs-test/double-copy.txt"
+cp $localfile "$root/mtpfs-test/double-copy.txt"
+
 fusermount -u $mount
 
 ./go-mtpfs $mount &
@@ -46,4 +51,8 @@ test -f  "$root/mtpfs-test/test2.txt"
 test -f  "$root/mtpfs-test/dest.txt"
 ! test -f  "$root/mtpfs-test/src.txt"
 ! test -f  "$root/mtpfs-test/zerobytes.txt"
+rm "$root/mtpfs-test/double-copy.txt"
+
 fusermount -u $mount
+
+echo PASS
