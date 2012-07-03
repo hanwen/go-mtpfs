@@ -213,7 +213,7 @@ func (d *Device) CreateFolder(parent uint32, name string, storage uint32) (uint3
 	id := C.LIBMTP_Create_Folder(d.me(), cname, C.uint32_t(parent), C.uint32_t(storage))
 
 	if newName := C.GoString(cname); newName != name {
-		log.Println("Folder name changed to %q", newName)
+		log.Printf("Folder name changed to %q", newName)
 	}
 	C.free(unsafe.Pointer(cname))
 	return uint32(id), d.ErrorStack()

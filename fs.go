@@ -542,7 +542,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	if f := n.Inode().GetChild(newName); f != nil {
 		if fn != n {
 			// TODO - delete destination?
-			log.Println("old folder already has child %q", newName)
+			log.Printf("old folder already has child %q", newName)
 			return fuse.ENOSYS
 		} else {
 			// does mtp overwrite the destination?
