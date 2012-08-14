@@ -17,6 +17,7 @@ func main() {
 	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging. 1=PTP, 2=PLST, 4=USB, 8=DATA")
 	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
+    other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -80,7 +81,10 @@ func main() {
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 
 	mount := fuse.NewMountState(rawFs)
-	if err := mount.Mount(mountpoint, nil); err != nil {
+    mOpts := &fuse.MountOptions{
+        AllowOther: *other,
+    }
+    if err := mount.Mount(mountpoint, mOpts); err != nil {
 		log.Fatalf("mount failed: %v", err)
 	}
 
