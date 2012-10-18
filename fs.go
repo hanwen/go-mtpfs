@@ -6,13 +6,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/hanwen/go-fuse/fuse"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/hanwen/go-fuse/fuse"
 )
 
 type DeviceFsOptions struct {

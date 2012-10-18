@@ -6,10 +6,11 @@ package main
 
 import (
 	"flag"
-	"github.com/hanwen/go-fuse/fuse"
 	"io/ioutil"
 	"log"
 	"os"
+
+	"github.com/hanwen/go-fuse/fuse"
 )
 
 func main() {
