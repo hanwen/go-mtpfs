@@ -202,7 +202,7 @@ type fileNode struct {
 
 	storage *DeviceStorage
 
-        // mtp *File (for files) or a *folder.
+	// mtp *File (for files) or a *folder.
 	fileFolder interface{}
 
 	// local file containing the contents.
