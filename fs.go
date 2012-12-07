@@ -437,7 +437,7 @@ func (n *fileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (c
 	return fuse.OK
 }
 
-func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context *fuse.Context) (code fuse.Status) {
+func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
 	if n.File() == nil {
 		return
 	}
@@ -445,7 +445,9 @@ func (n *fileNode) Utimens(file fuse.File, AtimeNs int64, MtimeNs int64, context
 	// Unfortunately, we can't set the modtime; it's READONLY in
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
-	n.File().SetMtime(time.Unix(0, MtimeNs))
+	if mTime != nil {
+		n.File().SetMtime(*mTime)
+	}
 	return fuse.OK
 }
 
