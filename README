@@ -12,7 +12,13 @@ libmtp 1.1.3.
 
 COMPILATION
 
-* Install the Go compiler suite
+* Install the Go compiler suite; e.g. on Ubuntu:
+
+    sudo apt-get install golang-go
+
+* Install libmtp header files
+
+    sudo apt-get install libmtp-dev
 
 * Then run
 
