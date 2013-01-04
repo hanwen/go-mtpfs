@@ -26,22 +26,24 @@ type DeviceFs struct {
 	backingDir string
 	root       *rootNode
 	dev        *Device
+	storages   []*DeviceStorage
 
 	options *DeviceFsOptions
 }
 
-/* DeviceFs is a simple filesystem interface to an MTP device. It
-should be wrapped in a Locking(Raw)FileSystem to make sure it is
-threadsafe.  The file system assumes the device does not touch the
-storage.  Arguments are the opened mtp device and a directory for the
-backing store. */
-
-func NewDeviceFs(d *Device, options *DeviceFsOptions) *DeviceFs {
-	o := *options
+// DeviceFs is a simple filesystem interface to an MTP device. It
+// should be wrapped in a Locking(Raw)FileSystem to make sure it is
+// threadsafe.  The file system assumes the device does not touch the
+// storage.  Arguments are the opened mtp device and a directory for the
+// backing store. 
+func NewDeviceFs(d *Device, storages []*DeviceStorage, options DeviceFsOptions) *DeviceFs {
+	o := options
 
 	root := rootNode{}
 	fs := &DeviceFs{root: &root, dev: d, options: &o}
 	root.fs = fs
+
+	fs.storages = storages
 	return fs
 }
 
@@ -109,10 +111,11 @@ func (fs *DeviceFs) String() string {
 	return fmt.Sprintf("DeviceFs(%s)", fs.dev.ModelName())
 }
 
+
 func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
-	for _, s := range fs.dev.ListStorage() {
+	for _, s := range fs.storages {
 		total += uint64(s.MaxCapacity)
 		free += uint64(s.FreeSpaceInBytes)
 	}
@@ -161,12 +164,7 @@ func (n *rootNode) StatFs() *fuse.StatfsOut {
 }
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
-	for _, s := range fs.dev.ListStorage() {
-		if !s.IsHierarchical() {
-			log.Printf("skipping non hierarchical storage %q", s.Description())
-			continue
-		}
-
+	for _, s := range fs.storages {
 		folder := fs.newFolder(NOPARENT_ID, s)
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.Description(), inode)

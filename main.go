@@ -21,6 +21,7 @@ func main() {
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
+	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -59,23 +60,54 @@ func main() {
 		log.Fatal("no device found.  Try replugging it.")
 	}
 	if len(devs) > 1 {
-		log.Fatal("must have exactly one device")
+		log.Fatal("must have exactly one device. Try using -dev")
 	}
 
 	rdev := devs[0]
 
 	dev, err := rdev.Open()
 	if err != nil {
-		log.Fatalf("rdev.open: %v", err)
+		log.Fatalf("rdev.open failed: %v", err)
 	}
 	defer dev.Release()
 	dev.GetStorage(0)
-	for _, s := range dev.ListStorage() {
-		log.Printf("storage ID %d: %s", s.Id(), s.Description())
+	
+	storages := []*DeviceStorage{}
+	for _, s := range dev.ListStorage()  {
+		if !s.IsHierarchical() {
+			log.Printf("skipping non hierarchical storage %q", s.Description())
+			continue
+		}
+		storages = append(storages, s)
+	}
+	
+	if *storageFilter != "" {
+		re, err := regexp.Compile(*storageFilter)
+		if err != nil {
+			log.Fatalf("invalid regexp %q: %v", *storageFilter, err)
+		}
+		
+		filtered := []*DeviceStorage{}
+		for _, s := range storages {
+			if re.FindStringIndex(s.Description()) == nil {
+				log.Printf("filtering out storage %q", s.Description())
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+
+		if len(filtered) == 0 {
+			log.Fatalf("No storages found. Try changing the -storage flag.")
+		}
+		storages = filtered
+	} else {
+		for _, s := range storages {
+			log.Printf("storage ID %d: %s", s.Id(), s.Description())
+		}
 	}
 
-	if len(dev.ListStorage()) == 0 {
-		log.Fatalf("No storages found.  Try unlocking the device.")
+	if len(storages) == 0 {
+		log.Fatalf("No storages found. Try unlocking the device.")		
 	}
 
 	if *backing == "" {
@@ -96,8 +128,9 @@ func main() {
 	opts := DeviceFsOptions{
 		Dir:           *backing,
 		RemovableVFat: *vfat,
+		StorageFilter: *storageFilter,
 	}
-	fs := NewDeviceFs(dev, &opts)
+	fs := NewDeviceFs(dev, storages, opts)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 
