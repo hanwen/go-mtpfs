@@ -128,7 +128,6 @@ func main() {
 	opts := DeviceFsOptions{
 		Dir:           *backing,
 		RemovableVFat: *vfat,
-		StorageFilter: *storageFilter,
 	}
 	fs := NewDeviceFs(dev, storages, opts)
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
@@ -144,6 +143,6 @@ func main() {
 
 	conn.Debug = *fsdebug
 	mount.Debug = *fsdebug
-	log.Println("starting FUSE.")
+	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
 }
