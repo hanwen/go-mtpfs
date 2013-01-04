@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/hanwen/go-fuse/fuse"
 )
@@ -19,10 +20,11 @@ func main() {
 	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
+	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
-		log.Fatal("Usage: mtpfs MOUNT-POINT")
+		log.Fatalf("Usage: %s [options] MOUNT-POINT\n", os.Args[0])
 	}
 	mountpoint := flag.Arg(0)
 
@@ -30,11 +32,29 @@ func main() {
 	SetDebug(*mtpDebug)
 	devs, err := Detect()
 	if err != nil {
-		log.Fatalf("detect: %v", err)
+		log.Fatalf("detect failed: %v", err)
 	}
-	for _, d := range devs {
-		log.Printf("device %v: ", d)
+
+	if *deviceFilter != "" {
+		re, err := regexp.Compile(*deviceFilter)
+		if err != nil {
+			log.Fatalf("invalid regexp %q: %v", *deviceFilter, err)
+		}
+		filtered := []*RawDevice{}
+		for _, d := range devs {
+			if re.FindStringIndex(d.String()) != nil { 
+				filtered = append(filtered, d)
+			} else {
+				log.Printf("filtering out device %v: ", d)
+			}
+		}
+		devs = filtered
+	} else {
+		for _, d := range devs {
+			log.Printf("found device %v: ", d)
+		}
 	}
+	
 	if len(devs) == 0 {
 		log.Fatal("no device found.  Try replugging it.")
 	}
