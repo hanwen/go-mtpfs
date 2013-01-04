@@ -699,5 +699,4 @@ func (p *pendingFile) Flush() fuse.Status {
 
 func (p *pendingFile) Release() {
 	p.LoopbackFile.Release()
-	p.node.send()
 }
