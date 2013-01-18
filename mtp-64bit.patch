@@ -1,0 +1,196 @@
+commit 28dae30e2cb91b648965a8b1fd30e6f4d4120be9
+Author: hanwen <hanwen@google.com>
+Date:   Wed Jan 16 11:05:26 2013 +0100
+
+    Use int64 for file sizes, and set file size to FFFFFFFF when sending
+    object info.
+
+diff --git a/src/libmtp.c b/src/libmtp.c
+index 6a2741f..46aa2d9 100644
+--- a/src/libmtp.c
++++ b/src/libmtp.c
+@@ -6173,8 +6173,12 @@ static int send_file_object_info(LIBMTP_mtpdevice_t *device, LIBMTP_file_t *file
+     if (FLAG_ONLY_7BIT_FILENAMES(ptp_usb)) {
+       strip_7bit_from_utf8(new_file.Filename);
+     }
+-    // We lose precision here.
+-    new_file.ObjectCompressedSize = (uint32_t) filedata->filesize;
++    if (filedata->filesize > 0xFFFFFFFFL) {
++      // This is a kludge in the MTP standard for large files.
++      new_file.ObjectCompressedSize = (uint32_t) 0xFFFFFFFF;
++    } else {
++      new_file.ObjectCompressedSize = (uint32_t) filedata->filesize;
++    }
+     new_file.ObjectFormat = of;
+     new_file.StorageID = store;
+     new_file.ParentObject = localph;
+diff --git a/src/libopenusb1-glue.c b/src/libopenusb1-glue.c
+index 8bd3757..a2c5e76 100644
+--- a/src/libopenusb1-glue.c
++++ b/src/libopenusb1-glue.c
+@@ -1196,13 +1196,13 @@ ptp_usb_sendreq(PTPParams* params, PTPContainer* req) {
+ 
+ uint16_t
+ ptp_usb_senddata(PTPParams* params, PTPContainer* ptp,
+-        unsigned long size, PTPDataHandler *handler
++		 uint64_t size, PTPDataHandler *handler
+         ) {
+     uint16_t ret;
+     int wlen, datawlen;
+     unsigned long written;
+     PTPUSBBulkContainer usbdata;
+-    uint32_t bytes_left_to_transfer;
++    int64_t bytes_left_to_transfer;
+     PTPDataHandler memhandler;
+ 
+     LIBMTP_USB_DEBUG("SEND DATA PHASE\n");
+diff --git a/src/libusb-glue.c b/src/libusb-glue.c
+index 7c23f14..abf763f 100644
+--- a/src/libusb-glue.c
++++ b/src/libusb-glue.c
+@@ -1186,16 +1186,15 @@ ptp_usb_sendreq (PTPParams* params, PTPContainer* req)
+ 
+ uint16_t
+ ptp_usb_senddata (PTPParams* params, PTPContainer* ptp,
+-		  unsigned long size, PTPDataHandler *handler
++		  uint64_t size, PTPDataHandler *handler
+ ) {
+ 	uint16_t ret;
+ 	int wlen, datawlen;
+ 	unsigned long written;
+ 	PTPUSBBulkContainer usbdata;
+-	uint32_t bytes_left_to_transfer;
++	int64_t bytes_left_to_transfer;
+ 	PTPDataHandler memhandler;
+ 
+-
+ 	LIBMTP_USB_DEBUG("SEND DATA PHASE\n");
+ 
+ 	/* build appropriate USB container */
+diff --git a/src/libusb1-glue.c b/src/libusb1-glue.c
+index 9af1ffa..14330d7 100644
+--- a/src/libusb1-glue.c
++++ b/src/libusb1-glue.c
+@@ -1183,15 +1183,16 @@ ptp_usb_sendreq (PTPParams* params, PTPContainer* req)
+ 
+ uint16_t
+ ptp_usb_senddata (PTPParams* params, PTPContainer* ptp,
+-		  unsigned long size, PTPDataHandler *handler
++		  uint64_t size, PTPDataHandler *handler
+ ) {
+ 	uint16_t ret;
+ 	int wlen, datawlen;
+ 	unsigned long written;
+ 	PTPUSBBulkContainer usbdata;
+-	uint32_t bytes_left_to_transfer;
++	int64_t bytes_left_to_transfer;
+ 	PTPDataHandler memhandler;
+ 
++	fprintf(stderr, "libusb1 ptp_usb_senddata %ld\n", size);
+ 
+ 	LIBMTP_USB_DEBUG("SEND DATA PHASE\n");
+ 
+diff --git a/src/ptp.c b/src/ptp.c
+index 6087398..0c943b2 100644
+--- a/src/ptp.c
++++ b/src/ptp.c
+@@ -136,8 +136,8 @@ ptp_error (PTPParams *params, const char *format, ...)
+  **/
+ static uint16_t
+ ptp_transaction_new (PTPParams* params, PTPContainer* ptp, 
+-		uint16_t flags, unsigned int sendlen,
+-		PTPDataHandler *handler
++		     uint16_t flags, uint64_t sendlen,
++		     PTPDataHandler *handler
+ ) {
+ 	int 		tries;
+ 	uint16_t	cmd;
+@@ -380,7 +380,7 @@ ptp_exit_fd_handler (PTPDataHandler *handler) {
+ /* Old style transaction, based on memory */
+ static uint16_t
+ ptp_transaction (PTPParams* params, PTPContainer* ptp, 
+-		uint16_t flags, unsigned int sendlen,
++		uint16_t flags, uint64 sendlen,
+ 		unsigned char **data, unsigned int *recvlen
+ ) {
+ 	PTPDataHandler	handler;
+@@ -1047,7 +1047,7 @@ ptp_sendobjectinfo (PTPParams* params, uint32_t* store,
+  * ptp_sendobject:
+  * params:	PTPParams*
+  *		char*	object		- contains the object that is to be sent
+- *		uint32_t size		- object size
++ *		uint64_t size		- object size
+  *		
+  * Sends object to Responder.
+  *
+@@ -1055,7 +1055,7 @@ ptp_sendobjectinfo (PTPParams* params, uint32_t* store,
+  *
+  */
+ uint16_t
+-ptp_sendobject (PTPParams* params, unsigned char* object, uint32_t size)
++ptp_sendobject (PTPParams* params, unsigned char* object, uint64_t size)
+ {
+ 	PTPContainer ptp;
+ 
+@@ -1070,7 +1070,7 @@ ptp_sendobject (PTPParams* params, unsigned char* object, uint32_t size)
+  * ptp_sendobject_from_handler:
+  * params:	PTPParams*
+  *		PTPDataHandler*         - File descriptor to read() object from
+- *              uint32_t size           - File/object size
++ *              uint64_t size           - File/object size
+  *
+  * Sends object from file descriptor by consecutive reads from this
+  * descriptor.
+@@ -1078,7 +1078,7 @@ ptp_sendobject (PTPParams* params, unsigned char* object, uint32_t size)
+  * Return values: Some PTP_RC_* code.
+  **/
+ uint16_t
+-ptp_sendobject_from_handler (PTPParams* params, PTPDataHandler *handler, uint32_t size)
++ptp_sendobject_from_handler (PTPParams* params, PTPDataHandler *handler, uint64_t size)
+ {
+ 	PTPContainer	ptp;
+ 
+@@ -1093,7 +1093,7 @@ ptp_sendobject_from_handler (PTPParams* params, PTPDataHandler *handler, uint32_
+  * ptp_sendobject_fromfd:
+  * params:	PTPParams*
+  *		fd                      - File descriptor to read() object from
+- *              uint32_t size           - File/object size
++ *              uint64_t size           - File/object size
+  *
+  * Sends object from file descriptor by consecutive reads from this
+  * descriptor.
+@@ -1101,7 +1101,7 @@ ptp_sendobject_from_handler (PTPParams* params, PTPDataHandler *handler, uint32_
+  * Return values: Some PTP_RC_* code.
+  **/
+ uint16_t
+-ptp_sendobject_fromfd (PTPParams* params, int fd, uint32_t size)
++ptp_sendobject_fromfd (PTPParams* params, int fd, uint64_t size)
+ {
+ 	PTPContainer	ptp;
+ 	PTPDataHandler	handler;
+diff --git a/src/ptp.h b/src/ptp.h
+index 0cc7440..d5b9f4a 100644
+--- a/src/ptp.h
++++ b/src/ptp.h
+@@ -2068,7 +2068,7 @@ typedef struct _PTPDataHandler {
+  */
+ typedef uint16_t (* PTPIOSendReq)	(PTPParams* params, PTPContainer* req);
+ typedef uint16_t (* PTPIOSendData)	(PTPParams* params, PTPContainer* ptp,
+-					 unsigned long size, PTPDataHandler*getter);
++					 uint64_t size, PTPDataHandler*getter);
+ 
+ typedef uint16_t (* PTPIOGetResp)	(PTPParams* params, PTPContainer* resp);
+ typedef uint16_t (* PTPIOGetData)	(PTPParams* params, PTPContainer* ptp,
+@@ -2297,9 +2297,9 @@ uint16_t ptp_sendobjectinfo	(PTPParams* params, uint32_t* store,
+  */
+ #define ptp_setobjectprotection(params,oid,newprot) ptp_generic_no_data(params,PTP_OC_SetObjectProtection,2,oid,newprot)
+ uint16_t ptp_sendobject		(PTPParams* params, unsigned char* object,
+-				 uint32_t size);
+-uint16_t ptp_sendobject_fromfd  (PTPParams* params, int fd, uint32_t size);
+-uint16_t ptp_sendobject_from_handler  (PTPParams* params, PTPDataHandler*, uint32_t size);
++				 uint64_t size);
++uint16_t ptp_sendobject_fromfd  (PTPParams* params, int fd, uint64_t size);
++uint16_t ptp_sendobject_from_handler  (PTPParams* params, PTPDataHandler*, uint64_t size);
+ /**
+  * ptp_initiatecapture:
+  * params:      PTPParams*

@@ -1,7 +1,7 @@
 INTRODUCTION
 
 Go-mtpfs is a simple FUSE filesystem that I wrote because mtpfs was
-very unstable for me. 
+very unstable for me.
 
 It will expose all storage areas of a device in the mount, and only
 reads file metadata as needed, making it mount more quickly.
@@ -22,7 +22,7 @@ COMPILATION
 
 * Then run
 
-    mkdir /tmp/go 
+    mkdir /tmp/go
     export GOPATH=/tmp/go
     go get github.com/hanwen/go-mtpfs
 
@@ -31,6 +31,12 @@ COMPILATION
 * A 32 and 64-bit linux x86 binaries are at
 
   http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
+
+
+CAVEATS
+
+For transferring files over 4G, you need to apply mtp-64bit.patch to
+libmtp.
 
 
 USAGE
