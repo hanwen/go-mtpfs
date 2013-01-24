@@ -1,9 +1,17 @@
-commit 28dae30e2cb91b648965a8b1fd30e6f4d4120be9
-Author: hanwen <hanwen@google.com>
-Date:   Wed Jan 16 11:05:26 2013 +0100
+From 0980434f8a977c2b63ccb4d10781f938e45bb39d Mon Sep 17 00:00:00 2001
+From: hanwen <hanwen@google.com>
+Date: Mon, 21 Jan 2013 19:13:16 +0100
+Subject: [PATCH 1/1] Fixed mtp-64bit.patch to work with latest libmtp git
+ version
 
-    Use int64 for file sizes, and set file size to FFFFFFFF when sending
-    object info.
+---
+ src/libmtp.c           |    8 ++++++--
+ src/libopenusb1-glue.c |    4 ++--
+ src/libusb-glue.c      |    5 ++---
+ src/libusb1-glue.c     |    5 +++--
+ src/ptp.c              |   18 +++++++++---------
+ src/ptp.h              |   10 +++++-----
+ 6 files changed, 27 insertions(+), 23 deletions(-)
 
 diff --git a/src/libmtp.c b/src/libmtp.c
 index 6a2741f..46aa2d9 100644
@@ -91,7 +99,7 @@ index 9af1ffa..14330d7 100644
  	LIBMTP_USB_DEBUG("SEND DATA PHASE\n");
  
 diff --git a/src/ptp.c b/src/ptp.c
-index 6087398..0c943b2 100644
+index 6087398..e200e50 100644
 --- a/src/ptp.c
 +++ b/src/ptp.c
 @@ -136,8 +136,8 @@ ptp_error (PTPParams *params, const char *format, ...)
@@ -110,7 +118,7 @@ index 6087398..0c943b2 100644
  static uint16_t
  ptp_transaction (PTPParams* params, PTPContainer* ptp, 
 -		uint16_t flags, unsigned int sendlen,
-+		uint16_t flags, uint64 sendlen,
++		uint16_t flags, uint64_t sendlen,
  		unsigned char **data, unsigned int *recvlen
  ) {
  	PTPDataHandler	handler;
@@ -169,7 +177,7 @@ index 6087398..0c943b2 100644
  	PTPContainer	ptp;
  	PTPDataHandler	handler;
 diff --git a/src/ptp.h b/src/ptp.h
-index 0cc7440..d5b9f4a 100644
+index 0cc7440..4fce85e 100644
 --- a/src/ptp.h
 +++ b/src/ptp.h
 @@ -2068,7 +2068,7 @@ typedef struct _PTPDataHandler {
@@ -181,6 +189,15 @@ index 0cc7440..d5b9f4a 100644
  
  typedef uint16_t (* PTPIOGetResp)	(PTPParams* params, PTPContainer* resp);
  typedef uint16_t (* PTPIOGetData)	(PTPParams* params, PTPContainer* ptp,
+@@ -2192,7 +2192,7 @@ struct _PTPParams {
+ /* last, but not least - ptp functions */
+ uint16_t ptp_usb_sendreq	(PTPParams* params, PTPContainer* req);
+ uint16_t ptp_usb_senddata	(PTPParams* params, PTPContainer* ptp,
+-				 unsigned long size, PTPDataHandler *handler);
++				 uint64_t size, PTPDataHandler *handler);
+ uint16_t ptp_usb_getresp	(PTPParams* params, PTPContainer* resp);
+ uint16_t ptp_usb_getdata	(PTPParams* params, PTPContainer* ptp, 
+ 	                         PTPDataHandler *handler);
 @@ -2297,9 +2297,9 @@ uint16_t ptp_sendobjectinfo	(PTPParams* params, uint32_t* store,
   */
  #define ptp_setobjectprotection(params,oid,newprot) ptp_generic_no_data(params,PTP_OC_SetObjectProtection,2,oid,newprot)
@@ -194,3 +211,6 @@ index 0cc7440..d5b9f4a 100644
  /**
   * ptp_initiatecapture:
   * params:      PTPParams*
+-- 
+1.7.10.4
+
