@@ -232,36 +232,6 @@ func (d *Device) DeleteObject(id uint32) error {
 	return nil
 }
 
-func (d *Device) GetStringFromObject(id uint32, prop int) (string, error) {
-	mId := C.uint32_t(id)
-	mProp := C.LIBMTP_property_t(prop)
-	cstr := C.LIBMTP_Get_String_From_Object(d.me(), mId, mProp)
-	result := C.GoString(cstr)
-	C.free(unsafe.Pointer(cstr))
-
-	return result, d.ErrorStack()
-}
-
-func (d *Device) GetIntFromObject(id uint32, prop int, bits int) (uint64, error) {
-	var result uint64
-	mId := C.uint32_t(id)
-	mProp := C.LIBMTP_property_t(prop)
-	switch bits {
-	case 64:
-		result = uint64(C.LIBMTP_Get_u64_From_Object(d.me(), mId, mProp, 0))
-	case 32:
-		result = uint64(C.LIBMTP_Get_u32_From_Object(d.me(), mId, mProp, 0))
-	case 16:
-		result = uint64(C.LIBMTP_Get_u16_From_Object(d.me(), mId, mProp, 0))
-	case 8:
-		result = uint64(C.LIBMTP_Get_u8_From_Object(d.me(), mId, mProp, 0))
-	default:
-		return 0, fmt.Errorf("unsupported bit size %d", bits)
-	}
-
-	return result, d.ErrorStack()
-}
-
 const DateModified = C.LIBMTP_PROPERTY_DateModified
 
 ////////////////
