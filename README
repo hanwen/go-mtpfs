@@ -6,8 +6,10 @@ very unstable for me.
 It will expose all storage areas of a device in the mount, and only
 reads file metadata as needed, making it mount more quickly.
 
-It has been tested on Galaxy Nexus (ICS) and Motorola Xoom (HC), with
-libmtp 1.1.3.
+It has been tested on various flagship devices (Galaxy Nexus, Xoom,
+Nexus 7).  As of Jan. 2013, it uses a pure Go implementation of MTP,
+which is based on libusb.
+
 
 
 COMPILATION

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hanwen/go-mtpfs/mtp"
 	"github.com/hanwen/go-fuse/fuse"
 )
 
@@ -25,8 +26,10 @@ type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	backingDir string
 	root       *rootNode
-	dev        *Device
-	storages   []*DeviceStorage
+	dev        *mtp.Device
+	devInfo    mtp.DeviceInfo
+	storages   []uint32
+	storageInfos []mtp.StorageInfo
 
 	options *DeviceFsOptions
 }
@@ -36,7 +39,7 @@ type DeviceFs struct {
 // threadsafe.  The file system assumes the device does not touch the
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store. 
-func NewDeviceFs(d *Device, storages []*DeviceStorage, options DeviceFsOptions) *DeviceFs {
+func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
 	o := options
 
 	root := rootNode{}
@@ -44,7 +47,20 @@ func NewDeviceFs(d *Device, storages []*DeviceStorage, options DeviceFsOptions) 
 	root.fs = fs
 
 	fs.storages = storages
-	return fs
+	err := d.GetDeviceInfo(&fs.devInfo)
+	if err != nil {
+		return fs, nil
+	}
+	
+	for _, sid := range fs.storages {
+		var info mtp.StorageInfo 
+		err := d.GetStorageInfo(sid, &info)
+		if err != nil {
+			return nil, err
+		}
+		fs.storageInfos = append(fs.storageInfos, info)
+	}
+	return fs, nil
 }
 
 /*
@@ -55,6 +71,16 @@ TODO:
 - expose properties as xattrs?
 
 */
+
+func (fs *DeviceFs) GetStorageInfo(want uint32) *mtp.StorageInfo {
+	for i, sid := range fs.storages {
+		if sid == want {
+			return &fs.storageInfos[i]
+		}
+	}
+	return nil
+}
+
 func (fs *DeviceFs) Root() fuse.FsNode {
 	return fs.root
 }
@@ -108,15 +134,15 @@ func (fs *DeviceFs) ensureFreeSpace(want int64) error {
 }
 
 func (fs *DeviceFs) String() string {
-	return fmt.Sprintf("DeviceFs(%s)", fs.dev.ModelName())
+	return fmt.Sprintf("DeviceFs(%s)", fs.devInfo.Model)
 }
 
 
 func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
-	for _, s := range fs.storages {
-		total += uint64(s.MaxCapacity)
+	for _, s := range fs.storageInfos {
+		total += uint64(s.MaxCapability)
 		free += uint64(s.FreeSpaceInBytes)
 	}
 
@@ -130,25 +156,23 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	}
 }
 
-func (fs *DeviceFs) newFolder(id uint32, ds *DeviceStorage) *folderNode {
+func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, id uint32, storage uint32) *folderNode {
+	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
-		fileNode: fileNode{
-			storage:    ds,
-			fileFolder: &folder{id},
-			fs:         fs,
-		},
+		fileNode: fs.newFile(obj, id, storage),
 	}
 }
 
-func (fs *DeviceFs) newFile(file *File, store *DeviceStorage) *fileNode {
-	if file.StorageId() != store.Id() {
+func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, id uint32, storage uint32) *fileNode {
+	if obj.StorageID != storage {
 		log.Printf("storage mismatch file %s on %d, parent storage %d",
-			file.Name(), file.StorageId(), store.Id())
+			obj.Filename, obj.StorageID, storage)
 	}
 	n := &fileNode{
-		storage:    store,
-		fileFolder: file,
-		fs:         fs,
+		storageID:    storage,
+		obj: &obj,
+		fs: fs,
+		id: id,
 	}
 
 	return n
@@ -162,12 +186,17 @@ type rootNode struct {
 func (n *rootNode) StatFs() *fuse.StatfsOut {
 	return n.fs.statFs()
 }
-
+const NOPARENT_ID = 0xFFFFFFFF
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
-	for _, s := range fs.storages {
-		folder := fs.newFolder(NOPARENT_ID, s)
+	for i, s := range fs.storageInfos {
+		obj := mtp.ObjectInfo{
+			ParentObject: NOPARENT_ID,
+			StorageID: fs.storages[i],
+			Filename: s.StorageDescription,
+		}
+		folder := fs.newFolder(obj, NOPARENT_ID, fs.storages[i])
 		inode := fs.root.Inode().New(true, folder)
-		fs.root.Inode().AddChild(s.Description(), inode)
+		fs.root.Inode().AddChild(s.StorageDescription, inode)
 	}
 }
 
@@ -199,10 +228,13 @@ type fileNode struct {
 	fuse.DefaultFsNode
 	fs *DeviceFs
 
-	storage *DeviceStorage
+	storageID uint32
 
-	// mtp *File (for files) or a *folder.
-	fileFolder interface{}
+	// MTP handle.
+	id uint32 
+
+	// mtp *mtp.ObjectInfo for files
+	obj *mtp.ObjectInfo
 
 	// local file containing the contents.
 	backing string
@@ -215,19 +247,8 @@ type fileNode struct {
 	error fuse.Status
 }
 
-func (n *fileNode) File() *File {
-	f, _ := n.fileFolder.(*File)
-	return f
-}
-
 func (n *fileNode) Id() uint32 {
-	f, ok := n.fileFolder.(*File)
-	if ok {
-		return f.Id()
-	}
-
-	folder := n.fileFolder.(*folder)
-	return folder.id
+	return n.id
 }
 
 func (n *fileNode) StatFs() *fuse.StatfsOut {
@@ -235,9 +256,9 @@ func (n *fileNode) StatFs() *fuse.StatfsOut {
 }
 
 func (n *fileNode) OnForget() {
-	if n.File() != nil {
-		n.File().Destroy()
-		n.fileFolder = nil
+	if n.obj != nil {
+		n.obj = nil
+		n.id = 0
 	}
 }
 
@@ -246,18 +267,18 @@ func (n *fileNode) send() error {
 		return nil
 	}
 
-	f := n.File()
 	if n.backing == "" {
-		log.Panicf("sending file without backing store: %q", f.Name())
+		log.Panicf("sending file without backing store: %q", n.obj.Filename)
 	}
 
+	f := n.obj
 	if !n.error.Ok() {
 		n.dirty = false
 		os.Remove(n.backing)
 		n.backing = ""
 		n.error = fuse.OK
-		f.filesize = 0
-		log.Printf("not sending file %q due to write errors", f.Name())
+		n.obj.CompressedSize = 0
+		log.Printf("not sending file %q due to write errors", f.Filename)
 		return syscall.EIO // TODO - send back n.error
 	}
 
@@ -267,16 +288,16 @@ func (n *fileNode) send() error {
 		return err
 	}
 	if fi.Size() == 0 {
-		log.Printf("cannot send 0 byte file %q", f.Name())
+		log.Printf("cannot send 0 byte file %q", f.Filename)
 		return syscall.EINVAL
 	}
 
-	if f.Name() == "" {
+	if n.obj.Filename == "" {
 		return nil
 	}
 
-	if n.storage.IsRemovable() && n.fs.options.RemovableVFat {
-		f.SetName(SanitizeDosName(f.Name()))
+	if n.fs.GetStorageInfo(n.storageID).IsRemovable() && n.fs.options.RemovableVFat {
+		f.Filename = SanitizeDosName(f.Filename)
 	}
 
 	backing, err := os.Open(n.backing)
@@ -285,25 +306,35 @@ func (n *fileNode) send() error {
 	}
 	defer backing.Close()
 
-	log.Printf("sending file %q to device: %d bytes.", f.Name(), fi.Size())
-	if id := f.Id(); id != 0 {
+	log.Printf("sending file %q to device: %d bytes.", f.Filename, fi.Size())
+	if id := n.id; id != 0 {
 		// Apparently, you can't overwrite things in MTP.
 		err := n.fs.dev.DeleteObject(id)
 		if err != nil {
 			return err
 		}
-		f.SetId(0)
+		n.id = 0
 	}
 
-	f.SetFilesize(uint64(fi.Size()))
+	f.CompressedSize = uint32(fi.Size())
 	start := time.Now()
 
-	err = n.fs.dev.SendFromFileDescriptor(f, backing.Fd())
+	_, _, handle, err := n.fs.dev.SendObjectInfo(n.storageID, f.ParentObject, f)
+	if err != nil {
+		log.Printf("SendObjectInfo failed %v", err)
+		return syscall.EINVAL	
+	}
+	err = n.fs.dev.SendObject(backing, fi.Size())
+	if err != nil {
+		log.Printf("SendObject failed %v", err)
+		return syscall.EINVAL	
+	}
 	dt := time.Now().Sub(start)
 	log.Printf("sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
-
+	n.id = handle
+	
 	// We could leave the file for future reading, but the
 	// management of free space is a hassle when doing large
 	// copies.
@@ -325,7 +356,7 @@ func (n *fileNode) trim() int64 {
 		return 0
 	}
 
-	log.Printf("removing local cache for %q, %d bytes", n.File().Name(), fi.Size())
+	log.Printf("removing local cache for %q, %d bytes", n.obj.Filename, fi.Size())
 	err = os.Remove(n.backing)
 	if err != nil {
 		return 0
@@ -340,7 +371,7 @@ func (n *fileNode) fetch() error {
 	if n.backing != "" {
 		return nil
 	}
-	sz := int64(n.File().filesize)
+	sz := int64(n.obj.CompressedSize)
 	if err := n.fs.ensureFreeSpace(sz); err != nil {
 		return err
 	}
@@ -353,12 +384,12 @@ func (n *fileNode) fetch() error {
 	defer f.Close()
 
 	start := time.Now()
-	err = n.fs.dev.GetFileToFileDescriptor(n.Id(), f.Fd())
+	err = n.fs.dev.GetObject(n.id, f)
 	dt := time.Now().Sub(start)
 	if err == nil {
 		n.backing = f.Name()
 		n.dirty = false
-		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.File().Name(), sz,
+		log.Printf("fetched %q, %d bytes in %d ms. %.1f MB/s", n.obj.Filename, sz,
 			dt.Nanoseconds()/1e6, 1e3*float64(sz)/float64(dt.Nanoseconds()))
 	} else {
 		log.Printf("error fetching: %v", err)
@@ -403,22 +434,21 @@ func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context
 	}
 
 	out.Mode = fuse.S_IFREG | 0644
-	f := n.File()
+	f := n.obj
 	if n.backing != "" {
 		fi, err := os.Stat(n.backing)
 		if err != nil {
 			return fuse.ToStatus(err)
 		}
 		out.Size = uint64(fi.Size())
-		t := f.Mtime()
+		t := f.ModificationDate
 		if n.dirty {
 			t = fi.ModTime()
 		}
 		out.SetTimes(&t, &t, &t)
 	} else if f != nil {
-		out.Size = uint64(f.filesize)
-
-		t := f.Mtime()
+		out.Size = uint64(f.CompressedSize)
+		t := f.ModificationDate
 		out.SetTimes(&t, &t, &t)
 	}
 
@@ -436,7 +466,7 @@ func (n *fileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (c
 }
 
 func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
-	if n.File() == nil {
+	if n.obj == nil {
 		return
 	}
 
@@ -444,7 +474,7 @@ func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, c
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
 	if mTime != nil {
-		n.File().SetMtime(*mTime)
+		n.obj.ModificationDate = *mTime
 	}
 	return fuse.OK
 }
@@ -453,7 +483,7 @@ func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, c
 // folders
 
 type folderNode struct {
-	fileNode
+	*fileNode
 	fetched bool
 }
 
@@ -468,24 +498,38 @@ func (n *folderNode) fetch() bool {
 		return true
 	}
 
-	l, err := n.fs.dev.FilesAndFolders(n.storage.Id(), n.Id())
+	handles := mtp.ObjectHandles{}
+	err := n.fs.dev.GetObjectHandles(n.storageID, 0x0,
+		n.id, &handles)
 	if err != nil {
-		log.Printf("FilesAndFolders failed: %v", err)
+		log.Printf("GetObjectHandles failed: %v", err)
 		return false
 	}
 
-	for _, f := range l {
+	infos := []*mtp.ObjectInfo{}
+	for _, handle := range handles.Handles {
+		obj := mtp.ObjectInfo{}
+		err := n.fs.dev.GetObjectInfo(handle, &obj)
+		if err != nil {
+			log.Printf("GetObjectInfo failed: %v", err)
+			return false
+		}
+		infos = append(infos, &obj)
+	}
+	
+	for i, handle := range handles.Handles {
 		var node fuse.FsNode
-		isdir := f.Filetype() == FILETYPE_FOLDER
+		obj := *infos[i]
+		obj.ParentObject = n.id
+		isdir := obj.ObjectFormat == mtp.OFC_Association
 		if isdir {
-			fNode := n.fs.newFolder(f.Id(), n.storage)
-			fNode.fileFolder = f
+			fNode := n.fs.newFolder(obj, handle, n.storageID)
 			node = fNode
 		} else {
-			node = n.fs.newFile(f, n.storage)
+			node = n.fs.newFile(obj, handle, n.storageID)
 		}
 
-		n.Inode().AddChild(f.Name(), n.Inode().New(isdir, node))
+		n.Inode().AddChild(obj.Filename, n.Inode().New(isdir, node))
 	}
 
 	n.fetched = true
@@ -505,20 +549,22 @@ func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Conte
 	return fuse.OK
 }
 
-func mtpFile(n *fuse.Inode) *File {
+func toFileNode(n *fuse.Inode) *fileNode {
 	switch f := n.FsNode().(type) {
 	case *fileNode:
-		return f.File()
+		return f
 	case *folderNode:
-		return f.File()
+		return f.fileNode
 	}
 	return nil
 }
 
+/*
+ 
 func (n *folderNode) basenameRename(oldName string, newName string) error {
 	ch := n.Inode().GetChild(oldName)
 
-	mFile := mtpFile(ch)
+	mFile := toFileNode(ch)
 
 	if mFile.Id() != 0 {
 		// Only rename on device if it was sent already.
@@ -532,7 +578,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 	return nil
 }
 
-func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
+func (n *folderNode) xRename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
 	fn, ok := newParent.(*folderNode)
 	if !ok {
 		return fuse.ENOSYS
@@ -565,6 +611,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	return fuse.OK
 }
 
+ */
 func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node fuse.FsNode, code fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
@@ -582,22 +629,22 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	newId, err := n.fs.dev.CreateFolder(n.Id(), name, n.storage.Id())
+
+	obj := mtp.ObjectInfo{
+		Filename: name,
+		ObjectFormat: mtp.OFC_Association,
+		ModificationDate: time.Now(),
+		ParentObject: n.id,
+		StorageID: n.storageID,
+	}
+	_, _, newId, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
 		return nil, fuse.EIO
 	}
 
-	f := n.fs.newFolder(newId, n.storage)
+	f := n.fs.newFolder(obj, newId, n.storageID)
 	n.Inode().AddChild(name, n.Inode().New(true, f))
-
-	if meta, err := n.fs.dev.Filemetadata(newId); err != nil {
-		log.Printf("Filemetadata failed for directory %q: %v", name, err)
-		return nil, fuse.EIO
-	} else {
-		f.fileFolder = meta
-	}
-
 	return f, fuse.OK
 }
 
@@ -611,15 +658,15 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 		return fuse.ENOENT
 	}
 
-	f := mtpFile(ch)
-	if f.Id() != 0 {
-		err := n.fs.dev.DeleteObject(f.Id())
+	f := toFileNode(ch)
+	if f.id != 0 {
+		err := n.fs.dev.DeleteObject(f.id)
 		if err != nil {
 			log.Printf("DeleteObject failed: %v", err)
 			return fuse.EIO
 		}
 	} else {
-		f.SetName("")
+		f.obj.Filename = ""
 	}
 	n.Inode().RmChild(name)
 	return fuse.OK
@@ -633,25 +680,31 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	if !n.fetch() {
 		return nil, nil, fuse.EIO
 	}
-	f, err := ioutil.TempFile(n.fs.options.Dir, "")
+	backingFile, err := ioutil.TempFile(n.fs.options.Dir, "")
 	if err != nil {
 		return nil, nil, fuse.ToStatus(err)
 
 	}
-	now := time.Now()
 
-	mtpFile := NewFile(0, n.Id(), n.storage.Id(), name, 0, now, FILETYPE_UNKNOWN)
+	obj := mtp.ObjectInfo{
+		StorageID: n.storageID,
+		Filename: name,
+		ObjectFormat: mtp.OFC_Undefined,
+		ModificationDate: time.Now(),
+		ParentObject: n.id,
+	}
+	
 	fn := &fileNode{
-		storage:    n.storage,
-		fileFolder: mtpFile,
+		obj: &obj,
+		storageID:    n.storageID,
 		fs:         n.fs,
 		dirty:      true,
 	}
-	fn.backing = f.Name()
+	fn.backing = backingFile.Name()
 	n.Inode().AddChild(name, n.Inode().New(false, fn))
 
 	p := &pendingFile{
-		LoopbackFile: fuse.LoopbackFile{File: f},
+		LoopbackFile: fuse.LoopbackFile{File: backingFile},
 		node:         fn,
 	}
 

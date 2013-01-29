@@ -6,17 +6,19 @@ package main
 
 import (
 	"flag"
+//	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
 
+	"github.com/hanwen/go-mtpfs/mtp"
 	"github.com/hanwen/go-fuse/fuse"
 )
 
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
-	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging. 1=PTP, 2=PLST, 4=USB, 8=DATA")
+//	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging. 1=PTP, 2=PLST, 4=USB, 8=DATA")
 	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
@@ -29,85 +31,20 @@ func main() {
 	}
 	mountpoint := flag.Arg(0)
 
-	Init()
-	SetDebug(*mtpDebug)
-	devs, err := Detect()
+	dev, err := mtp.SelectDevice(*deviceFilter)
 	if err != nil {
 		log.Fatalf("detect failed: %v", err)
 	}
+	
+	defer dev.Close()
 
-	if *deviceFilter != "" {
-		re, err := regexp.Compile(*deviceFilter)
-		if err != nil {
-			log.Fatalf("invalid regexp %q: %v", *deviceFilter, err)
-		}
-		filtered := []*RawDevice{}
-		for _, d := range devs {
-			if re.FindStringIndex(d.String()) != nil { 
-				filtered = append(filtered, d)
-			} else {
-				log.Printf("filtering out device %v: ", d)
-			}
-		}
-		devs = filtered
-	} else {
-		for _, d := range devs {
-			log.Printf("found device %v: ", d)
-		}
+	if err = dev.OpenSession(); err != nil {
+		log.Fatalf("OpenSession failed: %v", err)
 	}
 	
-	if len(devs) == 0 {
-		log.Fatal("no device found.  Try replugging it.")
-	}
-	if len(devs) > 1 {
-		log.Fatal("must have exactly one device. Try using -dev")
-	}
-
-	rdev := devs[0]
-
-	dev, err := rdev.Open()
+	sids, err := selectStorages(dev, *storageFilter)
 	if err != nil {
-		log.Fatalf("rdev.open failed: %v", err)
-	}
-	defer dev.Release()
-	dev.GetStorage(0)
-	
-	storages := []*DeviceStorage{}
-	for _, s := range dev.ListStorage()  {
-		if !s.IsHierarchical() {
-			log.Printf("skipping non hierarchical storage %q", s.Description())
-			continue
-		}
-		storages = append(storages, s)
-	}
-	
-	if *storageFilter != "" {
-		re, err := regexp.Compile(*storageFilter)
-		if err != nil {
-			log.Fatalf("invalid regexp %q: %v", *storageFilter, err)
-		}
-		
-		filtered := []*DeviceStorage{}
-		for _, s := range storages {
-			if re.FindStringIndex(s.Description()) == nil {
-				log.Printf("filtering out storage %q", s.Description())
-				continue
-			}
-			filtered = append(filtered, s)
-		}
-
-		if len(filtered) == 0 {
-			log.Fatalf("No storages found. Try changing the -storage flag.")
-		}
-		storages = filtered
-	} else {
-		for _, s := range storages {
-			log.Printf("storage ID %d: %s", s.Id(), s.Description())
-		}
-	}
-
-	if len(storages) == 0 {
-		log.Fatalf("No storages found. Try unlocking the device.")		
+		log.Fatalf("selectStorages failed: %v", err)
 	}
 
 	if *backing == "" {
@@ -129,7 +66,10 @@ func main() {
 		Dir:           *backing,
 		RemovableVFat: *vfat,
 	}
-	fs := NewDeviceFs(dev, storages, opts)
+	fs, err  := NewDeviceFs(dev, sids, opts)
+	if err != nil {
+		log.Fatalf("NewDeviceFs failed: %v", err)
+	}
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 
@@ -145,4 +85,39 @@ func main() {
 	mount.Debug = *fsdebug
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
+}
+
+func selectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
+	sids := mtp.StorageIDs{}
+	err := dev.GetStorageIDs(&sids)
+	if err != nil {
+		return nil, err
+	}
+
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := []uint32{}
+	for _, id := range sids.IDs {
+		var s mtp.StorageInfo
+		err := dev.GetStorageInfo(id, &s)
+		if err != nil {
+			return nil, err
+		}
+		
+		if !s.IsHierarchical() {
+			log.Printf("skipping non hierarchical storage %q", s.StorageDescription)
+			continue
+		}
+
+		if re.FindStringIndex(s.StorageDescription) == nil {
+			log.Printf("filtering out storage %q", s.StorageDescription)
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+
+	return filtered, nil
 }
