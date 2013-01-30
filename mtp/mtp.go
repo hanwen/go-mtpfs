@@ -121,7 +121,7 @@ func (d *Device) sendReq(req *Container) error {
 	for i := range req.Param {
 		c.Param[i] = req.Param[i]
 	}
-	
+
 	var wData [BulkLen]byte
 	buf := bytes.NewBuffer(wData[:0])
 
@@ -143,12 +143,16 @@ const packetSize = 512
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
 func (d *Device) fetchPacket(dest []byte, header *USBBulkHeader) (rest []byte, err error) {
-	buf := bytes.NewBuffer(dest[:0])
-	_, err = d.bulkRead(buf)
+	n, err := d.h.BulkTransfer(d.fetchEp, dest[:packetSize], d.timeout)
+	if n > 0 {
+		d.debugPrint(d.fetchEp, dest[:n])
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
+	buf := bytes.NewBuffer(dest[:n])
 	err = binary.Read(buf, binary.LittleEndian, header)
 	if err != nil {
 		return nil, err
@@ -229,7 +233,7 @@ func (d *Device) RPC(req *Container, rep *Container,
 				return err
 			}
 		}
-			
+
 		h = &USBBulkHeader{}
 		rest, err = d.fetchPacket(data[:], h)
 	}
