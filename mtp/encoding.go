@@ -373,6 +373,12 @@ func InstantiateType(t DataTypeSelector) reflect.Value {
 	case DTC_UINT64:
 		v := uint64(0)
 		val = &v
+	case DTC_INT128:
+		v := [16]byte{}
+		val = &v
+	case DTC_UINT128:
+		v := [16]byte{}
+		val = &v
 	case DTC_STR:
 		s := ""
 		val = &s

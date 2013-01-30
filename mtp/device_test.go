@@ -48,15 +48,23 @@ func testDeviceProperties(dev *Device, t *testing.T) {
 		t.Logf("GetObjectPropsSupported (OFC_Undefined) value: %s\n", getNames(OPC_names, props.Values))
 	}
 
+	for _,  p := range props.Values {
 	var objPropDesc ObjectPropDesc
-	err = dev.GetObjectPropDesc(OPC_ObjectSize, OFC_Undefined, &objPropDesc)
-	if err != nil {
-		t.Logf("GetObjectPropDesc(ObjectSize) failed: %v\n", err)
-	} else {
-		t.Logf("GetObjectPropDesc(ObjectSize) value: %#v %T\n", objPropDesc,
-			InstantiateType(objPropDesc.DataType).Interface())
+		if p == OPC_PersistantUniqueObjectIdentifier {
+			// can't deal with int128.
+			continue
+		}
+		
+		err = dev.GetObjectPropDesc(p, OFC_Undefined, &objPropDesc)
+		name := OPC_names[int(p)]
+		if err != nil {
+			t.Logf("GetObjectPropDesc(%s) failed: %v\n", name, err)
+		} else {
+			t.Logf("GetObjectPropDesc(%s) value: %#v %T\n", name, objPropDesc,
+				InstantiateType(objPropDesc.DataType).Interface())
+		}
 	}
-
+	
 	err = dev.ResetDeviceProp(DPC_MTP_DeviceFriendlyName)
 	if err != nil {
 		t.Log("ResetDeviceProp:", err)
@@ -115,7 +123,7 @@ func TestDevice(t *testing.T) {
 }
 
 func testStorage(dev *Device, t *testing.T) {
-	sids := StorageIDs{}
+	sids := Uint32Array{}
 	err := dev.GetStorageIDs(&sids)
 	if err != nil {
 		t.Fatalf("GetStorageIDs failed: %v", err)
@@ -123,11 +131,11 @@ func testStorage(dev *Device, t *testing.T) {
 		t.Logf("%#v\n", sids)
 	}
 
-	if len(sids.IDs) == 0 {
+	if len(sids.Values) == 0 {
 		t.Fatalf("No storages")
 	}
 
-	id := sids.IDs[0]
+	id := sids.Values[0]
 	var storageInfo StorageInfo
 	dev.GetStorageInfo(id, &storageInfo)
 	if err != nil {
