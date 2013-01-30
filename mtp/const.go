@@ -875,14 +875,14 @@ const GOH_ALL_FORMATS = 0x00000000
 const GOH_ALL_STORAGE = 0xffffffff
 const GOH_ROOT_PARENT = 0xffffffff
 
-var GOH_names = map[int]string{0x00000000: "ALL_ASSOCS",
+var GOH_names = map[int64]string{0x00000000: "ALL_ASSOCS",
 	0xffffffff: "ALL_STORAGE",
 }
 
 const HANDLER_ROOT = 0x00000000
 const HANDLER_SPECIAL = 0xffffffff
 
-var HANDLER_names = map[int]string{0x00000000: "ROOT",
+var HANDLER_names = map[int64]string{0x00000000: "ROOT",
 	0xffffffff: "SPECIAL",
 }
 
