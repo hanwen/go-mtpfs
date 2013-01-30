@@ -159,18 +159,23 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, id uint32, storage uint32) *folderNode {
 	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
-		fileNode: fs.newFile(obj, id, storage),
+		fileNode: fs.newFile(obj, 0, id, storage),
 	}
 }
 
-func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, id uint32, storage uint32) *fileNode {
+func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32, storage uint32) *fileNode {
 	if obj.StorageID != storage {
 		log.Printf("storage mismatch file %s on %d, parent storage %d",
 			obj.Filename, obj.StorageID, storage)
 	}
+	if obj.CompressedSize != 0xFFFFFFFF {
+		size = int64(obj.CompressedSize)
+	}
+	
 	n := &fileNode{
 		storageID:    storage,
 		obj: &obj,
+		Size: size,
 		fs: fs,
 		id: id,
 	}
@@ -233,6 +238,10 @@ type fileNode struct {
 	// MTP handle.
 	id uint32 
 
+	// This is needed because obj.CompressedSize only goes to
+	// 0xFFFFFFFF
+	Size int64
+	
 	// mtp *mtp.ObjectInfo for files
 	obj *mtp.ObjectInfo
 
@@ -278,6 +287,7 @@ func (n *fileNode) send() error {
 		n.backing = ""
 		n.error = fuse.OK
 		n.obj.CompressedSize = 0
+		n.Size = 0
 		log.Printf("not sending file %q due to write errors", f.Filename)
 		return syscall.EIO // TODO - send back n.error
 	}
@@ -316,7 +326,10 @@ func (n *fileNode) send() error {
 		n.id = 0
 	}
 
-	f.CompressedSize = uint32(fi.Size())
+	if fi.Size() > 0xFFFFFFFF {
+		f.CompressedSize = 0xFFFFFFFF
+		n.Size = fi.Size()
+	}
 	start := time.Now()
 
 	_, _, handle, err := n.fs.dev.SendObjectInfo(n.storageID, f.ParentObject, f)
@@ -371,7 +384,7 @@ func (n *fileNode) fetch() error {
 	if n.backing != "" {
 		return nil
 	}
-	sz := int64(n.obj.CompressedSize)
+	sz := n.Size
 	if err := n.fs.ensureFreeSpace(sz); err != nil {
 		return err
 	}
@@ -447,7 +460,7 @@ func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context
 		}
 		out.SetTimes(&t, &t, &t)
 	} else if f != nil {
-		out.Size = uint64(f.CompressedSize)
+		out.Size = uint64(n.Size)
 		t := f.ModificationDate
 		out.SetTimes(&t, &t, &t)
 	}
@@ -507,12 +520,23 @@ func (n *folderNode) fetch() bool {
 	}
 
 	infos := []*mtp.ObjectInfo{}
+	sizes := map[uint32]int64{}
 	for _, handle := range handles.Handles {
 		obj := mtp.ObjectInfo{}
 		err := n.fs.dev.GetObjectInfo(handle, &obj)
 		if err != nil {
 			log.Printf("GetObjectInfo failed: %v", err)
 			return false
+		}
+		if obj.CompressedSize == 0xFFFFFFFF {
+			var val mtp.Uint64Value
+			err := n.fs.dev.GetObjectPropValue(handle, mtp.OPC_ObjectSize, &val)
+			if err != nil {
+				log.Printf("GetObjectPropValue handle %d failed: %v", handle, err)
+				return false
+			}
+
+			sizes[handle] = int64(val.Value)
 		}
 		infos = append(infos, &obj)
 	}
@@ -526,7 +550,8 @@ func (n *folderNode) fetch() bool {
 			fNode := n.fs.newFolder(obj, handle, n.storageID)
 			node = fNode
 		} else {
-			node = n.fs.newFile(obj, handle, n.storageID)
+			sz := sizes[handle]
+			node = n.fs.newFile(obj, sz, handle, n.storageID)
 		}
 
 		n.Inode().AddChild(obj.Filename, n.Inode().New(isdir, node))

@@ -212,7 +212,7 @@ func decodeTime(r io.Reader, f reflect.Value) error {
 	return nil
 }
 
-func decodeField(r io.Reader, f reflect.Value) error {
+func decodeField(r io.Reader, f reflect.Value, typeSelector DataTypeSelector) error {
 	if !f.CanAddr() {
 		return fmt.Errorf("canaddr false")
 	}
@@ -250,6 +250,10 @@ func decodeField(r io.Reader, f reflect.Value) error {
 			return err
 		}
 		f.Set(sl)
+	case reflect.Interface:
+		val := InstantiateType(typeSelector)
+		decodeField(r, val, typeSelector)
+		f.Set(val)
 	default:
 		panic(fmt.Sprintf("unimplemented kind %v", f))
 	}
@@ -290,6 +294,16 @@ func encodeField(w io.Writer, f reflect.Value) error {
 
 // Decode MTP data stream into data structure.
 func Decode(r io.Reader, iface interface{}) error {
+	decoder, ok := iface.(Decoder)
+	if ok {
+		return decoder.Decode(r)
+	}
+	
+	typeSel := DataTypeSelector(0xfe)
+	return decodeWithSelector(r, iface, typeSel)
+}
+
+func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector) error {
 	val := reflect.ValueOf(iface)
 	if val.Kind() != reflect.Ptr {
 		return fmt.Errorf("need ptr argument: %T", iface)
@@ -297,12 +311,17 @@ func Decode(r io.Reader, iface interface{}) error {
 	val = val.Elem()
 	t := val.Type()
 
-	for i := 0; i < t.NumField(); i++ {
-		err := decodeField(r, val.Field(i))
 
+	for i := 0; i < t.NumField(); i++ {
+		err := decodeField(r, val.Field(i), typeSel)
+		
 		if err != nil {
 			return err
 		}
+		if val.Field(i).Type().Name() == "DataTypeSelector" {
+			typeSel = val.Field(i).Interface().(DataTypeSelector)
+		}
+		
 	}
 	return nil
 }
@@ -324,28 +343,6 @@ func Encode(w io.Writer, iface interface{}) error {
 	}
 	return nil
 
-}
-
-func (rf *PropDescRangeForm) Decode(r io.Reader, t DataTypeSelector) error {
-	v := InstantiateType(t)
-	err := decodeField(r, v)
-	if err != nil {
-		return err
-	}
-	rf.MinimumValue = v.Interface()
-	v = InstantiateType(t)
-	err = decodeField(r, v)
-	if err != nil {
-		return err
-	}
-	rf.MaximumValue = v.Interface()
-	v = InstantiateType(t)
-	err = decodeField(r, v)
-	if err != nil {
-		return err
-	}
-	rf.StepSize = v.Interface()
-	return nil
 }
 
 // Instantiates an object of wanted type as addressable value.
@@ -386,54 +383,37 @@ func InstantiateType(t DataTypeSelector) reflect.Value {
 	return reflect.ValueOf(val).Elem()
 }
 
-func (pd *DevicePropDesc) Decode(r io.Reader) error {
-	binary.Read(r, byteOrder, &pd.DevicePropertyCode)
-	binary.Read(r, byteOrder, &pd.DataType)
-	binary.Read(r, byteOrder, &pd.GetSet)
-
-	val := InstantiateType(pd.DataType)
-	err := decodeField(r, val)
-	if err != nil {
-		return err
-	}
-	pd.FactoryDefaultValue = val.Interface()
-
-	val = InstantiateType(pd.DataType)
-	err = decodeField(r, val)
-	if err != nil {
-		return err
-	}
-	pd.CurrentValue = val.Interface()
-
-	err = binary.Read(r, byteOrder, &pd.FormFlag)
-	if err != nil {
-		return err
-	}
-
-	if pd.FormFlag == DPFF_Range {
+func decodePropDescForm(r io.Reader, selector DataTypeSelector, formFlag uint8) (DataDependentType, error) {
+	if formFlag == DPFF_Range {
 		f := PropDescRangeForm{}
-		err = f.Decode(r, pd.DataType)
-	} else if pd.FormFlag == DPFF_Enumeration {
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Elem(), selector)
+		return f, err
+	} else if formFlag == DPFF_Enumeration {
 		f := PropDescEnumForm{}
-		err = f.Decode(r, pd.DataType)
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Elem(), selector)
+		return f, err 
 	}
+	return nil, nil
+}
+
+func (pd *ObjectPropDesc) Decode(r io.Reader) (err error) {
+	err = Decode(r, &pd.ObjectPropDescFixed)
+	if err != nil {
+		return err
+	}
+	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
+	pd.Form = form
 	return err
 }
 
-func (ef *PropDescEnumForm) Decode(r io.Reader, t DataTypeSelector) error {
-	var sz uint16
-	err := binary.Read(r, byteOrder, &sz)
+
+func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
+	err = Decode(r, &pd.DevicePropDescFixed)
 	if err != nil {
 		return err
 	}
-	for i := 0; i < int(sz); i++ {
-		v := InstantiateType(t)
-		err = decodeField(r, v)
-		if err != nil {
-			return err
-		}
-		ef.Values = append(ef.Values, v.Interface())
-	}
-
-	return nil
+	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
+	pd.Form = form
+	return err
 }
+

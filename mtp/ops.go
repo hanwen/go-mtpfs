@@ -41,7 +41,6 @@ func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
 	if err != nil {
 		return err
 	}
-	// todo - look at rep.
 	err = Decode(&buf, info)
 	if err != nil {
 		return err
@@ -49,7 +48,7 @@ func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
 	return err
 }
 
-func (d *Device) GetStorageIDs(info *StorageIDs) error {
+func (d *Device) GetStorageIDs(info *Uint32Array) error {
 	var req, rep Container
 	req.Code = OC_GetStorageIDs
 	var buf bytes.Buffer
@@ -57,13 +56,15 @@ func (d *Device) GetStorageIDs(info *StorageIDs) error {
 	if err != nil {
 		return err
 	}
-	// todo - look at rep.
 	err = Decode(&buf, info)
 	return err
 }
 
-func (d *Device) GetObjectPropDesc(objCode, objFormatCode uint16, info *ObjectPropDesc) error {
+
+func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *ObjectPropDesc) error {
 	var req, rep Container
+	req.Code = OC_MTP_GetObjectPropDesc
+	req.Param = []uint32{uint32(objPropCode), uint32(objFormatCode)}
 	var buf bytes.Buffer
 	err := d.RPC(&req, &rep, &buf, nil, 0)
 	if err != nil {
@@ -72,6 +73,34 @@ func (d *Device) GetObjectPropDesc(objCode, objFormatCode uint16, info *ObjectPr
 
 	err = Decode(&buf, info)
 	return err
+}
+
+func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
+	var req, rep Container
+	var buf bytes.Buffer
+	
+	req.Code = OC_MTP_GetObjectPropValue
+	req.Param = []uint32{objHandle, uint32(objPropCode)}
+	err := d.RPC(&req, &rep, &buf, nil, 0)
+	if err != nil {
+		return err
+	}
+	err = Decode(&buf, value)
+	return err
+}
+
+func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Array) error {
+	var req, rep Container
+	var buf bytes.Buffer
+	
+	req.Code = OC_MTP_GetObjectPropsSupported
+	req.Param = []uint32{uint32(objFormatCode)}
+	err := d.RPC(&req, &rep, &buf, nil, 0)
+	if err != nil {
+		return err
+	}
+	err = Decode(&buf, props)
+	return err	
 }
 
 func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error {
@@ -227,3 +256,4 @@ func (d *Device) GetObject(handle uint32, w io.Writer) error {
 
 	return d.RPC(&req, &rep, w, nil, 0)
 }
+ 

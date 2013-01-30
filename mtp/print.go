@@ -17,6 +17,8 @@ func getNames(m map[int]string, vals []uint16) string {
 	return strings.Join(r, ", ")
 }
 
+
+
 func (i *DeviceInfo) String() string {
 	return fmt.Sprintf("stdv: %x, ext: %x, mtp: v%x, mtp ext: %q fmod: %x ops: %s evs: %s "+
 		"dprops: %s fmts: %s capfmts: %s manu: %q model: %q devv: %q serno: %q",

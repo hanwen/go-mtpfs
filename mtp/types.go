@@ -1,6 +1,7 @@
 package mtp
 
 import (
+	"io"
 	"time"
 )
 
@@ -46,6 +47,10 @@ type DeviceInfo struct {
 type DataTypeSelector uint16
 type DataDependentType interface{}
 
+type Decoder interface {
+	Decode(r io.Reader) error
+}
+
 type PropDescRangeForm struct {
 	MinimumValue DataDependentType
 	MaximumValue DataDependentType
@@ -60,28 +65,44 @@ type PropString struct {
 	Value string
 }
 
-type DevicePropDesc struct {
+type DevicePropDescFixed struct {
 	DevicePropertyCode  uint16
 	DataType            DataTypeSelector
 	GetSet              uint8
 	FactoryDefaultValue DataDependentType
 	CurrentValue        DataDependentType
 	FormFlag            uint8
+}
+
+type DevicePropDesc struct {
+	DevicePropDescFixed
 	Form                interface{}
 }
 
-type ObjectPropDesc struct {
+type ObjectPropDescFixed struct {
 	ObjectPropertyCode  uint16
-	DataType            uint16
+	DataType            DataTypeSelector
 	GetSet              uint8
 	FactoryDefaultValue DataDependentType
 	GroupCode           uint32
 	FormFlag            uint8
+}
+
+type ObjectPropDesc struct {
+	ObjectPropDescFixed
 	Form                interface{}
 }
 
-type StorageIDs struct {
-	IDs []uint32
+type Uint32Array struct {
+	Values []uint32
+}
+
+type Uint16Array struct {
+	Values []uint16
+}
+
+type Uint64Value struct {
+	Value uint64
 }
 
 type StorageInfo struct {

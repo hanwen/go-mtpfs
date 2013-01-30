@@ -40,6 +40,23 @@ func testDeviceProperties(dev *Device, t *testing.T) {
 		t.Logf("Device Value: %#v\n", str)
 	}
 
+	props := Uint16Array{}
+	err = dev.GetObjectPropsSupported(OFC_Undefined, &props)
+	if err != nil {
+		t.Logf("GetObjectPropsSupported failed: %v\n", err)
+	} else {
+		t.Logf("GetObjectPropsSupported (OFC_Undefined) value: %s\n", getNames(OPC_names, props.Values))
+	}
+
+	var objPropDesc ObjectPropDesc
+	err = dev.GetObjectPropDesc(OPC_ObjectSize, OFC_Undefined, &objPropDesc)
+	if err != nil {
+		t.Logf("GetObjectPropDesc(ObjectSize) failed: %v\n", err)
+	} else {
+		t.Logf("GetObjectPropDesc(ObjectSize) value: %#v %T\n", objPropDesc,
+			InstantiateType(objPropDesc.DataType).Interface())
+	}
+
 	err = dev.ResetDeviceProp(DPC_MTP_DeviceFriendlyName)
 	if err != nil {
 		t.Log("ResetDeviceProp:", err)
@@ -186,6 +203,18 @@ func testStorage(dev *Device, t *testing.T) {
 		t.Logf("info %#v\n", backInfo)
 	}
 
+	var objSize Uint64Value
+	err = dev.GetObjectPropValue(handle, OPC_ObjectSize, &objSize)
+	if err != nil {
+		t.Fatalf("GetObjectPropValue failed: %v", err)
+	} else {
+		t.Logf("info %#v\n", objSize)
+	}
+
+	if objSize.Value != testSize {
+		t.Errorf("object size error: got %v, want %v", objSize.Value, testSize)
+	}
+	
 	backBuf := &bytes.Buffer{}
 	err = dev.GetObject(handle, backBuf)
 	if err != nil {
