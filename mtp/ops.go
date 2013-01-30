@@ -89,6 +89,19 @@ func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value 
 	return err
 }
 
+func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
+	var req, rep Container
+	req.Code = OC_MTP_SetObjectPropValue
+	req.Param = []uint32{objHandle, uint32(objPropCode)}
+	var buf bytes.Buffer
+	err := Encode(&buf, value)
+	if err != nil {
+		return err
+	}
+	
+	return d.RPC(&req, &rep, nil, &buf, int64(buf.Len()))
+}
+
 func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Array) error {
 	var req, rep Container
 	var buf bytes.Buffer

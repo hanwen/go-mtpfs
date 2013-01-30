@@ -25,14 +25,14 @@ func testDeviceProperties(dev *Device, t *testing.T) {
 	}
 
 	t.Log("setpropt")
-	var str PropString
+	var str StringValue
 	str.Value = "hanwen's nexus 7"
 	err = dev.SetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
 		t.Log("SetDevicePropValue failed:", err)
 	}
 
-	str = PropString{}
+	str = StringValue{}
 	err = dev.GetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
 		t.Log("GetDevicePropValue failed:", err)
@@ -232,6 +232,12 @@ func testStorage(dev *Device, t *testing.T) {
 			t.Fatalf("back comparison failed.")
 		}
 	}
+
+	newName := fmt.Sprintf("mtp-doodle-test%x", rand.Int31())
+	err = dev.SetObjectPropValue(handle, OPC_ObjectFileName, &StringValue{newName})
+	if err != nil {
+		t.Errorf("error renaming object: %v", err)
+	}	
 
 	err = dev.DeleteObject(handle)
 	if err != nil {

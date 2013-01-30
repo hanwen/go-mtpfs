@@ -54,15 +54,11 @@ type Decoder interface {
 type PropDescRangeForm struct {
 	MinimumValue DataDependentType
 	MaximumValue DataDependentType
-	StepSize     DataDependentType
+ 	StepSize     DataDependentType
 }
 
 type PropDescEnumForm struct {
 	Values []DataDependentType
-}
-
-type PropString struct {
-	Value string
 }
 
 type DevicePropDescFixed struct {
@@ -103,6 +99,10 @@ type Uint16Array struct {
 
 type Uint64Value struct {
 	Value uint64
+}
+
+type StringValue struct {
+	Value string
 }
 
 type StorageInfo struct {

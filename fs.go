@@ -584,8 +584,6 @@ func toFileNode(n *fuse.Inode) *fileNode {
 	return nil
 }
 
-/*
- 
 func (n *folderNode) basenameRename(oldName string, newName string) error {
 	ch := n.Inode().GetChild(oldName)
 
@@ -593,7 +591,8 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 
 	if mFile.Id() != 0 {
 		// Only rename on device if it was sent already.
-		err := n.fs.dev.SetFileName(mFile, newName)
+		v := mtp.StringValue{newName}
+		err := n.fs.dev.SetObjectPropValue(mFile.Id(), mtp.OPC_ObjectFileName, &v)
 		if err != nil {
 			return err
 		}
@@ -603,7 +602,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 	return nil
 }
 
-func (n *folderNode) xRename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
+func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
 	fn, ok := newParent.(*folderNode)
 	if !ok {
 		return fuse.ENOSYS
@@ -636,7 +635,6 @@ func (n *folderNode) xRename(oldName string, newParent fuse.FsNode, newName stri
 	return fuse.OK
 }
 
- */
 func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node fuse.FsNode, code fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
