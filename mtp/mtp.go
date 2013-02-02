@@ -25,7 +25,9 @@ type Device struct {
 	fetchEp     byte
 	eventEp     byte
 	configIndex byte
-	timeout     int
+
+	// In milliseconds.
+	Timeout     int
 
 	// Print request/response codes.
 	DebugPrint bool
@@ -71,7 +73,10 @@ func (d *Device) Done() {
 
 // Open an MTP device.
 func (d *Device) Open() error {
-	d.timeout = 60000
+	if d.Timeout == 0 {
+		d.Timeout = 2000
+	}
+	
 	if d.h != nil {
 		return fmt.Errorf("already open")
 	}
@@ -138,7 +143,7 @@ func (d *Device) sendReq(req *Container) error {
 	}
 
 	d.debugPrint(d.sendEp, buf.Bytes())
-	_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.timeout)
+	_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
 	if err != nil {
 		return err
 	}
@@ -150,7 +155,7 @@ const packetSize = 512
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
 func (d *Device) fetchPacket(dest []byte, header *USBBulkHeader) (rest []byte, err error) {
-	n, err := d.h.BulkTransfer(d.fetchEp, dest[:packetSize], d.timeout)
+	n, err := d.h.BulkTransfer(d.fetchEp, dest[:packetSize], d.Timeout)
 	if n > 0 {
 		d.debugPrint(d.fetchEp, dest[:n])
 	}
@@ -336,7 +341,7 @@ func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64
 
 		_, err = io.CopyN(buf, r, cpSize)
 		d.debugPrint(d.sendEp, buf.Bytes())
-		_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.timeout)
+		_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
 		if err != nil {
 			return cpSize, err
 		}
@@ -360,7 +365,7 @@ func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64
 		size -= int64(m)
 
 		d.debugPrint(d.sendEp, buf[:m])
-		lastTransfer, err = d.h.BulkTransfer(d.sendEp, buf[:m], d.timeout)
+		lastTransfer, err = d.h.BulkTransfer(d.sendEp, buf[:m], d.Timeout)
 		n += int64(lastTransfer)
 
 		if err != nil || lastTransfer == 0 {
@@ -369,7 +374,7 @@ func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64
 	}
 	if lastTransfer%packetSize == 0 {
 		// write a short packet just to be sure.
-		d.h.BulkTransfer(d.sendEp, buf[:0], d.timeout)
+		d.h.BulkTransfer(d.sendEp, buf[:0], d.Timeout)
 	}
 
 	return n, err
@@ -380,7 +385,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 	var lastRead int
 	for {
 		toread := buf[:]
-		lastRead, err = d.h.BulkTransfer(d.fetchEp, toread, d.timeout)
+		lastRead, err = d.h.BulkTransfer(d.fetchEp, toread, d.Timeout)
 		if err != nil {
 			break
 		}
@@ -400,7 +405,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 	}
 	if lastRead%packetSize == 0 {
 		// Null read.
-		d.h.BulkTransfer(d.fetchEp, buf[:0], d.timeout)
+		d.h.BulkTransfer(d.fetchEp, buf[:0], d.Timeout)
 	}
 	return n, err
 }
