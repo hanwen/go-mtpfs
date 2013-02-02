@@ -1,4 +1,8 @@
-package main
+// Copyright 2012 Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package fs
 
 import (
 	"bytes"
@@ -24,11 +28,9 @@ func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	return &fuse.ReadResultData{dest[:b.Len()]}, fuse.OK
 }
 
-
 func (f *androidFile) String() string {
 	return fmt.Sprintf("androidFile h=0x%x", f.node.id)
 }
-
 
 func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse.Status) {
 	b := bytes.NewBuffer(dest)

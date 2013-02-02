@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
 	"github.com/hanwen/go-fuse/fuse"
 )
@@ -32,23 +33,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("detect failed: %v", err)
 	}
-	
 	defer dev.Close()
 
 	if err = dev.OpenSession(); err != nil {
 		log.Fatalf("OpenSession failed: %v", err)
 	}
 	
-	sids, err := selectStorages(dev, *storageFilter)
+	sids, err := fs.SelectStorages(dev, *storageFilter)
 	if err != nil {
 		log.Fatalf("selectStorages failed: %v", err)
 	}
 
 	dev.DebugPrint = *mtpDebug
-	opts := DeviceFsOptions{
+	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
 	}
-	fs, err  := NewDeviceFs(dev, sids, opts)
+	fs, err  := fs.NewDeviceFs(dev, sids, opts)
 	if err != nil {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
@@ -67,39 +67,4 @@ func main() {
 	mount.Debug = *fsdebug
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
-}
-
-func selectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
-	sids := mtp.Uint32Array{}
-	err := dev.GetStorageIDs(&sids)
-	if err != nil {
-		return nil, err
-	}
-
-	re, err := regexp.Compile(pat)
-	if err != nil {
-		return nil, err
-	}
-
-	filtered := []uint32{}
-	for _, id := range sids.Values {
-		var s mtp.StorageInfo
-		err := dev.GetStorageInfo(id, &s)
-		if err != nil {
-			return nil, err
-		}
-		
-		if !s.IsHierarchical() {
-			log.Printf("skipping non hierarchical storage %q", s.StorageDescription)
-			continue
-		}
-
-		if re.FindStringIndex(s.StorageDescription) == nil {
-			log.Printf("filtering out storage %q", s.StorageDescription)
-			continue
-		}
-		filtered = append(filtered, id)
-	}
-
-	return filtered, nil
 }
