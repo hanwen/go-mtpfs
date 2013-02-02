@@ -27,8 +27,12 @@ type Device struct {
 	configIndex byte
 	timeout     int
 
+	// Print request/response codes.
 	DebugPrint bool
 
+	// Print data as it passes over the USB connection.
+	DataPrint  bool
+	
 	// If set, send header in separate write.
 	SeparateHeader bool
 
@@ -196,6 +200,10 @@ func (d *Device) RPC(req *Container, rep *Container,
 		d.session.tid++
 	}
 
+	if d.DebugPrint {
+		fmt.Printf("request %s %v\n", OC_names[int(req.Code)], req.Param)
+	}
+	
 	err := d.sendReq(req)
 	if err != nil {
 		return err
@@ -226,6 +234,9 @@ func (d *Device) RPC(req *Container, rep *Container,
 			d.Close()
 			return fmt.Errorf("no sink for data")
 		}
+		if d.DebugPrint {
+			fmt.Printf("data %d\n", h.Length)
+		}
 
 		size := int(h.Length)
 		dest.Write(rest)
@@ -242,6 +253,9 @@ func (d *Device) RPC(req *Container, rep *Container,
 	}
 
 	err = d.decodeRep(h, rest, rep)
+	if d.DebugPrint {
+		fmt.Printf("rep %s\n", RC_names[int(rep.Code)])
+	}
 	if err != nil {
 		return err
 	}
@@ -254,7 +268,7 @@ func (d *Device) RPC(req *Container, rep *Container,
 }
 
 func (d *Device) debugPrint(ep byte, data []byte) {
-	if !d.DebugPrint {
+	if !d.DataPrint {
 		return
 	}
 	dir := "send"
