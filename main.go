@@ -8,7 +8,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"regexp"
 
 	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
