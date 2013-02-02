@@ -1,10 +1,12 @@
 INTRODUCTION
 
-Go-mtpfs is a simple FUSE filesystem that I wrote because mtpfs was
-very unstable for me.
+Go-mtpfs is a simple FUSE filesystem for mounting Android devices as a
+MTP device.
 
 It will expose all storage areas of a device in the mount, and only
-reads file metadata as needed, making it mount more quickly.
+reads file metadata as needed, making it mount quickly. It uses
+Android extensions to read/write partial data, so manipulating large
+files requires no extra space in /tmp.
 
 It has been tested on various flagship devices (Galaxy Nexus, Xoom,
 Nexus 7).  As of Jan. 2013, it uses a pure Go implementation of MTP,
@@ -20,7 +22,7 @@ COMPILATION
 
 * Install libmtp header files
 
-    sudo apt-get install libmtp-dev
+    sudo apt-get install libusb1-devel
 
 * Then run
 

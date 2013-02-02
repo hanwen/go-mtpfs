@@ -6,8 +6,6 @@ package main
 
 import (
 	"flag"
-//	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"regexp"
@@ -18,8 +16,7 @@ import (
 
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
-//	mtpDebug := flag.Int("mtp-debug", 0, "switch on MTP debugging. 1=PTP, 2=PLST, 4=USB, 8=DATA")
-	backing := flag.String("backing-dir", "", "backing store for locally cached files. Default: use a temporary directory.")
+	mtpDebug := flag.Bool("mtp-debug", false, "switch on MTP debugging")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
@@ -47,23 +44,8 @@ func main() {
 		log.Fatalf("selectStorages failed: %v", err)
 	}
 
-	if *backing == "" {
-		*backing, err = ioutil.TempDir("", "go-mtpfs")
-		if err != nil {
-			log.Fatalf("TempDir failed: %v", err)
-		}
-	} else {
-		*backing = *backing + "/go-mtpfs"
-		err = os.Mkdir(*backing, 0700)
-		if err != nil {
-			log.Fatalf("Mkdir failed: %v", err)
-		}
-	}
-	log.Println("backing data", *backing)
-	defer os.RemoveAll(*backing)
-
+	dev.DebugPrint = *mtpDebug
 	opts := DeviceFsOptions{
-		Dir:           *backing,
 		RemovableVFat: *vfat,
 	}
 	fs, err  := NewDeviceFs(dev, sids, opts)
