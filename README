@@ -23,10 +23,10 @@ COMPILATION
 * Install libmtp header files
 
     sudo apt-get install libusb1-devel
-
+    
 * Then run
 
-    mkdir /tmp/go
+    mkdir /tmp/go 
     export GOPATH=/tmp/go
     go get github.com/hanwen/go-mtpfs
 
@@ -35,12 +35,6 @@ COMPILATION
 * A 32 and 64-bit linux x86 binaries are at
 
   http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
-
-
-CAVEATS
-
-For transferring files over 4G, you need to apply mtp-64bit.patch to
-libmtp.
 
 
 USAGE
