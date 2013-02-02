@@ -215,7 +215,7 @@ func (n *fileNode) startEdit() bool {
 	
 	err := n.fs.dev.AndroidBeginEditObject(n.id)
 	if err != nil {
-		log.Println("AndroidBeginEditObject:", err)
+		log.Println("AndroidBeginEditObject failed:", err)
 		return false
 	}
 	n.write = true
@@ -223,15 +223,13 @@ func (n *fileNode) startEdit() bool {
 }
 
 func (n *fileNode) endEdit() bool {
-	log.Println("endEdit")
 	if !n.write {
-		log.Println("already end")
 		return true
 	}
 	
 	err := n.fs.dev.AndroidEndEditObject(n.id)
 	if err != nil {
-		log.Println("AndroidEndEditObject:", err)
+		log.Println("AndroidEndEditObject failed:", err)
 		return false
 	}
 	n.write = false
@@ -272,7 +270,7 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 	}
 	err := n.fs.dev.AndroidTruncate(n.id, int64(size))
 	if err != nil {
-		log.Println("AndroidTruncate:", err)
+		log.Println("AndroidTruncate failed:", err)
 		return fuse.EIO
 	}
 	n.Size = int64(size)
@@ -548,18 +546,18 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	
 	_,_, handle, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
 	if err != nil {
-		log.Println("SendObjectInfo", err)
+		log.Println("SendObjectInfo failed", err)
 		return nil, nil, fuse.EIO
 	}
 
 	err = n.fs.dev.SendObject(&bytes.Buffer{}, 0)
 	if err != nil {
-		log.Println("SendObject", err)
+		log.Println("SendObject failed:", err)
 		return nil, nil, fuse.EIO
 	}
 
 	if err := n.fs.dev.AndroidBeginEditObject(handle); err != nil {
-		log.Println("AndroidBeginEditObject", err)
+		log.Println("AndroidBeginEditObject failed:", err)
 		return nil, nil, fuse.EIO
 	}
 	

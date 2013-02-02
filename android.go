@@ -17,7 +17,7 @@ func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	b := bytes.NewBuffer(dest[:0])
 	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.id, b, off, uint32(len(dest)))
 	if err != nil {
-		log.Println("AndroidGetPartialObject64:", err)
+		log.Println("AndroidGetPartialObject64 failed:", err)
 		return nil, fuse.EIO
 	}
 
@@ -34,7 +34,7 @@ func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse
 	b := bytes.NewBuffer(dest)
 	err := f.node.fs.dev.AndroidSendPartialObject(f.node.id, off, uint32(len(dest)), b)
 	if err != nil {
-		log.Println("AndroidSendPartialObject:", err)
+		log.Println("AndroidSendPartialObject failed:", err)
 		return 0, fuse.EIO
 	}
 	written = uint32(len(dest)-b.Len())
