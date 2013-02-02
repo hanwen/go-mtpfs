@@ -29,6 +29,9 @@ type Device struct {
 
 	DebugPrint bool
 
+	// If set, send header in separate write.
+	SeparateHeader bool
+
 	session *Session
 }
 
@@ -302,10 +305,17 @@ func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64
 			hdr.Length = uint32(size + HdrLen)
 		}
 
-		var packet [packetSize]byte
+		var packetArr [packetSize]byte
+		var packet []byte
+		if d.SeparateHeader {
+			packet = packetArr[:HdrLen]
+		} else {
+			packet = packetArr[:]
+		}
+
 		buf := bytes.NewBuffer(packet[:0])
 		binary.Write(buf, byteOrder, hdr)
-		cpSize := int64(packetSize - HdrLen)
+		cpSize := int64(len(packet) - HdrLen)
 		if cpSize > size {
 			cpSize = size
 		}
