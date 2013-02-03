@@ -21,7 +21,7 @@ func (d *Device) OpenSession() error {
 	}
 
 	// TODO - libmtp checks for invalid transaction, I/O err?
-	d.session = &Session{
+	d.session = &sessionData{
 		tid: 1,
 		sid: 1,
 	}

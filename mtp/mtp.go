@@ -38,10 +38,10 @@ type Device struct {
 	// If set, send header in separate write.
 	SeparateHeader bool
 
-	session *Session
+	session *sessionData
 }
 
-type Session struct {
+type sessionData struct {
 	tid uint32
 	sid uint32
 }
