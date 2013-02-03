@@ -329,7 +329,7 @@ func (n *folderNode) fetch() bool {
 		return true
 	}
 
-	handles := mtp.ObjectHandles{}
+	handles := mtp.Uint32Array{}
 	err := n.fs.dev.GetObjectHandles(n.storageID, 0x0,
 		n.id, &handles)
 	if err != nil {
@@ -339,7 +339,7 @@ func (n *folderNode) fetch() bool {
 
 	infos := []*mtp.ObjectInfo{}
 	sizes := map[uint32]int64{}
-	for _, handle := range handles.Handles {
+	for _, handle := range handles.Values {
 		obj := mtp.ObjectInfo{}
 		err := n.fs.dev.GetObjectInfo(handle, &obj)
 		if err != nil {
@@ -366,7 +366,7 @@ func (n *folderNode) fetch() bool {
 		infos = append(infos, &obj)
 	}
 
-	for i, handle := range handles.Handles {
+	for i, handle := range handles.Values {
 		var node fuse.FsNode
 		if infos[i] == nil {
 			continue

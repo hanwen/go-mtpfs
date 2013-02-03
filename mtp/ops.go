@@ -167,6 +167,7 @@ func (d *Device) ResetDevicePropValue(propCode uint32) error {
 	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
+// Claims the USB interface of the device.
 func (d *Device) Claim() error {
 	if d.h == nil {
 		return fmt.Errorf("device not open")
@@ -196,9 +197,7 @@ func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
 	return err
 }
 
-func (d *Device) GetObjectHandles(storageID,
-	objFormatCode, parent uint32,
-	info *Uint32Array) error {
+func (d *Device) GetObjectHandles(storageID, objFormatCode, parent uint32, info *Uint32Array) error {
 	var req, rep Container
 	req.Code = OC_GetObjectHandles
 	req.Param = []uint32{storageID, objFormatCode, parent}

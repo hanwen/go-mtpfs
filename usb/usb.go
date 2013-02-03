@@ -1,3 +1,7 @@
+// The usb package is a straighforward cgo wrapping of the libusb 1.0
+// API. It only supports the synchronous API, since Goroutines can be
+// used for asynchronous use-cases.
+
 package usb
 
 // #cgo LDFLAGS: -L/lib64 -lusb-1.0
@@ -18,16 +22,14 @@ const SPEED_SUPER = C.LIBUSB_SPEED_SUPER
 
 type ControlSetup C.struct_libusb_control_setup
 type Transfer C.struct_libusb_transfer
-type Pollfd C.struct_libusb_pollfd
 
-// each interface specifies its own.
+// Device and/or interface class codes.
 const CLASS_PER_INTERFACE = 0
 const CLASS_AUDIO = 1
 const CLASS_COMM = 2
 const CLASS_HID = 3
 const CLASS_PHYSICAL = 5
 const CLASS_PRINTER = 7
-const CLASS_PTP = 6 /* legacy name from libusb-0.1 usb.h */
 const CLASS_IMAGE = 6
 const CLASS_MASS_STORAGE = 8
 const CLASS_HUB = 9
@@ -41,7 +43,7 @@ const CLASS_WIRELESS = 0xe0
 const CLASS_APPLICATION = 0xfe
 const CLASS_VENDOR_SPEC = 0xff
 
-// descriptor types
+// Descriptor types as defined by the USB specification.
 const DT_DEVICE = 0x01
 const DT_CONFIG = 0x02
 const DT_STRING = 0x03
@@ -52,52 +54,37 @@ const DT_REPORT = 0x22
 const DT_PHYSICAL = 0x23
 const DT_HUB = 0x29
 
-// standard request types.
+// Standard request types, as defined in table 9-3 of the USB2 specifications
 const REQUEST_GET_STATUS = 0x00
 const REQUEST_CLEAR_FEATURE = 0x01
 
-/** Set or enable a specific feature */
+// Set or enable a specific feature
 const REQUEST_SET_FEATURE = 0x03
 
-/** Set device address for all future accesses */
+// Set device address for all future accesses
 const REQUEST_SET_ADDRESS = 0x05
 
-/** Get the specified descriptor */
+// Get the specified descriptor
 const REQUEST_GET_DESCRIPTOR = 0x06
 
-/** Used to update existing descriptors or add new descriptors */
+// Used to update existing descriptors or add new descriptors
 const REQUEST_SET_DESCRIPTOR = 0x07
 
-/** Get the current device configuration value */
+// Get the current device configuration value
 const REQUEST_GET_CONFIGURATION = 0x08
 
-/** Set device configuration */
+// Set device configuration
 const REQUEST_SET_CONFIGURATION = 0x09
 
-/** Return the selected alternate setting for the specified interface */
+// Return the selected alternate setting for the specified interface.
 const REQUEST_GET_INTERFACE = 0x0A
 
-/** Select an alternate interface for the specified interface */
+// Select an alternate interface for the specified interface
 const REQUEST_SET_INTERFACE = 0x0B
 
-/** Set then report an endpoint's synchronization frame */
+// Set then report an endpoint's synchronization frame
 const REQUEST_SYNCH_FRAME = 0x0C
 
-const RECIPIENT_DEVICE = 0x00
-const RECIPIENT_INTERFACE = 0x01
-const RECIPIENT_ENDPOINT = 0x02
-const RECIPIENT_OTHER = 0x03
-
-const ISO_SYNC_TYPE_NONE = 0
-const ISO_SYNC_TYPE_ASYNC = 1
-const ISO_SYNC_TYPE_ADAPTIVE = 2
-const ISO_SYNC_TYPE_SYNC = 3
-
-const ISO_USAGE_TYPE_DATA = 0
-const ISO_USAGE_TYPE_FEEDBACK = 1
-const ISO_USAGE_TYPE_IMPLICIT = 2
-
-// TODO add error type.
 const SUCCESS = 0
 const ERROR_IO = -1
 const ERROR_INVALID_PARAM = -2
@@ -125,6 +112,33 @@ const TRANSFER_SHORT_NOT_OK = 1 << 0
 const TRANSFER_FREE_BUFFER = 1 << 1
 const TRANSFER_FREE_TRANSFER = 1 << 2
 
+// Request types to use in ControlTransfer().
+const REQUEST_TYPE_STANDARD = (0x00 << 5)
+const REQUEST_TYPE_CLASS = (0x01 << 5)
+const REQUEST_TYPE_VENDOR = (0x02 << 5)
+const REQUEST_TYPE_RESERVED = (0x03 << 5)
+
+// Recipient bits for the reqType of ControlTransfer(). Values 4 - 31
+// are reserved.
+const RECIPIENT_DEVICE = 0x00
+const RECIPIENT_INTERFACE = 0x01
+const RECIPIENT_ENDPOINT = 0x02
+const RECIPIENT_OTHER = 0x03
+
+// Synchronization types for isochronous endpoints, used in
+// EndpointDescriptor.Attributes, bits 2:3.
+const ISO_SYNC_TYPE_NONE = 0
+const ISO_SYNC_TYPE_ASYNC = 1
+const ISO_SYNC_TYPE_ADAPTIVE = 2
+const ISO_SYNC_TYPE_SYNC = 3
+
+// Usage types used in EndpointDescriptor.Attributes, bits 4:5.
+const ISO_USAGE_TYPE_DATA = 0
+const ISO_USAGE_TYPE_FEEDBACK = 1
+const ISO_USAGE_TYPE_IMPLICIT = 2
+
+// DeviceDescriptor is the standard USB device descriptor as
+// documented in section 9.6.1 of the USB 2.0 specification.
 type DeviceDescriptor struct {
 	// Size of this descriptor (in bytes)
 	Length byte
@@ -139,7 +153,7 @@ type DeviceDescriptor struct {
 	// DeviceClass value.
 	DeviceSubClass byte
 	// USB-IF protocol code for the device, qualified by the
-	// bDeviceClass and DeviceSubClass values.
+	// DeviceClass and DeviceSubClass values.
 	DeviceProtocol byte
 	// Maximum packet size for endpoint 0.
 	MaxPacketSize0 byte
@@ -161,6 +175,7 @@ type DeviceDescriptor struct {
 	NumConfigurations byte
 }
 
+// A collection of alternate settings for a USB interface.
 type Interface struct {
 	AltSetting []InterfaceDescriptor
 }
@@ -175,29 +190,27 @@ func (f *Interface) fromC(c *C.struct_libusb_interface) {
 	}
 }
 
-// a structure representing the standard USB endpoint descriptor. This
-// descriptor is documented in section 9.6.3 of the USB 2.0 specification.
-// All multiple-byte fields are represented in host-endian format.
+// EndpointDescriptor represents the standard USB endpoint
+// descriptor. This descriptor is documented in section 9.6.3 of the
+// USB 2.0 specification.
 type EndpointDescriptor struct {
 	// Size of this descriptor (in bytes)
 	Length byte
 
-	// Descriptor type. Will have value
-	// \ref libusb_descriptor_type::LIBUSB_DT_ENDPOINT LIBUSB_DT_ENDPOINT in
-	// this context.
+	// Descriptor type. Will have value LIBUSB_DT_ENDPOINT in this
+	// context.
 	DescriptorType byte
 
 	// The address of the endpoint described by this descriptor. Bits 0:3 are
-	// the endpoint number. Bits 4:6 are reserved. Bit 7 indicates direction,
-	// see \ref libusb_endpoint_direction.
+	// the endpoint number. Bits 4:6 are reserved. Bit 7 indicates direction.
 	EndpointAddress byte
 
 	// Attributes which apply to the endpoint when it is configured using
 	// the ConfigurationValue. Bits 0:1 determine the transfer type and
-	// correspond to \ref libusb_transfer_type. Bits 2:3 are only used for
-	// isochronous endpoints and correspond to \ref libusb_iso_sync_type.
+	// correspond to libusb_transfer_type. Bits 2:3 are only used for
+	// isochronous endpoints and correspond to libusb_iso_sync_type.
 	// Bits 4:5 are also only used for isochronous endpoints and correspond to
-	// \ref libusb_iso_usage_type. Bits 6:7 are reserved.
+	// libusb_iso_usage_type. Bits 6:7 are reserved.
 	Attributes byte
 
 	// Maximum packet size this endpoint is capable of sending/receiving.
@@ -219,12 +232,17 @@ type EndpointDescriptor struct {
 	Extra []byte
 }
 
+// Endpoint transfer types, for bits 0:1 of
+// EndpointDescriptor.Attributes
 const TRANSFER_TYPE_CONTROL = 0
 const TRANSFER_TYPE_ISOCHRONOUS = 1
 const TRANSFER_TYPE_BULK = 2
 const TRANSFER_TYPE_INTERRUPT = 3
 
+// in: device-to-host
 const ENDPOINT_IN = 0x80
+
+// out: host-to-device
 const ENDPOINT_OUT = 0x00
 
 func (e *EndpointDescriptor) TransferType() byte {
@@ -283,16 +301,14 @@ func (d *EndpointDescriptor) fromC(c *C.struct_libusb_endpoint_descriptor) {
 	d.Extra = byteArrToSlice(c.extra, c.extra_length)
 }
 
-// A structure representing the standard USB interface descriptor. This
-// descriptor is documented in section 9.6.5 of the USB 2.0 specification.
-// All multiple-byte fields are represented in host-endian format.
+// InterfaceDescriptor contains the standard USB interface descriptor,
+// according to section 9.6.5 of the USB 2.0 specification.
 type InterfaceDescriptor struct {
 	// Size of this descriptor (in bytes)
 	Length byte
 
-	// Descriptor type. Will have value
-	// libusb_descriptor_type::LIBUSB_DT_INTERFACE LIBUSB_DT_INTERFACE
-	// in this context.
+	// Descriptor type. Will have value DT_INTERFACE
+	// LIBUSB_DT_INTERFACE in this context.
 	DescriptorType byte
 
 	// Number of this interface
@@ -301,7 +317,7 @@ type InterfaceDescriptor struct {
 	// Value used to select this alternate setting for this interface
 	AlternateSetting byte
 
-	// USB-IF class code for this interface. See \ref libusb_class_code. */
+	// USB-IF class code for this interface.
 	InterfaceClass byte
 
 	// USB-IF subclass code for this interface, qualified by the
@@ -309,14 +325,13 @@ type InterfaceDescriptor struct {
 	InterfaceSubClass byte
 
 	// USB-IF protocol code for this interface, qualified by the
-	// bInterfaceClass and bInterfaceSubClass values
+	// InterfaceClass and InterfaceSubClass values
 	InterfaceProtocol byte
 
 	// Index of string descriptor describing this interface
 	InterfaceStringIndex byte
 
-	// Array of endpoint descriptors. This length of this array is determined
-	// by the NumEndpoints field.
+	// Array of endpoint descriptors.
 	EndPoints []EndpointDescriptor
 
 	// Extra descriptors. If libusb encounters unknown interface
@@ -360,8 +375,7 @@ type ConfigDescriptor struct {
 	// Size of this descriptor (in bytes)
 	Length byte
 
-	// Descriptor type. Will have value
-	// \ref libusb_descriptor_type::LIBUSB_DT_CONFIG LIBUSB_DT_CONFIG
+	// Descriptor type. Will have value DT_CONFIG LIBUSB_DT_CONFIG
 	// in this context.
 	DescriptorType byte
 
@@ -374,7 +388,7 @@ type ConfigDescriptor struct {
 	// Index of string descriptor describing this configuration
 	ConfigurationIndex byte
 
-	// Configuration characteristics */
+	// Configuration characteristics
 	Attributes byte
 
 	// Maximum power consumption of the USB device from this bus in this
@@ -382,12 +396,11 @@ type ConfigDescriptor struct {
 	// of 2 mA.
 	MaxPower byte
 
-	// Array of interfaces supported by this configuration. The length of
-	// this array is determined by the bNumInterfaces field.
+	// Array of interfaces supported by this configuration.
 	Interfaces []Interface
 
 	// Extra descriptors. If libusb encounters unknown configuration
-	// descriptors, it will store them here, should you wish to parse them. */
+	// descriptors, it will store them here, should you wish to parse them.
 	Extra []byte
 }
 
@@ -468,7 +481,7 @@ func (d *Device) GetDeviceSpeed() int {
 	return int(C.libusb_get_device_speed(d.me()))
 }
 
-// Convenience function to retrieve the wMaxPacketSize value for a particular endpoint in the active device configuration.
+// Convenience function to retrieve the MaxPacketSize value for a particular endpoint in the active device configuration.
 func (d *Device) GetMaxPacketSize(endpoint byte) int {
 	return int(C.libusb_get_max_packet_size(d.me(), C.uchar(endpoint)))
 }
@@ -533,7 +546,7 @@ func (d *Device) GetConfigDescriptorByValue(value byte) (*ConfigDescriptor, erro
 	return &cd, nil
 }
 
-// Determine the bConfigurationValue of the currently active configuration.
+// Determine the ConfigurationValue of the currently active configuration.
 func (h *DeviceHandle) GetConfiguration() (int, error) {
 	var r C.int
 	err := C.libusb_get_configuration(h.me(), &r)
@@ -571,6 +584,7 @@ func (h *DeviceHandle) Device() *Device {
 	return (*Device)(C.libusb_get_device(h.me()))
 }
 
+// The error codes returned by libusb.
 type Error int
 
 func (e Error) Error() string {
@@ -651,16 +665,29 @@ func (h *DeviceHandle) Reset() error {
 	return toErr(C.libusb_reset_device(h.me()))
 }
 
-/*
-libusb_device_handle *libusb_open_device_with_vid_pid (libusb_context *ctx, uint16_t vendor_id, uint16_t product_id)
-	Convenience function for finding a device with a particular idVendor/idProduct combination.
-int 	libusb_reset_device (libusb_device_handle *dev)
- 	Perform a USB port reset to reinitialize a device.
-int 	libusb_kernel_driver_active (libusb_device_handle *dev, int interface_number)
- 	Determine if a kernel driver is active on an interface.
-int 	libusb_detach_kernel_driver (libusb_device_handle *dev, int interface_number)
- 	Detach a kernel driver from an interface.
-int 	libusb_attach_kernel_driver (libusb_device_handle *dev, int interface_number)
- 	Re-attach an interface's kernel driver, which was previously detached using libusb_detach_kernel_driver().
+// Clear an halt/stall for a endpoint.
+func (h *DeviceHandle) ClearHalt(endpoint byte) error {
+	return toErr(C.libusb_clear_halt(h.me(), C.uchar(endpoint)))
+}
 
-*/
+// Determine if a kernel driver is active on an interface.
+func (h *DeviceHandle) KernelDriverActive(ifaceNum int) (bool, error) {
+	ret := C.libusb_kernel_driver_active(h.me(), C.int(ifaceNum))
+	if ret == 0 {
+		return false, nil
+	}
+	if ret == 1 {
+		return true, nil
+	}
+	return false, toErr(ret)
+}
+
+// Detach a kernel driver from an interface.
+func (h *DeviceHandle) DetachKernelDriver(ifaceNum int) error {
+	return toErr(C.libusb_detach_kernel_driver(h.me(), C.int(ifaceNum)))
+}
+
+// Re-attach an interface's kernel driver, which was previously detached using libusb_detach_kernel_driver().
+func (h *DeviceHandle) AttachKernelDriver(ifaceNum int) error {
+	return toErr(C.libusb_attach_kernel_driver(h.me(), C.int(ifaceNum)))
+}
