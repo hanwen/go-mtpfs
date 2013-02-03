@@ -1,5 +1,8 @@
 package mtp
 
+// These tests require a single Android MTP device that is connected
+// and unlocked.
+
 import (
 	"bytes"
 	"fmt"
@@ -169,35 +172,76 @@ func TestAndroid(t *testing.T) {
 	}
 }
 
-func testDeviceProperties(dev *Device, t *testing.T) {
-	var friendly DevicePropDesc
-	err := dev.GetDevicePropDesc(DPC_MTP_DeviceFriendlyName, &friendly)
+func TestDeviceProperties(t *testing.T) {
+	dev, err := SelectDevice("")
 	if err != nil {
-		t.Log("friendly failed:", err)
-	} else {
-		t.Logf("%#v\n", friendly)
+		t.Fatal(err)
+	}
+	defer dev.Close()
+
+	err = dev.Claim()
+	if err != nil {
+		t.Log("device claim failed:", err)
 	}
 
-	t.Log("setpropt")
-	var str StringValue
-	str.Value = "hanwen's nexus 7"
+	err = dev.OpenSession()
+	if err != nil {
+		t.Log("OpenSession failed:", err)
+	}
+
+	// Test non-supported device property first.
+	var battery DevicePropDesc
+	err = dev.GetDevicePropDesc(DPC_BatteryLevel, &battery)
+	if err != nil {
+		// Not an error; not supported on Android.
+		t.Log("battery failed:", err)
+	} else {
+		t.Logf("%#v\n", battery)
+	}
+
+	var friendly DevicePropDesc
+	err = dev.GetDevicePropDesc(DPC_MTP_DeviceFriendlyName, &friendly)
+	if err != nil {
+		t.Fatal("GetDevicePropDesc FriendlyName failed:", err)
+	} else {
+		t.Logf("%s: %#v\n", DPC_names[DPC_MTP_DeviceFriendlyName], friendly)
+	}
+	before := friendly.CurrentValue.(string)
+
+	newVal := fmt.Sprintf("gomtp device_test %x", rand.Int31())
+	str := StringValue{newVal}
 	err = dev.SetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
-		t.Log("SetDevicePropValue failed:", err)
+		t.Error("SetDevicePropValue failed:", err)
 	}
 
-	str = StringValue{}
+	str.Value = ""
 	err = dev.GetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
-		t.Log("GetDevicePropValue failed:", err)
-	} else {
-		t.Logf("Device Value: %#v\n", str)
+		t.Error("GetDevicePropValue failed:", err)
+	}
+	if str.Value != newVal {
+		t.Logf("got %q for property value, want %q\n", str.Value, newVal)
 	}
 
+	err = dev.ResetDevicePropValue(DPC_MTP_DeviceFriendlyName)
+	if err != nil {
+		// For some reason, this is not supported? Returns
+		// unknown error code 0xffff
+		t.Log("ResetDevicePropValue failed:", err)
+	}
+
+	str = StringValue{before}
+	err = dev.SetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
+	if err != nil {
+		t.Error("SetDevicePropValue failed:", err)
+	}
+
+	// Test object properties.
 	props := Uint16Array{}
 	err = dev.GetObjectPropsSupported(OFC_Undefined, &props)
 	if err != nil {
-		t.Logf("GetObjectPropsSupported failed: %v\n", err)
+		t.Errorf("GetObjectPropsSupported failed: %v\n", err)
 	} else {
 		t.Logf("GetObjectPropsSupported (OFC_Undefined) value: %s\n", getNames(OPC_names, props.Values))
 	}
@@ -212,31 +256,40 @@ func testDeviceProperties(dev *Device, t *testing.T) {
 		err = dev.GetObjectPropDesc(p, OFC_Undefined, &objPropDesc)
 		name := OPC_names[int(p)]
 		if err != nil {
-			t.Logf("GetObjectPropDesc(%s) failed: %v\n", name, err)
+			t.Errorf("GetObjectPropDesc(%s) failed: %v\n", name, err)
 		} else {
 			t.Logf("GetObjectPropDesc(%s) value: %#v %T\n", name, objPropDesc,
 				InstantiateType(objPropDesc.DataType).Interface())
 		}
 	}
 
-	err = dev.ResetDeviceProp(DPC_MTP_DeviceFriendlyName)
+}
+
+func TestDeviceInfo(t *testing.T) {
+	dev, err := SelectDevice("")
 	if err != nil {
-		t.Log("ResetDeviceProp:", err)
+		t.Fatal(err)
+	}
+	defer dev.Close()
+
+	i, _ := dev.Id()
+	t.Log("device:", i)
+	err = dev.Claim()
+	if err != nil {
+		t.Error("device claim failed:", err)
 	}
 
-	var battery DevicePropDesc
-	err = dev.GetDevicePropDesc(DPC_BatteryLevel, &friendly)
+	t.Log("devinfo:")
+	info := DeviceInfo{}
+	err = dev.GetDeviceInfo(&info)
 	if err != nil {
-		t.Log("battery failed:", err)
+		t.Error("GetDeviceInfo failed:", err)
 	} else {
-		t.Logf("%#v\n", battery)
+		t.Logf("%v\n", &info)
 	}
 }
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
-func TestDevice(t *testing.T) {
+func TestDeviceStorage(t *testing.T) {
 	dev, err := SelectDevice("")
 	if err != nil {
 		t.Fatal(err)
@@ -250,9 +303,7 @@ func TestDevice(t *testing.T) {
 		t.Log("device claim failed:", err)
 	}
 
-	//t.Log(dev.OpenSession())
 	t.Log("devinfo:")
-	//dev.DebugPrint = true
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
 	if err != nil {
@@ -266,19 +317,8 @@ func TestDevice(t *testing.T) {
 		t.Log("Session failed:", err)
 	}
 
-	testDeviceProperties(dev, t)
-	if err != nil {
-		t.Error(err)
-	}
-	testStorage(dev, t)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func testStorage(dev *Device, t *testing.T) {
 	sids := Uint32Array{}
-	err := dev.GetStorageIDs(&sids)
+	err = dev.GetStorageIDs(&sids)
 	if err != nil {
 		t.Fatalf("GetStorageIDs failed: %v", err)
 	} else {
@@ -298,7 +338,7 @@ func testStorage(dev *Device, t *testing.T) {
 		t.Logf("%#v\n", storageInfo)
 	}
 
-	resp, err := dev.GenericRPC(OC_GetNumObjects, []uint32{id, 0x0, 0x0})
+	resp, err := dev.GetNumObjects(id, 0x0, 0x0)
 	if err != nil {
 		t.Fatalf("GenericRPC failed:", err)
 	} else {
@@ -312,7 +352,7 @@ func testStorage(dev *Device, t *testing.T) {
 		data[i] = byte(i % 256)
 	}
 
-	name := fmt.Sprintf("mtp-doodle-test%x", rand.Int31())
+	name := fmt.Sprintf("go-mtp-test%x", rand.Int31())
 	buf := bytes.NewBuffer(data)
 	send := ObjectInfo{
 		StorageID:        id,
@@ -335,7 +375,7 @@ func testStorage(dev *Device, t *testing.T) {
 		}
 	}
 
-	hs := ObjectHandles{}
+	hs := Uint32Array{}
 	err = dev.GetObjectHandles(id,
 		OFC_Undefined,
 		//OFC_Association,
@@ -345,7 +385,7 @@ func testStorage(dev *Device, t *testing.T) {
 		t.Fatalf("GetObjectHandles failed: %v", err)
 	} else {
 		found := false
-		for _, h := range hs.Handles {
+		for _, h := range hs.Values {
 			if h == handle {
 				found = true
 				break
@@ -396,6 +436,5 @@ func testStorage(dev *Device, t *testing.T) {
 	err = dev.DeleteObject(handle)
 	if err != nil {
 		t.Fatalf("DeleteObject failed: %v", err)
-
 	}
 }

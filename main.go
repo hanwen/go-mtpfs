@@ -9,9 +9,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
-	"github.com/hanwen/go-fuse/fuse"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	if err = dev.OpenSession(); err != nil {
 		log.Fatalf("OpenSession failed: %v", err)
 	}
-	
+
 	sids, err := fs.SelectStorages(dev, *storageFilter)
 	if err != nil {
 		log.Fatalf("selectStorages failed: %v", err)
@@ -47,7 +47,7 @@ func main() {
 	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
 	}
-	fs, err  := fs.NewDeviceFs(dev, sids, opts)
+	fs, err := fs.NewDeviceFs(dev, sids, opts)
 	if err != nil {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}

@@ -2,9 +2,40 @@ package mtp
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
+// Print hex on stderr.
+func hexDump(data []byte) {
+	i := 0
+	for i < len(data) {
+		next := i + 16
+		if next > len(data) {
+			next = len(data)
+		}
+		ss := []string{}
+		s := fmt.Sprintf("%x", data[i:next])
+		for j := 0; j < len(s); j += 4 {
+			e := j + 4
+			if len(s) < e {
+				e = len(s)
+			}
+			ss = append(ss, s[j:e])
+		}
+		chars := make([]byte, next-i)
+		for j, c := range data[i:next] {
+			if c < 32 || c > 127 {
+				c = '.'
+			}
+			chars[j] = c
+		}
+		fmt.Fprintf(os.Stderr, "%04x: %-40s %s\n", i, strings.Join(ss, " "), chars)
+		i = next
+	}
+}
+
+// Extract names from name map.
 func getNames(m map[int]string, vals []uint16) string {
 	r := []string{}
 	for _, v := range vals {
@@ -16,8 +47,6 @@ func getNames(m map[int]string, vals []uint16) string {
 	}
 	return strings.Join(r, ", ")
 }
-
-
 
 func (i *DeviceInfo) String() string {
 	return fmt.Sprintf("stdv: %x, ext: %x, mtp: v%x, mtp ext: %q fmod: %x ops: %s evs: %s "+

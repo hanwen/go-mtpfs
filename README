@@ -49,6 +49,15 @@ the device; the filesystem then will continue to function, but
 generates I/O errors when it reads from or writes to the device.
 
 
+CAVEATS
+
+* It does not implement rename between directories, because the
+  Android stack does not implement it.
+
+* It does not implement Event handling, ie. it will not notice changes
+  that the phone makes to the media database while connected.
+
+
 FEEDBACK
 
 You can send your feedback through the issue tracker at

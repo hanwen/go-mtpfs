@@ -3,7 +3,7 @@ package fs
 import (
 	"log"
 	"regexp"
-	
+
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -26,7 +26,7 @@ func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if !s.IsHierarchical() {
 			log.Printf("skipping non hierarchical storage %q", s.StorageDescription)
 			continue

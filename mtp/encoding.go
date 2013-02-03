@@ -298,7 +298,7 @@ func Decode(r io.Reader, iface interface{}) error {
 	if ok {
 		return decoder.Decode(r)
 	}
-	
+
 	typeSel := DataTypeSelector(0xfe)
 	return decodeWithSelector(r, iface, typeSel)
 }
@@ -311,17 +311,16 @@ func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector
 	val = val.Elem()
 	t := val.Type()
 
-
 	for i := 0; i < t.NumField(); i++ {
 		err := decodeField(r, val.Field(i), typeSel)
-		
+
 		if err != nil {
 			return err
 		}
 		if val.Field(i).Type().Name() == "DataTypeSelector" {
 			typeSel = val.Field(i).Interface().(DataTypeSelector)
 		}
-		
+
 	}
 	return nil
 }
@@ -397,7 +396,7 @@ func decodePropDescForm(r io.Reader, selector DataTypeSelector, formFlag uint8) 
 	} else if formFlag == DPFF_Enumeration {
 		f := PropDescEnumForm{}
 		err := decodeWithSelector(r, reflect.ValueOf(&f).Elem(), selector)
-		return f, err 
+		return f, err
 	}
 	return nil, nil
 }
@@ -412,7 +411,6 @@ func (pd *ObjectPropDesc) Decode(r io.Reader) (err error) {
 	return err
 }
 
-
 func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
 	err = Decode(r, &pd.DevicePropDescFixed)
 	if err != nil {
@@ -422,4 +420,3 @@ func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
 	pd.Form = form
 	return err
 }
-

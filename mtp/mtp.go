@@ -11,6 +11,7 @@ import (
 	"github.com/hanwen/go-mtpfs/usb"
 )
 
+// An MTP device.
 type Device struct {
 	h   *usb.DeviceHandle
 	dev *usb.Device
@@ -18,7 +19,6 @@ type Device struct {
 	claimed bool
 
 	// split off descriptor?
-
 	devDescr    usb.DeviceDescriptor
 	ifaceDescr  usb.InterfaceDescriptor
 	sendEp      byte
@@ -26,15 +26,15 @@ type Device struct {
 	eventEp     byte
 	configIndex byte
 
-	// In milliseconds.
-	Timeout     int
+	// In milliseconds. Defaults to 2 seconds.
+	Timeout int
 
 	// Print request/response codes.
 	DebugPrint bool
 
 	// Print data as it passes over the USB connection.
-	DataPrint  bool
-	
+	DataPrint bool
+
 	// If set, send header in separate write.
 	SeparateHeader bool
 
@@ -46,12 +46,18 @@ type Session struct {
 	sid uint32
 }
 
+// RCError are return codes from the Container.Code field.
 type RCError uint16
 
 func (e RCError) Error() string {
-	return fmt.Sprintf("RC %s", RC_names[int(e)])
+	n, ok := RC_names[int(e)]
+	if ok {
+		return n
+	}
+	return fmt.Sprintf("RetCode %x", uint16(e))
 }
 
+// Close releases the interface, and closes the device.
 func (d *Device) Close() error {
 	if d.h == nil {
 		return nil // or error?
@@ -71,12 +77,12 @@ func (d *Device) Done() {
 	d.dev = nil
 }
 
-// Open an MTP device.
+// Open opens an MTP device.
 func (d *Device) Open() error {
 	if d.Timeout == 0 {
 		d.Timeout = 2000
 	}
-	
+
 	if d.h != nil {
 		return fmt.Errorf("already open")
 	}
@@ -122,9 +128,9 @@ func (d *Device) Id() (string, error) {
 }
 
 func (d *Device) sendReq(req *Container) error {
-	c := USBBulkContainer{
-		USBBulkHeader: USBBulkHeader{
-			Length:        uint32(HdrLen + 4*len(req.Param)),
+	c := usbBulkContainer{
+		usbBulkHeader: usbBulkHeader{
+			Length:        uint32(usbHdrLen + 4*len(req.Param)),
 			Type:          USB_CONTAINER_COMMAND,
 			Code:          req.Code,
 			TransactionID: req.TransactionID,
@@ -134,7 +140,7 @@ func (d *Device) sendReq(req *Container) error {
 		c.Param[i] = req.Param[i]
 	}
 
-	var wData [BulkLen]byte
+	var wData [usbBulkLen]byte
 	buf := bytes.NewBuffer(wData[:0])
 
 	err := binary.Write(buf, binary.LittleEndian, c)
@@ -142,7 +148,7 @@ func (d *Device) sendReq(req *Container) error {
 		panic(err)
 	}
 
-	d.debugPrint(d.sendEp, buf.Bytes())
+	d.dataPrint(d.sendEp, buf.Bytes())
 	_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
 	if err != nil {
 		return err
@@ -154,10 +160,10 @@ const packetSize = 512
 
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
-func (d *Device) fetchPacket(dest []byte, header *USBBulkHeader) (rest []byte, err error) {
+func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
 	n, err := d.h.BulkTransfer(d.fetchEp, dest[:packetSize], d.Timeout)
 	if n > 0 {
-		d.debugPrint(d.fetchEp, dest[:n])
+		d.dataPrint(d.fetchEp, dest[:n])
 	}
 
 	if err != nil {
@@ -172,7 +178,7 @@ func (d *Device) fetchPacket(dest []byte, header *USBBulkHeader) (rest []byte, e
 	return buf.Bytes(), nil
 }
 
-func (d *Device) decodeRep(h *USBBulkHeader, rest []byte, rep *Container) error {
+func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
 	if h.Type != USB_CONTAINER_RESPONSE {
 		return fmt.Errorf("got type %d in response", h.Type)
 	}
@@ -183,7 +189,7 @@ func (d *Device) decodeRep(h *USBBulkHeader, rest []byte, rep *Container) error 
 	}
 	rep.TransactionID = h.TransactionID
 
-	restLen := int(h.Length) - HdrLen
+	restLen := int(h.Length) - usbHdrLen
 	if restLen != len(rest) {
 		return fmt.Errorf("header specified 0x%x bytes, but have 0x%x",
 			restLen, len(rest))
@@ -196,8 +202,12 @@ func (d *Device) decodeRep(h *USBBulkHeader, rest []byte, rep *Container) error 
 	return nil
 }
 
-// Runs a single MTP transaction. dest and src cannot be specified at the same time.
-func (d *Device) RPC(req *Container, rep *Container,
+// Runs a single MTP transaction. dest and src cannot be specified at
+// the same time.  The request should fill out Code and Param as
+// necessary. The response is provided here, but usually only the
+// return code is of interest.  If the return code is an error, this
+// function will return an RCError instance.
+func (d *Device) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	if d.session != nil {
 		req.SessionID = d.session.sid
@@ -208,14 +218,14 @@ func (d *Device) RPC(req *Container, rep *Container,
 	if d.DebugPrint {
 		fmt.Printf("request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
-	
+
 	err := d.sendReq(req)
 	if err != nil {
 		return err
 	}
 
 	if src != nil {
-		hdr := USBBulkHeader{
+		hdr := usbBulkHeader{
 			Type:          USB_CONTAINER_DATA,
 			Code:          req.Code,
 			Length:        uint32(writeSize),
@@ -229,7 +239,7 @@ func (d *Device) RPC(req *Container, rep *Container,
 		}
 	}
 	var data [packetSize]byte
-	h := &USBBulkHeader{}
+	h := &usbBulkHeader{}
 	rest, err := d.fetchPacket(data[:], h)
 	if err != nil {
 		return err
@@ -245,7 +255,7 @@ func (d *Device) RPC(req *Container, rep *Container,
 
 		size := int(h.Length)
 		dest.Write(rest)
-		size -= len(rest) + HdrLen
+		size -= len(rest) + usbHdrLen
 		if size > 0 {
 			_, err = d.bulkRead(dest)
 			if err != nil {
@@ -253,7 +263,7 @@ func (d *Device) RPC(req *Container, rep *Container,
 			}
 		}
 
-		h = &USBBulkHeader{}
+		h = &usbBulkHeader{}
 		rest, err = d.fetchPacket(data[:], h)
 	}
 
@@ -272,7 +282,8 @@ func (d *Device) RPC(req *Container, rep *Container,
 	return nil
 }
 
-func (d *Device) debugPrint(ep byte, data []byte) {
+// Prints data going over the USB connection.
+func (d *Device) dataPrint(ep byte, data []byte) {
 	if !d.DataPrint {
 		return
 	}
@@ -284,63 +295,35 @@ func (d *Device) debugPrint(ep byte, data []byte) {
 	hexDump(data)
 }
 
-func hexDump(data []byte) {
-	i := 0
-	for i < len(data) {
-		next := i + 16
-		if next > len(data) {
-			next = len(data)
-		}
-		ss := []string{}
-		s := fmt.Sprintf("%x", data[i:next])
-		for j := 0; j < len(s); j += 4 {
-			e := j + 4
-			if len(s) < e {
-				e = len(s)
-			}
-			ss = append(ss, s[j:e])
-		}
-		chars := make([]byte, next-i)
-		for j, c := range data[i:next] {
-			if c < 32 || c > 127 {
-				c = '.'
-			}
-			chars[j] = c
-		}
-		fmt.Fprintf(os.Stderr, "%04x: %-40s %s\n", i, strings.Join(ss, " "), chars)
-		i = next
-	}
-}
-
 // The linux usb stack can send 16kb per call, according to libusb.
 const rwBufSize = 0x4000
 
 // bulkWrite returns the number of non-header bytes written.
-func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64, err error) {
+func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
 	if hdr != nil {
-		if size+HdrLen > 0xFFFFFFFF {
+		if size+usbHdrLen > 0xFFFFFFFF {
 			hdr.Length = 0xFFFFFFFF
 		} else {
-			hdr.Length = uint32(size + HdrLen)
+			hdr.Length = uint32(size + usbHdrLen)
 		}
 
 		var packetArr [packetSize]byte
 		var packet []byte
 		if d.SeparateHeader {
-			packet = packetArr[:HdrLen]
+			packet = packetArr[:usbHdrLen]
 		} else {
 			packet = packetArr[:]
 		}
 
 		buf := bytes.NewBuffer(packet[:0])
 		binary.Write(buf, byteOrder, hdr)
-		cpSize := int64(len(packet) - HdrLen)
+		cpSize := int64(len(packet) - usbHdrLen)
 		if cpSize > size {
 			cpSize = size
 		}
 
 		_, err = io.CopyN(buf, r, cpSize)
-		d.debugPrint(d.sendEp, buf.Bytes())
+		d.dataPrint(d.sendEp, buf.Bytes())
 		_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
 		if err != nil {
 			return cpSize, err
@@ -364,7 +347,7 @@ func (d *Device) bulkWrite(hdr *USBBulkHeader, r io.Reader, size int64) (n int64
 		}
 		size -= int64(m)
 
-		d.debugPrint(d.sendEp, buf[:m])
+		d.dataPrint(d.sendEp, buf[:m])
 		lastTransfer, err = d.h.BulkTransfer(d.sendEp, buf[:m], d.Timeout)
 		n += int64(lastTransfer)
 
@@ -390,7 +373,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 			break
 		}
 		if lastRead > 0 {
-			d.debugPrint(d.fetchEp, buf[:lastRead])
+			d.dataPrint(d.fetchEp, buf[:lastRead])
 
 			w, err := w.Write(buf[:lastRead])
 			n += int64(w)

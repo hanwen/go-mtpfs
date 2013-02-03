@@ -58,6 +58,7 @@ vendors = set(data['VENDOR'].keys())
 vendors.add('EK')
 
 print 'package mtp'
+print '// DO NOT EDIT : generated automatically'
 for p, nv in sorted(data.items()):
     if p in expanation:
         print '\n// %s' % expanation[p]

@@ -1,19 +1,24 @@
 package fs
 
+// This test requires an unlocked android MTP device plugged in.
+
 import (
 	"fmt"
-	"testing"
 	"io/ioutil"
 	"log"
-	"os"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"testing"
 	"time"
-	
-	"github.com/hanwen/go-mtpfs/mtp"
+
 	"github.com/hanwen/go-fuse/fuse"
-	
+	"github.com/hanwen/go-mtpfs/mtp"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func TestDevice(t *testing.T) {
 	dev, err := mtp.SelectDevice("")
@@ -31,7 +36,7 @@ func TestDevice(t *testing.T) {
 		t.Fatalf("selectStorages failed: %v", err)
 	}
 
-	tempdir,err := ioutil.TempDir("", "mtpfs")
+	tempdir, err := ioutil.TempDir("", "mtpfs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,26 +51,26 @@ func TestDevice(t *testing.T) {
 
 	mount.Debug = true
 	dev.DebugPrint = true
-	
+
 	defer mount.Unmount()
 	go mount.Loop()
 
 	var root string
-	for i := 0;  i < 10; i++ {
+	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
 		if err != nil || len(fis) == 0 {
 			time.Sleep(1)
 			continue
 		}
 
-		root = filepath.Join(tempdir,fis[0].Name())
+		root = filepath.Join(tempdir, fis[0].Name())
 		break
 		if i == 9 {
 			t.Fatal("mount unsuccessful")
 		}
 	}
-	
-	_, err = os.Lstat(root + "/Music");
+
+	_, err = os.Lstat(root + "/Music")
 	if err != nil {
 		t.Fatal("Music not found", err)
 	}

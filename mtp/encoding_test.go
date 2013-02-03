@@ -100,7 +100,6 @@ func TestDecode(t *testing.T) {
 
 func TestDecodeObjInfo(t *testing.T) {
 	bin := parseHex(objInfoStr)
-	fmt.Printf("bin encoded 0x%x bytes\n", len(bin))
 	var info ObjectInfo
 	buf := bytes.NewBuffer(bin)
 	err := Decode(buf, &info)

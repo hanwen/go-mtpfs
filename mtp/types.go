@@ -1,3 +1,8 @@
+// The MTP packages defines data types and procedures for
+// communicating with an MTP device.  Beyond the communication
+// primitive, it implements many useful operations in the file ops.go.
+// These may serve as an example how to implement further operations.
+
 package mtp
 
 import (
@@ -5,27 +10,14 @@ import (
 	"time"
 )
 
+// Container is the data type for sending/receiving MTP requests and
+// responses.
 type Container struct {
 	Code          uint16
 	SessionID     uint32
 	TransactionID uint32
 	Param         []uint32
 }
-
-type USBBulkHeader struct {
-	Length        uint32
-	Type          uint16
-	Code          uint16
-	TransactionID uint32
-}
-
-type USBBulkContainer struct {
-	USBBulkHeader
-	Param [5]uint32
-}
-
-const HdrLen = 2*2 + 2*4
-const BulkLen = 5*4 + HdrLen
 
 type DeviceInfo struct {
 	StandardVersion           uint16
@@ -44,9 +36,13 @@ type DeviceInfo struct {
 	SerialNumber              string
 }
 
+// DataTypeSelector is the special type to indicate the actual type of
+// fields of DataDependentType.
 type DataTypeSelector uint16
 type DataDependentType interface{}
 
+// The Decoder interface is for types that need special decoding
+// support, eg. the ones using DataDependentType.
 type Decoder interface {
 	Decode(r io.Reader) error
 }
@@ -54,7 +50,7 @@ type Decoder interface {
 type PropDescRangeForm struct {
 	MinimumValue DataDependentType
 	MaximumValue DataDependentType
- 	StepSize     DataDependentType
+	StepSize     DataDependentType
 }
 
 type PropDescEnumForm struct {
@@ -72,7 +68,7 @@ type DevicePropDescFixed struct {
 
 type DevicePropDesc struct {
 	DevicePropDescFixed
-	Form                interface{}
+	Form interface{}
 }
 
 type ObjectPropDescFixed struct {
@@ -86,7 +82,7 @@ type ObjectPropDescFixed struct {
 
 type ObjectPropDesc struct {
 	ObjectPropDescFixed
-	Form                interface{}
+	Form interface{}
 }
 
 type Uint32Array struct {
@@ -116,19 +112,13 @@ type StorageInfo struct {
 	VolumeLabel        string
 }
 
-
 func (d *StorageInfo) IsHierarchical() bool {
-	return d.FilesystemType  == FST_GenericHierarchical
+	return d.FilesystemType == FST_GenericHierarchical
 }
-
 
 func (d *StorageInfo) IsRemovable() bool {
-       return (d.StorageType == ST_RemovableROM ||
+	return (d.StorageType == ST_RemovableROM ||
 		d.StorageType == ST_RemovableRAM)
-}
-
-type ObjectHandles struct {
-	Handles []uint32
 }
 
 type ObjectInfo struct {
@@ -152,3 +142,20 @@ type ObjectInfo struct {
 	ModificationDate    time.Time
 	Keywords            string
 }
+
+// USB stuff.
+
+type usbBulkHeader struct {
+	Length        uint32
+	Type          uint16
+	Code          uint16
+	TransactionID uint32
+}
+
+type usbBulkContainer struct {
+	usbBulkHeader
+	Param [5]uint32
+}
+
+const usbHdrLen = 2*2 + 2*4
+const usbBulkLen = 5*4 + usbHdrLen

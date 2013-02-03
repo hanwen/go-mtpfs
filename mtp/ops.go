@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+// OpenSession opens a session, which is necesary for any command that
+// queries or modifies storage. It is an error to open a session twice.
 func (d *Device) OpenSession() error {
 	if d.session != nil {
 		return fmt.Errorf("session already open")
@@ -13,7 +15,7 @@ func (d *Device) OpenSession() error {
 	var req, rep Container
 	req.Code = OC_OpenSession
 	req.Param = []uint32{1} // session
-	err := d.RPC(&req, &rep, nil, nil, 0)
+	err := d.RunTransaction(&req, &rep, nil, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -26,10 +28,11 @@ func (d *Device) OpenSession() error {
 	return nil
 }
 
+// Closes a sessions. This is done automatically if the device is closed.
 func (d *Device) CloseSession() error {
 	var req, rep Container
 	req.Code = OC_CloseSession
-	return d.RPC(&req, &rep, nil, nil, 0)
+	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
 func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
@@ -37,7 +40,7 @@ func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
 
 	req.Code = OC_GetDeviceInfo
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -52,7 +55,7 @@ func (d *Device) GetStorageIDs(info *Uint32Array) error {
 	var req, rep Container
 	req.Code = OC_GetStorageIDs
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -65,7 +68,7 @@ func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *Obje
 	req.Code = OC_MTP_GetObjectPropDesc
 	req.Param = []uint32{uint32(objPropCode), uint32(objFormatCode)}
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -80,7 +83,7 @@ func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value 
 
 	req.Code = OC_MTP_GetObjectPropValue
 	req.Param = []uint32{objHandle, uint32(objPropCode)}
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -98,7 +101,7 @@ func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value 
 		return err
 	}
 
-	return d.RPC(&req, &rep, nil, &buf, int64(buf.Len()))
+	return d.RunTransaction(&req, &rep, nil, &buf, int64(buf.Len()))
 }
 
 func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Array) error {
@@ -107,7 +110,7 @@ func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Arra
 
 	req.Code = OC_MTP_GetObjectPropsSupported
 	req.Param = []uint32{uint32(objFormatCode)}
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -121,7 +124,7 @@ func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error 
 	req.Param = append(req.Param, uint32(propCode))
 
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -140,7 +143,7 @@ func (d *Device) SetDevicePropValue(propCode uint32, src interface{}) error {
 	if err != nil {
 		return err
 	}
-	return d.RPC(&req, &rep, nil, &buf, int64(buf.Len()))
+	return d.RunTransaction(&req, &rep, nil, &buf, int64(buf.Len()))
 }
 
 func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
@@ -149,7 +152,7 @@ func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
 	req.Param = []uint32{propCode}
 
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -157,9 +160,11 @@ func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
 	return err
 }
 
-func (d *Device) ResetDeviceProp(propCode uint32) error {
-	_, err := d.GenericRPC(OC_ResetDevicePropValue, []uint32{propCode})
-	return err
+func (d *Device) ResetDevicePropValue(propCode uint32) error {
+	var req, rep Container
+	req.Code = OC_ResetDevicePropValue
+	req.Param = []uint32{propCode}
+	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
 func (d *Device) Claim() error {
@@ -180,7 +185,7 @@ func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
 	req.Code = OC_GetStorageInfo
 	req.Param = []uint32{ID}
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -191,23 +196,14 @@ func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
 	return err
 }
 
-// An operation that just involves standard containers, such as GetNumObjects
-func (d *Device) GenericRPC(opcode uint16, params []uint32) ([]uint32, error) {
-	var req, rep Container
-	req.Code = opcode
-	req.Param = params
-	err := d.RPC(&req, &rep, nil, nil, 0)
-	return rep.Param, err
-}
-
 func (d *Device) GetObjectHandles(storageID,
 	objFormatCode, parent uint32,
-	info *ObjectHandles) error {
+	info *Uint32Array) error {
 	var req, rep Container
 	req.Code = OC_GetObjectHandles
 	req.Param = []uint32{storageID, objFormatCode, parent}
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -220,7 +216,7 @@ func (d *Device) GetObjectInfo(handle uint32, info *ObjectInfo) error {
 	req.Code = OC_GetObjectInfo
 	req.Param = []uint32{handle}
 	var buf bytes.Buffer
-	err := d.RPC(&req, &rep, &buf, nil, 0)
+	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
@@ -231,9 +227,23 @@ func (d *Device) GetObjectInfo(handle uint32, info *ObjectInfo) error {
 	return err
 }
 
+func (d *Device) GetNumObjects(storageId uint32, formatCode uint16, parent uint32) (uint32, error) {
+	var req, rep Container
+	req.Code = OC_GetNumObjects
+	req.Param = []uint32{storageId, uint32(formatCode), parent}
+	err := d.RunTransaction(&req, &rep, nil, nil, 0)
+	if err != nil {
+		return 0, err
+	}
+	return rep.Param[0], nil
+}
+
 func (d *Device) DeleteObject(handle uint32) error {
-	_, err := d.GenericRPC(OC_DeleteObject, []uint32{handle, 0x0})
-	return err
+	var req, rep Container
+	req.Code = OC_DeleteObject
+	req.Param = []uint32{handle, 0x0}
+
+	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
 func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectInfo) (storageID, parent, handle uint32, err error) {
@@ -247,7 +257,7 @@ func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectIn
 		return
 	}
 
-	err = d.RPC(&req, &rep, nil, buf, int64(buf.Len()))
+	err = d.RunTransaction(&req, &rep, nil, buf, int64(buf.Len()))
 	if err != nil {
 		return
 	}
@@ -258,7 +268,7 @@ func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectIn
 func (d *Device) SendObject(r io.Reader, size int64) error {
 	var req, rep Container
 	req.Code = OC_SendObject
-	return d.RPC(&req, &rep, nil, r, size)
+	return d.RunTransaction(&req, &rep, nil, r, size)
 }
 
 func (d *Device) GetObject(handle uint32, w io.Writer) error {
@@ -266,12 +276,12 @@ func (d *Device) GetObject(handle uint32, w io.Writer) error {
 	req.Code = OC_GetObject
 	req.Param = []uint32{handle}
 
-	return d.RPC(&req, &rep, w, nil, 0)
+	return d.RunTransaction(&req, &rep, w, nil, 0)
 }
 
 func (d *Device) GetPartialObject(handle uint32, w io.Writer, offset uint32, size uint32) error {
 	var req, rep Container
 	req.Code = OC_ANDROID_GET_PARTIAL_OBJECT64
 	req.Param = []uint32{handle, offset, size}
-	return d.RPC(&req, &rep, w, nil, 0)
+	return d.RunTransaction(&req, &rep, w, nil, 0)
 }

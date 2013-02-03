@@ -8,7 +8,7 @@ import (
 	"github.com/hanwen/go-mtpfs/usb"
 )
 
-// Finds likely MTP devices without opening them.
+// FindDevices finds likely MTP devices without opening them.
 func FindDevices(c *usb.Context) ([]*Device, error) {
 	l, err := c.GetDeviceList()
 	if err != nil {
@@ -123,7 +123,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 // Return opened MTP device that matches given pattern.
 func SelectDevice(pattern string) (*Device, error) {
 	c := usb.NewContext()
-	
+
 	devs, err := FindDevices(c)
 	if err != nil {
 		return nil, err

@@ -39,8 +39,8 @@ func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse
 		log.Println("AndroidSendPartialObject failed:", err)
 		return 0, fuse.EIO
 	}
-	written = uint32(len(dest)-b.Len())
-	if off + int64(written) > f.node.Size {
+	written = uint32(len(dest) - b.Len())
+	if off+int64(written) > f.node.Size {
 		f.node.Size = off + int64(written)
 	}
 	return written, fuse.OK
@@ -49,4 +49,3 @@ func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse
 func (f *androidFile) Release() {
 	f.node.endEdit()
 }
-

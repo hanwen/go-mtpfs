@@ -11,21 +11,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hanwen/go-mtpfs/mtp"
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-mtpfs/mtp"
 )
 
 type DeviceFsOptions struct {
+	// Assume removable volumes are VFAT and munge filenames
+	// accordingly.
 	RemovableVFat bool
 }
 
+// DeviceFS implements a fuse.NodeFileSystem that mounts multiple
+// storages.
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
-	backingDir string
-	root       *rootNode
-	dev        *mtp.Device
-	devInfo    mtp.DeviceInfo
-	storages   []uint32
+	backingDir   string
+	root         *rootNode
+	dev          *mtp.Device
+	devInfo      mtp.DeviceInfo
+	storages     []uint32
 	storageInfos []mtp.StorageInfo
 
 	options *DeviceFsOptions
@@ -35,7 +39,7 @@ type DeviceFs struct {
 // should be wrapped in a Locking(Raw)FileSystem to make sure it is
 // threadsafe.  The file system assumes the device does not touch the
 // storage.  Arguments are the opened mtp device and a directory for the
-// backing store. 
+// backing store.
 func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
 	o := options
 
@@ -51,9 +55,9 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 	if !strings.Contains(fs.devInfo.MTPExtension, "android.com") {
 		return nil, fmt.Errorf("this device has no android.com extensions.")
 	}
-	
+
 	for _, sid := range fs.storages {
-		var info mtp.StorageInfo 
+		var info mtp.StorageInfo
 		err := d.GetStorageInfo(sid, &info)
 		if err != nil {
 			return nil, err
@@ -62,15 +66,6 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 	}
 	return fs, nil
 }
-
-/*
-TODO:
-
-- Moving between directories
-- Something intelligent with playlists/pictures, maybe?
-- expose properties as xattrs?
-
-*/
 
 func (fs *DeviceFs) GetStorageInfo(want uint32) *mtp.StorageInfo {
 	for i, sid := range fs.storages {
@@ -88,7 +83,6 @@ func (fs *DeviceFs) Root() fuse.FsNode {
 func (fs *DeviceFs) String() string {
 	return fmt.Sprintf("DeviceFs(%s)", fs.devInfo.Model)
 }
-
 
 func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	total := uint64(0)
@@ -123,13 +117,13 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32, storage u
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
-	
+
 	n := &fileNode{
-		storageID:    storage,
-		obj: &obj,
-		Size: size,
-		fs: fs,
-		id: id,
+		storageID: storage,
+		obj:       &obj,
+		Size:      size,
+		fs:        fs,
+		id:        id,
 	}
 
 	return n
@@ -143,13 +137,15 @@ type rootNode struct {
 func (n *rootNode) StatFs() *fuse.StatfsOut {
 	return n.fs.statFs()
 }
+
 const NOPARENT_ID = 0xFFFFFFFF
+
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for i, s := range fs.storageInfos {
 		obj := mtp.ObjectInfo{
 			ParentObject: NOPARENT_ID,
-			StorageID: fs.storages[i],
-			Filename: s.StorageDescription,
+			StorageID:    fs.storages[i],
+			Filename:     s.StorageDescription,
 		}
 		folder := fs.newFolder(obj, NOPARENT_ID, fs.storages[i])
 		inode := fs.root.Inode().New(true, folder)
@@ -188,12 +184,12 @@ type fileNode struct {
 	storageID uint32
 
 	// MTP handle.
-	id uint32 
+	id uint32
 
 	// This is needed because obj.CompressedSize only goes to
 	// 0xFFFFFFFF
 	Size int64
-	
+
 	// mtp *mtp.ObjectInfo for files
 	obj *mtp.ObjectInfo
 
@@ -212,7 +208,7 @@ func (n *fileNode) startEdit() bool {
 	if n.write {
 		return true
 	}
-	
+
 	err := n.fs.dev.AndroidBeginEditObject(n.id)
 	if err != nil {
 		log.Println("AndroidBeginEditObject failed:", err)
@@ -226,7 +222,7 @@ func (n *fileNode) endEdit() bool {
 	if !n.write {
 		return true
 	}
-	
+
 	err := n.fs.dev.AndroidEndEditObject(n.id)
 	if err != nil {
 		log.Println("AndroidEndEditObject failed:", err)
@@ -252,16 +248,15 @@ func (n *fileNode) OnForget() {
 }
 
 func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	write := (flags & fuse.O_ANYWRITE != 0)
+	write := (flags&fuse.O_ANYWRITE != 0)
 	if write {
 		if !n.startEdit() {
 			return nil, fuse.EIO
 		}
-	} 
+	}
 
 	return &androidFile{node: n}, fuse.OK
 }
-
 
 func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
 	w := n.write
@@ -274,7 +269,7 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 		return fuse.EIO
 	}
 	n.Size = int64(size)
-	
+
 	if !w {
 		if !n.endEdit() {
 			return fuse.EIO
@@ -357,7 +352,7 @@ func (n *folderNode) fetch() bool {
 			infos = append(infos, nil)
 			continue
 		}
-		
+
 		if obj.CompressedSize == 0xFFFFFFFF {
 			var val mtp.Uint64Value
 			err := n.fs.dev.GetObjectPropValue(handle, mtp.OPC_ObjectSize, &val)
@@ -370,7 +365,7 @@ func (n *folderNode) fetch() bool {
 		}
 		infos = append(infos, &obj)
 	}
-	
+
 	for i, handle := range handles.Handles {
 		var node fuse.FsNode
 		if infos[i] == nil {
@@ -485,11 +480,11 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 	}
 
 	obj := mtp.ObjectInfo{
-		Filename: name,
-		ObjectFormat: mtp.OFC_Association,
+		Filename:         name,
+		ObjectFormat:     mtp.OFC_Association,
 		ModificationDate: time.Now(),
-		ParentObject: n.id,
-		StorageID: n.storageID,
+		ParentObject:     n.id,
+		StorageID:        n.storageID,
 	}
 	_, _, newId, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
 	if err != nil {
@@ -536,15 +531,15 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	}
 
 	obj := mtp.ObjectInfo{
-		StorageID: n.storageID,
-		Filename: name,
-		ObjectFormat: mtp.OFC_Undefined,
+		StorageID:        n.storageID,
+		Filename:         name,
+		ObjectFormat:     mtp.OFC_Undefined,
 		ModificationDate: time.Now(),
-		ParentObject: n.id,
-		CompressedSize: 0,
+		ParentObject:     n.id,
+		CompressedSize:   0,
 	}
-	
-	_,_, handle, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
+
+	_, _, handle, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
 	if err != nil {
 		log.Println("SendObjectInfo failed", err)
 		return nil, nil, fuse.EIO
@@ -560,19 +555,19 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		log.Println("AndroidBeginEditObject failed:", err)
 		return nil, nil, fuse.EIO
 	}
-	
+
 	fn := &fileNode{
-		obj: &obj,
-		storageID:    n.storageID,
-		fs:         n.fs,
-		id: handle,
-		write: true,
+		obj:       &obj,
+		storageID: n.storageID,
+		fs:        n.fs,
+		id:        handle,
+		write:     true,
 	}
 
 	n.Inode().AddChild(name, n.Inode().New(false, fn))
 	p := &androidFile{
-		node:         fn,
+		node: fn,
 	}
-	
+
 	return p, fn, fuse.OK
 }

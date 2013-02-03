@@ -1,5 +1,7 @@
 package mtp
 
+// DO NOT EDIT : generated automatically
+
 const AC_ReadWrite = 0x0000
 const AC_ReadOnly = 0x0001
 const AC_ReadOnly_with_Object_Deletion = 0x0002
