@@ -2,7 +2,6 @@
 // communicating with an MTP device.  Beyond the communication
 // primitive, it implements many useful operations in the file ops.go.
 // These may serve as an example how to implement further operations.
-
 package mtp
 
 import (
