@@ -35,13 +35,18 @@ func TestDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectStorages failed: %v", err)
 	}
-
+	if len(sids) == 0 {
+		t.Fatal("no storages found. Unlock device?")
+	}
 	tempdir, err := ioutil.TempDir("", "mtpfs")
 	if err != nil {
 		t.Fatal(err)
 	}
 	opts := DeviceFsOptions{}
 	fs, err := NewDeviceFs(dev, sids, opts)
+	if err != nil {
+		t.Fatal("NewDeviceFs failed:", err)
+	}
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn)
 	mount := fuse.NewMountState(rawFs)
@@ -58,16 +63,12 @@ func TestDevice(t *testing.T) {
 	var root string
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
-		if err != nil || len(fis) == 0 {
-			time.Sleep(1)
-			continue
+		if err == nil && len(fis) > 0 {
+			root = filepath.Join(tempdir, fis[0].Name())
+			t.Log("found entry", fis[0].Name())
+			break;
 		}
-
-		root = filepath.Join(tempdir, fis[0].Name())
-		break
-		if i == 9 {
-			t.Fatal("mount unsuccessful")
-		}
+		time.Sleep(1)
 	}
 
 	_, err = os.Lstat(root + "/Music")
