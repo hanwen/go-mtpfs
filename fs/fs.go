@@ -19,7 +19,11 @@ type DeviceFsOptions struct {
 	// Assume removable volumes are VFAT and munge filenames
 	// accordingly.
 	RemovableVFat bool
+
+	// Backing directory.
+	Dir string
 }
+
 
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
