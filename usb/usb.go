@@ -85,20 +85,35 @@ const REQUEST_SET_INTERFACE = 0x0B
 // Set then report an endpoint's synchronization frame
 const REQUEST_SYNCH_FRAME = 0x0C
 
-const SUCCESS = 0
-const ERROR_IO = -1
-const ERROR_INVALID_PARAM = -2
-const ERROR_ACCESS = -3
-const ERROR_NO_DEVICE = -4
-const ERROR_NOT_FOUND = -5
-const ERROR_BUSY = -6
-const ERROR_TIMEOUT = -7
-const ERROR_OVERFLOW = -8
-const ERROR_PIPE = -9
-const ERROR_INTERRUPTED = -10
-const ERROR_NO_MEM = -11
-const ERROR_NOT_SUPPORTED = -12
-const ERROR_OTHER = -99
+
+// The error codes returned by libusb.
+type Error int
+
+func (e Error) Error() string {
+	return C.GoString(C.libusb_error_name(C.int(e)))
+}
+
+func toErr(e C.int) error {
+	if e < 0 {
+		return Error(e)
+	}
+	return nil
+}
+
+const SUCCESS = Error(0)
+const ERROR_IO = Error(-1)
+const ERROR_INVALID_PARAM = Error(-2)
+const ERROR_ACCESS = Error(-3)
+const ERROR_NO_DEVICE = Error(-4)
+const ERROR_NOT_FOUND = Error(-5)
+const ERROR_BUSY = Error(-6)
+const ERROR_TIMEOUT = Error(-7)
+const ERROR_OVERFLOW = Error(-8)
+const ERROR_PIPE = Error(-9)
+const ERROR_INTERRUPTED = Error(-10)
+const ERROR_NO_MEM = Error(-11)
+const ERROR_NOT_SUPPORTED = Error(-12)
+const ERROR_OTHER = Error(-99)
 
 const TRANSFER_COMPLETED = 0
 const TRANSFER_ERROR = 1
@@ -455,7 +470,7 @@ func (c *Context) GetDeviceList() (DeviceList, error) {
 	var devs **C.libusb_device
 	count := C.libusb_get_device_list(c.me(), &devs)
 	if count < 0 {
-		return nil, fmt.Errorf("libusb_get_device_list returned %d", count)
+		return nil, Error(count)
 	}
 	slice := &reflect.SliceHeader{uintptr(unsafe.Pointer(devs)), int(count), int(count)}
 	rdevs := *(*[]*Device)(unsafe.Pointer(slice))
@@ -563,10 +578,7 @@ func (h *DeviceHandle) SetConfiguration(c int) error {
 func (d *Device) Open() (*DeviceHandle, error) {
 	var h *C.libusb_device_handle
 	r := C.libusb_open(d.me(), &h)
-	if r < 0 {
-		return nil, fmt.Errorf("error %d", r)
-	}
-	return (*DeviceHandle)(h), nil
+	return (*DeviceHandle)(h), toErr(r)
 }
 
 func (h *DeviceHandle) me() *C.libusb_device_handle {
@@ -582,20 +594,6 @@ func (h *DeviceHandle) Close() error {
 // Get the underlying device for a handle.
 func (h *DeviceHandle) Device() *Device {
 	return (*Device)(C.libusb_get_device(h.me()))
-}
-
-// The error codes returned by libusb.
-type Error int
-
-func (e Error) Error() string {
-	return C.GoString(C.libusb_error_name(C.int(e)))
-}
-
-func toErr(e C.int) error {
-	if e < 0 {
-		return Error(e)
-	}
-	return nil
 }
 
 // Claim an interface on a given device handle.
