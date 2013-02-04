@@ -19,7 +19,7 @@ type androidFile struct {
 
 func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	b := bytes.NewBuffer(dest[:0])
-	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.id, b, off, uint32(len(dest)))
+	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.Handle(), b, off, uint32(len(dest)))
 	if err != nil {
 		log.Println("AndroidGetPartialObject64 failed:", err)
 		return nil, fuse.EIO
@@ -29,12 +29,12 @@ func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 }
 
 func (f *androidFile) String() string {
-	return fmt.Sprintf("androidFile h=0x%x", f.node.id)
+	return fmt.Sprintf("androidFile h=0x%x", f.node.Handle())
 }
 
 func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse.Status) {
 	b := bytes.NewBuffer(dest)
-	err := f.node.fs.dev.AndroidSendPartialObject(f.node.id, off, uint32(len(dest)), b)
+	err := f.node.fs.dev.AndroidSendPartialObject(f.node.Handle(), off, uint32(len(dest)), b)
 	if err != nil {
 		log.Println("AndroidSendPartialObject failed:", err)
 		return 0, fuse.EIO

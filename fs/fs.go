@@ -102,28 +102,18 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	}
 }
 
-func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, id uint32, storage uint32) *folderNode {
-	obj.AssociationType = mtp.OFC_Association
-	return &folderNode{
-		fileNode: fs.newFile(obj, 0, id, storage),
-	}
-}
-
-func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32, storage uint32) *fileNode {
-	if obj.StorageID != storage {
-		log.Printf("storage mismatch file %s on %d, parent storage %d",
-			obj.Filename, obj.StorageID, storage)
-	}
+func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) *fileNode {
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
 
 	n := &fileNode{
-		storageID: storage,
-		obj:       &obj,
+		mtpNodeImpl:mtpNodeImpl{
+			obj: &obj,
+			handle: id,
+			fs: fs,
+		},
 		Size:      size,
-		fs:        fs,
-		id:        id,
 	}
 
 	return n
@@ -147,7 +137,7 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 			StorageID:    fs.storages[i],
 			Filename:     s.StorageDescription,
 		}
-		folder := fs.newFolder(obj, NOPARENT_ID, fs.storages[i])
+		folder := fs.newFolder(obj, NOPARENT_ID)
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(s.StorageDescription, inode)
 	}
@@ -171,33 +161,58 @@ func SanitizeDosName(name string) string {
 }
 
 ////////////////
+// mtpNode
+
+type mtpNode interface {
+	fuse.FsNode
+	Handle() uint32
+	StorageID() uint32
+	SetName(string)
+}
+
+type mtpNodeImpl struct {
+	fuse.DefaultFsNode
+
+	// MTP handle.
+	handle uint32
+
+	obj *mtp.ObjectInfo
+	
+	fs *DeviceFs
+}
+
+func (n *mtpNodeImpl) Handle() uint32 {
+	return n.handle
+}
+
+func (n *mtpNodeImpl) SetName(nm string) {
+	n.obj.Filename = nm
+}
+
+func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
+	return n.fs.statFs()
+}
+
+func (n *mtpNodeImpl) StorageID() uint32 {
+	return n.obj.StorageID
+}
+
+var _ = mtpNode((*fileNode)(nil))
+var _ = mtpNode((*folderNode)(nil))
+	
+////////////////
 // files
 
 type fileNode struct {
-	fuse.DefaultFsNode
-	fs *DeviceFs
-
-	storageID uint32
-
-	// MTP handle.
-	id uint32
-
+	mtpNodeImpl
+	
 	// This is needed because obj.CompressedSize only goes to
 	// 0xFFFFFFFF
 	Size int64
 
-	// mtp *mtp.ObjectInfo for files
-	obj *mtp.ObjectInfo
-
-	// local file containing the contents.
-	backing string
 
 	// If set, the backing file was changed.
 	write bool
-
-	// If set, there was some error writing to the backing store;
-	// don't flush file to device.
-	error fuse.Status
 }
 
 func (n *fileNode) startEdit() bool {
@@ -205,7 +220,7 @@ func (n *fileNode) startEdit() bool {
 		return true
 	}
 
-	err := n.fs.dev.AndroidBeginEditObject(n.id)
+	err := n.fs.dev.AndroidBeginEditObject(n.Handle())
 	if err != nil {
 		log.Println("AndroidBeginEditObject failed:", err)
 		return false
@@ -219,28 +234,13 @@ func (n *fileNode) endEdit() bool {
 		return true
 	}
 
-	err := n.fs.dev.AndroidEndEditObject(n.id)
+	err := n.fs.dev.AndroidEndEditObject(n.Handle())
 	if err != nil {
 		log.Println("AndroidEndEditObject failed:", err)
 		return false
 	}
 	n.write = false
 	return true
-}
-
-func (n *fileNode) Id() uint32 {
-	return n.id
-}
-
-func (n *fileNode) StatFs() *fuse.StatfsOut {
-	return n.fs.statFs()
-}
-
-func (n *fileNode) OnForget() {
-	if n.obj != nil {
-		n.obj = nil
-		n.id = 0
-	}
 }
 
 func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
@@ -259,7 +259,7 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 	if !n.startEdit() {
 		return fuse.EIO
 	}
-	err := n.fs.dev.AndroidTruncate(n.id, int64(size))
+	err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size))
 	if err != nil {
 		log.Println("AndroidTruncate failed:", err)
 		return fuse.EIO
@@ -310,13 +310,24 @@ func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, c
 // folders
 
 type folderNode struct {
-	*fileNode
+	mtpNodeImpl
 	fetched bool
+}
+
+func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
+	obj.AssociationType = mtp.OFC_Association
+	return &folderNode{
+	mtpNodeImpl: mtpNodeImpl{
+			handle: h,
+			obj: &obj,
+			fs: fs,
+		},
+	}
 }
 
 // Keep the root nodes for all device storages alive.
 func (n *folderNode) Deletable() bool {
-	return n.Id() != NOPARENT_ID
+	return n.Handle() != NOPARENT_ID
 }
 
 // Fetches data from device returns false on failure.
@@ -326,8 +337,8 @@ func (n *folderNode) fetch() bool {
 	}
 
 	handles := mtp.Uint32Array{}
-	err := n.fs.dev.GetObjectHandles(n.storageID, 0x0,
-		n.id, &handles)
+	err := n.fs.dev.GetObjectHandles(n.StorageID(), 0x0,
+		n.Handle(), &handles)
 	if err != nil {
 		log.Printf("GetObjectHandles failed: %v", err)
 		return false
@@ -344,7 +355,7 @@ func (n *folderNode) fetch() bool {
 		}
 		if obj.Filename == "" {
 			log.Printf("ignoring handle 0x%x with empty name in dir 0x%x",
-				handle, n.id)
+				handle, n.Handle())
 			infos = append(infos, nil)
 			continue
 		}
@@ -368,14 +379,14 @@ func (n *folderNode) fetch() bool {
 			continue
 		}
 		obj := *infos[i]
-		obj.ParentObject = n.id
+		obj.ParentObject = n.Handle()
 		isdir := obj.ObjectFormat == mtp.OFC_Association
 		if isdir {
-			fNode := n.fs.newFolder(obj, handle, n.storageID)
+			fNode := n.fs.newFolder(obj, handle)
 			node = fNode
 		} else {
 			sz := sizes[handle]
-			node = n.fs.newFile(obj, sz, handle, n.storageID)
+			node = n.fs.newFile(obj, sz, handle)
 		}
 
 		n.Inode().AddChild(obj.Filename, n.Inode().New(isdir, node))
@@ -396,25 +407,15 @@ func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Conte
 	return fuse.OK
 }
 
-func toFileNode(n *fuse.Inode) *fileNode {
-	switch f := n.FsNode().(type) {
-	case *fileNode:
-		return f
-	case *folderNode:
-		return f.fileNode
-	}
-	return nil
-}
-
 func (n *folderNode) basenameRename(oldName string, newName string) error {
 	ch := n.Inode().GetChild(oldName)
 
-	mFile := toFileNode(ch)
+	mFile := ch.FsNode().(mtpNode)
 
-	if mFile.Id() != 0 {
+	if mFile.Handle() != 0 {
 		// Only rename on device if it was sent already.
 		v := mtp.StringValue{newName}
-		err := n.fs.dev.SetObjectPropValue(mFile.Id(), mtp.OPC_ObjectFileName, &v)
+		err := n.fs.dev.SetObjectPropValue(mFile.Handle(), mtp.OPC_ObjectFileName, &v)
 		if err != nil {
 			return err
 		}
@@ -479,16 +480,16 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fus
 		Filename:         name,
 		ObjectFormat:     mtp.OFC_Association,
 		ModificationDate: time.Now(),
-		ParentObject:     n.id,
-		StorageID:        n.storageID,
+		ParentObject:     n.Handle(),
+		StorageID:        n.StorageID(),
 	}
-	_, _, newId, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
+	_, _, newId, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
 		return nil, fuse.EIO
 	}
 
-	f := n.fs.newFolder(obj, newId, n.storageID)
+	f := n.fs.newFolder(obj, newId)
 	n.Inode().AddChild(name, n.Inode().New(true, f))
 	return f, fuse.OK
 }
@@ -503,15 +504,15 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 		return fuse.ENOENT
 	}
 
-	f := toFileNode(ch)
-	if f.id != 0 {
-		err := n.fs.dev.DeleteObject(f.id)
+	f := ch.FsNode().(mtpNode)
+	if f.Handle() != 0 {
+		err := n.fs.dev.DeleteObject(f.Handle())
 		if err != nil {
 			log.Printf("DeleteObject failed: %v", err)
 			return fuse.EIO
 		}
 	} else {
-		f.obj.Filename = ""
+		f.SetName("")
 	}
 	n.Inode().RmChild(name)
 	return fuse.OK
@@ -527,15 +528,15 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	}
 
 	obj := mtp.ObjectInfo{
-		StorageID:        n.storageID,
+		StorageID:        n.StorageID(),
 		Filename:         name,
 		ObjectFormat:     mtp.OFC_Undefined,
 		ModificationDate: time.Now(),
-		ParentObject:     n.id,
+		ParentObject:     n.Handle(),
 		CompressedSize:   0,
 	}
 
-	_, _, handle, err := n.fs.dev.SendObjectInfo(n.storageID, n.id, &obj)
+	_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 	if err != nil {
 		log.Println("SendObjectInfo failed", err)
 		return nil, nil, fuse.EIO
@@ -553,10 +554,11 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 	}
 
 	fn := &fileNode{
-		obj:       &obj,
-		storageID: n.storageID,
-		fs:        n.fs,
-		id:        handle,
+		mtpNodeImpl: mtpNodeImpl{
+			obj:       &obj,
+			fs:        n.fs,
+			handle:        handle,
+		},
 		write:     true,
 	}
 
