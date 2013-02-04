@@ -269,7 +269,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 	err = d.decodeRep(h, rest, rep)
 	if d.DebugPrint {
-		fmt.Printf("rep %s\n", RC_names[int(rep.Code)])
+		fmt.Printf("rep %s %v\n", RC_names[int(rep.Code)], rep.Param)
 	}
 	if err != nil {
 		return err
