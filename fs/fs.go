@@ -173,10 +173,6 @@ func SanitizeDosName(name string) string {
 ////////////////
 // files
 
-type folder struct {
-	id uint32
-}
-
 type fileNode struct {
 	fuse.DefaultFsNode
 	fs *DeviceFs
