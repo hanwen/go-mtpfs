@@ -23,7 +23,7 @@ func init() {
 func TestDevice(t *testing.T) {
 	dev, err := mtp.SelectDevice("")
 	if err != nil {
-		t.Fatalf("detect failed: %v", err)
+		t.Fatalf("SelectDevice failed: %v", err)
 	}
 	defer dev.Close()
 
@@ -56,7 +56,6 @@ func TestDevice(t *testing.T) {
 
 	mount.Debug = true
 	dev.DebugPrint = true
-
 	defer mount.Unmount()
 	go mount.Loop()
 
@@ -65,7 +64,6 @@ func TestDevice(t *testing.T) {
 		fis, err := ioutil.ReadDir(tempdir)
 		if err == nil && len(fis) > 0 {
 			root = filepath.Join(tempdir, fis[0].Name())
-			t.Log("found entry", fis[0].Name())
 			break;
 		}
 		time.Sleep(1)
@@ -79,7 +77,7 @@ func TestDevice(t *testing.T) {
 	name := filepath.Join(root, fmt.Sprintf("mtpfs-test-%x", rand.Int31()))
 	golden := "abcpxq134"
 	if err := ioutil.WriteFile(name, []byte("abcpxq134"), 0644); err != nil {
-		t.Fatal(err)
+		t.Fatal("WriteFile failed", err)
 	}
 	got, err := ioutil.ReadFile(name)
 	if err != nil {
@@ -94,13 +92,20 @@ func TestDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal("OpenFile failed:", err)
 	}
-
+	defer f.Close()
+	
 	log.Println("writing...")
 	golden += "hello"
-	f.Write([]byte("hello"))
+	_, err = f.Write([]byte("hello"))
 	log.Println("done...")
-	f.Close()
-
+	if err != nil {
+		t.Fatal("file.Write failed", err)
+	}
+	err = f.Close()
+	if err != nil {
+		t.Fatal("Close failed", err)
+	}
+	
 	got, err = ioutil.ReadFile(name)
 	if err != nil {
 		t.Fatal("ReadFile failed", err)
