@@ -32,7 +32,9 @@ func (d *Device) OpenSession() error {
 func (d *Device) CloseSession() error {
 	var req, rep Container
 	req.Code = OC_CloseSession
-	return d.RunTransaction(&req, &rep, nil, nil, 0)
+	err := d.RunTransaction(&req, &rep, nil, nil, 0)
+	d.session = nil
+	return err
 }
 
 func (d *Device) GetDeviceInfo(info *DeviceInfo) error {

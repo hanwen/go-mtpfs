@@ -111,11 +111,6 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 
 	cand := cands[0]
 
-	// For some reason, always have to reset
-	if err := cand.h.Reset(); err != nil {
-		return nil, err
-	}
-
 	// TODO - set active configuration
 	return cand, nil
 }

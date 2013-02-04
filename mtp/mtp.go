@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -63,6 +64,13 @@ func (d *Device) Close() error {
 		return nil // or error?
 	}
 
+	if d.session != nil {
+		err := d.CloseSession()
+		if err != nil {
+ 			d.h.Reset()
+		}
+	}
+	
 	if d.claimed {
 		d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
 	}
@@ -216,7 +224,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	}
 
 	if d.DebugPrint {
-		fmt.Printf("request %s %v\n", OC_names[int(req.Code)], req.Param)
+		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
 	err := d.sendReq(req)
@@ -250,7 +258,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 			return fmt.Errorf("no sink for data")
 		}
 		if d.DebugPrint {
-			fmt.Printf("data %d\n", h.Length)
+			log.Printf("MTP data 0x%x bytes", h.Length)
 		}
 
 		size := int(h.Length)
@@ -269,7 +277,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 	err = d.decodeRep(h, rest, rep)
 	if d.DebugPrint {
-		fmt.Printf("rep %s %v\n", RC_names[int(rep.Code)], rep.Param)
+		log.Printf("MTP response %s %v", RC_names[int(rep.Code)], rep.Param)
 	}
 	if err != nil {
 		return err
