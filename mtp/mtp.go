@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hanwen/go-mtpfs/usb"
 )
@@ -399,4 +400,25 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 		d.h.BulkTransfer(d.fetchEp, buf[:0], d.Timeout)
 	}
 	return n, err
+}
+
+// Configure is a robust version of OpenSession. On failure, it resets
+// the device and reopens the device and the session.
+func (d *Device) Configure() error {
+	err := d.OpenSession()
+	if err == usb.ERROR_IO || err == RCError(RC_SessionAlreadyOpened) ||
+		err == usb.ERROR_TIMEOUT {
+		d.h.Reset()
+		d.Close()
+
+		// Give the device some rest.
+		time.Sleep(100 * time.Millisecond)
+		if err := d.Open(); err != nil {
+			return fmt.Errorf("opening after reset: %v", err)
+		}
+		if err := d.OpenSession(); err != nil {
+			return fmt.Errorf("OpenSession after reset: %v", err)
+		}
+	}
+	return nil
 }

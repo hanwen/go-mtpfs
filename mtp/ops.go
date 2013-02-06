@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+
 // OpenSession opens a session, which is necesary for any command that
 // queries or modifies storage. It is an error to open a session twice.
 func (d *Device) OpenSession() error {
@@ -20,7 +21,6 @@ func (d *Device) OpenSession() error {
 		return err
 	}
 
-	// TODO - libmtp checks for invalid transaction, I/O err?
 	d.session = &sessionData{
 		tid: 1,
 		sid: 1,
