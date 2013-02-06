@@ -19,19 +19,27 @@ type DeviceFsOptions struct {
 	// Assume removable volumes are VFAT and munge filenames
 	// accordingly.
 	RemovableVFat bool
+
+	// Backing directory.
+	Dir string
+
+	// Use android extensions if available.
+	Android bool
 }
+
 
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
 	backingDir   string
+	delBackingDir bool
 	root         *rootNode
 	dev          *mtp.Device
 	devInfo      mtp.DeviceInfo
 	storages     []uint32
 	storageInfos []mtp.StorageInfo
-
+	
 	options *DeviceFsOptions
 }
 
@@ -53,9 +61,15 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 	}
 
 	if !strings.Contains(fs.devInfo.MTPExtension, "android.com") {
-		return nil, fmt.Errorf("this device has no android.com extensions.")
+		options.Android = false
 	}
 
+	if !options.Android {
+		err = fs.setupClassic()
+		if err != nil {
+			return nil, err
+		}
+	}
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
 		err := d.GetStorageInfo(sid, &info)
@@ -102,21 +116,28 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	}
 }
 
-func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) *fileNode {
+func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fuse.FsNode) {
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
 
-	n := &fileNode{
-		mtpNodeImpl:mtpNodeImpl{
-			obj: &obj,
-			handle: id,
-			fs: fs,
-		},
-		Size:      size,
+	mNode := mtpNodeImpl{
+		obj: &obj,
+		handle: id,
+		fs: fs,
 	}
-
-	return n
+	if fs.options.Android {
+		node = &fileNode{
+			mtpNodeImpl:mNode,
+			Size:      size,
+		}
+	} else {
+		node = &classicNode{
+			mtpNodeImpl: mNode,
+			Size: size,
+		}
+	}
+	return node
 }
 
 type rootNode struct {
@@ -536,36 +557,42 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		CompressedSize:   0,
 	}
 
-	_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
-	if err != nil {
-		log.Println("SendObjectInfo failed", err)
-		return nil, nil, fuse.EIO
-	}
+	if n.fs.options.Android {
+		_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
+		if err != nil {
+			log.Println("SendObjectInfo failed", err)
+			return nil, nil, fuse.EIO
+		}
 
-	err = n.fs.dev.SendObject(&bytes.Buffer{}, 0)
-	if err != nil {
-		log.Println("SendObject failed:", err)
-		return nil, nil, fuse.EIO
-	}
+		err = n.fs.dev.SendObject(&bytes.Buffer{}, 0)
+		if err != nil {
+			log.Println("SendObject failed:", err)
+			return nil, nil, fuse.EIO
+		}
 
-	if err := n.fs.dev.AndroidBeginEditObject(handle); err != nil {
-		log.Println("AndroidBeginEditObject failed:", err)
-		return nil, nil, fuse.EIO
-	}
+		if err := n.fs.dev.AndroidBeginEditObject(handle); err != nil {
+			log.Println("AndroidBeginEditObject failed:", err)
+			return nil, nil, fuse.EIO
+		}
 
-	fn := &fileNode{
-		mtpNodeImpl: mtpNodeImpl{
-			obj:       &obj,
-			fs:        n.fs,
-			handle:        handle,
-		},
-		write:     true,
+		node = &fileNode{
+			mtpNodeImpl: mtpNodeImpl{
+				obj:       &obj,
+				fs:        n.fs,
+				handle:        handle,
+			},
+			write:     true,
+		}
+		file = &androidFile{
+			node: node.(*fileNode),
+		}
+	} else {
+		var err error
+		file, node, err = n.fs.createClassicFile(obj)
+		if err != nil {
+			return nil, nil, fuse.ToStatus(err)
+		}
 	}
-
-	n.Inode().AddChild(name, n.Inode().New(false, fn))
-	p := &androidFile{
-		node: fn,
-	}
-
-	return p, fn, fuse.OK
+	n.Inode().AddChild(name, n.Inode().New(false, node))
+	return file, node, fuse.OK
 }

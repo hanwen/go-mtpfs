@@ -21,6 +21,7 @@ func main() {
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
 	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
+	android := flag.Bool("android", true, "use android extensions if available")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -34,8 +35,8 @@ func main() {
 	}
 	defer dev.Close()
 
-	if err = dev.OpenSession(); err != nil {
-		log.Fatalf("OpenSession failed: %v", err)
+	if err = dev.Configure(); err != nil {
+		log.Fatalf("Configure failed: %v", err)
 	}
 
 	sids, err := fs.SelectStorages(dev, *storageFilter)
@@ -46,6 +47,7 @@ func main() {
 	dev.DebugPrint = *mtpDebug
 	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
+		Android: *android,
 	}
 	fs, err := fs.NewDeviceFs(dev, sids, opts)
 	if err != nil {
@@ -66,4 +68,5 @@ func main() {
 	mount.Debug = *fsdebug
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
+	fs.OnUnmount()
 }

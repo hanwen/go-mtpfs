@@ -27,8 +27,8 @@ func TestDevice(t *testing.T) {
 	}
 	defer dev.Close()
 
-	if err = dev.OpenSession(); err != nil {
-		t.Fatalf("OpenSession failed: %v", err)
+	if err = dev.Configure(); err != nil {
+		t.Fatalf("Configure failed: %v", err)
 	}
 
 	sids, err := SelectStorages(dev, "")
