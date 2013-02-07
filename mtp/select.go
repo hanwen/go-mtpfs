@@ -116,7 +116,6 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 		return nil, fmt.Errorf("could not get configuration of %v: %v",
 			ids[0], err)
 	}
-	acd, err := cand.dev.GetActiveConfigDescriptor()
 	if config != cand.configValue {
 		err := cand.h.SetConfiguration(cand.configValue)
 		if err != nil {
