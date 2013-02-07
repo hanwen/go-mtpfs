@@ -568,7 +568,8 @@ func (h *DeviceHandle) GetConfiguration() (byte, error) {
  	return byte(r), toErr(err)
 }
 
-// Set the active configuration for a device.
+// Set the active configuration for a device. The argument should be
+// a ConfigurationValue, as given in the ConfigDescriptor.
 func (h *DeviceHandle) SetConfiguration(c byte) error {
 	err := C.libusb_set_configuration(h.me(), C.int(c))
 	return toErr(err)
