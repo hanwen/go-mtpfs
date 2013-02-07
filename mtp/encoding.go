@@ -1,6 +1,5 @@
 package mtp
 
-// TODO - testing.
 import (
 	"encoding/binary"
 	"fmt"

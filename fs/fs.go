@@ -125,16 +125,15 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 		obj: &obj,
 		handle: id,
 		fs: fs,
+		Size:      size,
 	}
 	if fs.options.Android {
 		node = &fileNode{
 			mtpNodeImpl:mNode,
-			Size:      size,
 		}
 	} else {
 		node = &classicNode{
 			mtpNodeImpl: mNode,
-			Size: size,
 		}
 	}
 	return node
@@ -200,6 +199,42 @@ type mtpNodeImpl struct {
 	obj *mtp.ObjectInfo
 	
 	fs *DeviceFs
+	
+	// This is needed because obj.CompressedSize only goes to
+	// 0xFFFFFFFF
+	Size int64
+}
+
+func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
+	out.Mode = fuse.S_IFREG | 0644
+	f := n.obj
+	if f != nil {
+		out.Size = uint64(n.Size)
+		t := f.ModificationDate
+		out.SetTimes(&t, &t, &t)
+	}
+
+	return fuse.OK
+}
+
+func (n *mtpNodeImpl) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
+	// Get rid of pesky messages from cp -a.
+	return fuse.OK
+}
+
+func (n *mtpNodeImpl) Chmod(file fuse.File, perms uint32, context *fuse.Context) (code fuse.Status) {
+	// Get rid of pesky messages from cp -a.
+	return fuse.OK
+}
+
+func (n *mtpNodeImpl) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
+	// Unfortunately, we can't set the modtime; it's READONLY in
+	// the Android MTP implementation. We just change the time in
+	// the mount, but this is not persisted.
+	if mTime != nil {
+		n.obj.ModificationDate = *mTime
+	}
+	return fuse.OK
 }
 
 func (n *mtpNodeImpl) Handle() uint32 {
@@ -227,11 +262,6 @@ var _ = mtpNode((*folderNode)(nil))
 type fileNode struct {
 	mtpNodeImpl
 	
-	// This is needed because obj.CompressedSize only goes to
-	// 0xFFFFFFFF
-	Size int64
-
-
 	// If set, the backing file was changed.
 	write bool
 }
@@ -291,38 +321,6 @@ func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) 
 		if !n.endEdit() {
 			return fuse.EIO
 		}
-	}
-	return fuse.OK
-}
-
-func (n *fileNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
-	out.Mode = fuse.S_IFREG | 0644
-	f := n.obj
-	if f != nil {
-		out.Size = uint64(n.Size)
-		t := f.ModificationDate
-		out.SetTimes(&t, &t, &t)
-	}
-
-	return fuse.OK
-}
-
-func (n *fileNode) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
-	// Get rid of pesky messages from cp -a.
-	return fuse.OK
-}
-
-func (n *fileNode) Chmod(file fuse.File, perms uint32, context *fuse.Context) (code fuse.Status) {
-	// Get rid of pesky messages from cp -a.
-	return fuse.OK
-}
-
-func (n *fileNode) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
-	// Unfortunately, we can't set the modtime; it's READONLY in
-	// the Android MTP implementation. We just change the time in
-	// the mount, but this is not persisted.
-	if mTime != nil {
-		n.obj.ModificationDate = *mTime
 	}
 	return fuse.OK
 }

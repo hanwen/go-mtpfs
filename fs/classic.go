@@ -14,10 +14,6 @@ import (
 
 type classicNode struct {
 	mtpNodeImpl
-
-	// This is needed because obj.CompressedSize only goes to
-	// 0xFFFFFFFF
-	Size int64
 	
 	// local file containing the contents.
 	backing string
@@ -87,8 +83,8 @@ func (n *classicNode) send() error {
 
 	if fi.Size() > 0xFFFFFFFF {
 		f.CompressedSize = 0xFFFFFFFF
-		n.Size = fi.Size()
 	}
+	n.Size = fi.Size()
 	start := time.Now()
 
 	_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), f.ParentObject, f)
@@ -172,23 +168,9 @@ func (n *classicNode) fetch() error {
 }
 
 func (n *classicNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	err := n.fetch()
-	if err != nil {
-		return nil, fuse.ToStatus(err)
-	}
-	f, err := os.OpenFile(n.backing, int(flags), 0644)
-	if err != nil {
-		return nil, fuse.ToStatus(err)
-	}
-
-	if flags&fuse.O_ANYWRITE != 0 {
-		p := &pendingFile{
-			LoopbackFile: fuse.LoopbackFile{File: f},
-			node:         n,
-		}
-		return p, fuse.OK
-	}
-	return &fuse.LoopbackFile{File: f}, fuse.OK
+	return &pendingFile{
+		node:         n,
+	}, fuse.OK
 }
 
 func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
@@ -200,45 +182,55 @@ func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 	return fuse.OK
 }
 
-func (n *classicNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
-	if file != nil {
-		return file.GetAttr(out)
-	}
-
-	out.Mode = fuse.S_IFREG | 0644
-	f := n.obj
-	if n.backing != "" {
-		fi, err := os.Stat(n.backing)
-		if err != nil {
-			return fuse.ToStatus(err)
-		}
-		out.Size = uint64(fi.Size())
-		t := f.ModificationDate
-		if n.dirty {
-			t = fi.ModTime()
-		}
-		out.SetTimes(&t, &t, &t)
-	} else if f != nil {
-		out.Size = uint64(n.Size)
-		t := f.ModificationDate
-		out.SetTimes(&t, &t, &t)
-	}
-
-	return fuse.OK
-}
-
-
 ////////////////
 // writing files.
 
 type pendingFile struct {
-	fuse.LoopbackFile
+	fuse.DefaultFile
+	flags uint32
+	loopback *fuse.LoopbackFile
 	node *classicNode
 }
 
+func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
+	if p.loopback == nil {
+		err := p.node.fetch()
+		if err != nil {
+			return nil, fuse.ToStatus(err)
+		}
+		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			return nil, fuse.ToStatus(err)
+		}
+
+		p.loopback = &fuse.LoopbackFile{File: f}
+	}
+	return p.loopback, fuse.OK
+}
+
+func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status) {
+	if p.loopback == nil {
+		if err := p.node.fetch(); err!= nil {
+			log.Println("fetch failed: %v", err)
+			return nil, fuse.EIO
+		}
+		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			return nil, fuse.ToStatus(err)
+		}
+		p.loopback = &fuse.LoopbackFile{File: f}
+	}
+	return p.loopback.Read(data, off)
+}	
+
 func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	p.node.dirty = true
-	n, code := p.LoopbackFile.Write(data, off)
+	f, code := p.rwLoopback()
+	if !code.Ok() {
+		return 0, code
+	}
+		
+	n, code := f.Write(data, off)
 	if !code.Ok() {
 		p.node.error = code
 	}
@@ -246,8 +238,16 @@ func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 }
 
 func (p *pendingFile) Truncate(size uint64) fuse.Status {
+	f, code := p.rwLoopback()
+	if !code.Ok() {
+		return code
+	}
+	
+	code = f.Truncate(size)
+	if !code.Ok() {
+		return code
+	}
 	p.node.dirty = true
-	code := p.LoopbackFile.Truncate(size)
 	if code.Ok() && size == 0 {
 		p.node.error = fuse.OK
 	}
@@ -255,7 +255,10 @@ func (p *pendingFile) Truncate(size uint64) fuse.Status {
 }
 
 func (p *pendingFile) Flush() fuse.Status {
-	code := p.LoopbackFile.Flush()
+	if p.loopback == nil {
+		return fuse.OK
+	}
+	code := p.loopback.Flush()
 	if !code.Ok() {
 		return code
 	}
@@ -268,7 +271,9 @@ func (p *pendingFile) Flush() fuse.Status {
 }
 
 func (p *pendingFile) Release() {
-	p.LoopbackFile.Release()
+	if p.loopback != nil {
+		p.loopback.Release()
+	}
 }
 
 ////////////////////////////////////////////////////////////////
@@ -354,7 +359,7 @@ func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file fuse.File, node 
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
-		LoopbackFile: fuse.LoopbackFile{File: backingFile},
+		loopback: &fuse.LoopbackFile{File: backingFile},
 		node: cl, 
 	}
 
