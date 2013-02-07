@@ -26,7 +26,7 @@ type Device struct {
 	sendEp      byte
 	fetchEp     byte
 	eventEp     byte
-	configIndex byte
+	configValue byte
 
 	// In milliseconds. Defaults to 2 seconds.
 	Timeout int

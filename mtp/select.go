@@ -6,6 +6,46 @@ import (
 
 	"github.com/hanwen/go-mtpfs/usb"
 )
+ 
+func candidateFromDeviceDescriptor(d *usb.Device) *Device {
+	dd, err := d.GetDeviceDescriptor()
+	if err != nil {
+		return nil
+	}
+	for i := byte(0); i < dd.NumConfigurations; i++ {
+		cdecs, err := d.GetConfigDescriptor(i)
+		if err != nil {
+			return nil
+		}
+		for _, iface := range cdecs.Interfaces {
+			for _, a := range iface.AltSetting {
+				if len(a.EndPoints) != 3 {
+					continue
+				}	
+				m := Device{}
+				for _, s := range a.EndPoints {
+					switch {
+					case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_INTERRUPT:
+						m.eventEp = s.EndpointAddress
+					case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_BULK:
+						m.fetchEp = s.EndpointAddress
+					case s.Direction() == usb.ENDPOINT_OUT && s.TransferType() == usb.TRANSFER_TYPE_BULK:
+						m.sendEp = s.EndpointAddress
+					}
+				}
+				if m.sendEp > 0 && m.fetchEp > 0 && m.eventEp > 0 {
+					m.devDescr = *dd
+					m.ifaceDescr = a
+					m.dev = d.Ref()
+					m.configValue = cdecs.ConfigurationValue
+					return &m
+				}
+			}
+		}
+	}
+
+	return nil
+}
 
 // FindDevices finds likely MTP devices without opening them.
 func FindDevices(c *usb.Context) ([]*Device, error) {
@@ -16,42 +56,9 @@ func FindDevices(c *usb.Context) ([]*Device, error) {
 
 	var cands []*Device
 	for _, d := range l {
-		dd, err := d.GetDeviceDescriptor()
-		if err != nil {
-			continue
-		}
-
-		for i := byte(0); i < dd.NumConfigurations; i++ {
-			cdecs, err := d.GetConfigDescriptor(i)
-			if err != nil {
-				return nil, fmt.Errorf("GetConfigDescriptor %d: %v", i, err)
-			}
-			for _, iface := range cdecs.Interfaces {
-				for _, a := range iface.AltSetting {
-					if len(a.EndPoints) != 3 {
-						continue
-					}
-
-					m := Device{}
-					for _, s := range a.EndPoints {
-						switch {
-						case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_INTERRUPT:
-							m.eventEp = s.EndpointAddress
-						case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_BULK:
-							m.fetchEp = s.EndpointAddress
-						case s.Direction() == usb.ENDPOINT_OUT && s.TransferType() == usb.TRANSFER_TYPE_BULK:
-							m.sendEp = s.EndpointAddress
-						}
-					}
-					if m.sendEp > 0 && m.fetchEp > 0 && m.eventEp > 0 {
-						m.devDescr = *dd
-						m.ifaceDescr = a
-						m.dev = d.Ref()
-						m.configIndex = i
-						cands = append(cands, &m)
-					}
-				}
-			}
+		cand := candidateFromDeviceDescriptor(d)
+		if cand != nil {
+			cands = append(cands, cand)
 		}
 	}
 	l.Done()
@@ -103,7 +110,20 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 		return nil, fmt.Errorf("no device matched")
 	}
 
-	// TODO - set active configuration
+	cand := cands[0]
+	config, err := cand.h.GetConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("could not get configuration of %v: %v",
+			ids[0], err)
+	}
+	acd, err := cand.dev.GetActiveConfigDescriptor()
+	if config != cand.configValue {
+		err := cand.h.SetConfiguration(cand.configValue)
+		if err != nil {
+			return nil, fmt.Errorf("could not set configuration of %v: %v",
+				ids[0], err)
+		}
+	}
 	return cands[0], nil
 }
 
