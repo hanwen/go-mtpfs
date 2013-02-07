@@ -20,12 +20,16 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func TestDevice(t *testing.T) {
+func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	dev, err := mtp.SelectDevice("")
 	if err != nil {
 		t.Fatalf("SelectDevice failed: %v", err)
 	}
-	defer dev.Close()
+	defer func() {
+		if dev != nil {
+			dev.Close()
+		}
+	}()
 
 	if err = dev.Configure(); err != nil {
 		t.Fatalf("Configure failed: %v", err)
@@ -42,7 +46,9 @@ func TestDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := DeviceFsOptions{}
+	opts := DeviceFsOptions{
+		Android: useAndroid,
+	}
 	fs, err := NewDeviceFs(dev, sids, opts)
 	if err != nil {
 		t.Fatal("NewDeviceFs failed:", err)
@@ -56,10 +62,8 @@ func TestDevice(t *testing.T) {
 
 	mount.Debug = true
 	dev.DebugPrint = true
-	defer mount.Unmount()
 	go mount.Loop()
 
-	var root string
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
 		if err == nil && len(fis) > 0 {
@@ -69,7 +73,24 @@ func TestDevice(t *testing.T) {
 		time.Sleep(1)
 	}
 
-	_, err = os.Lstat(root + "/Music")
+	if root == "" {
+		mount.Unmount()
+		t.Fatal("could not find entries in mount point.")
+	}
+
+	d := dev
+	dev = nil
+	return root, func() {
+		mount.Unmount()
+		d.Close()
+	}
+}
+
+func testDevice(t *testing.T, useAndroid bool) {
+	root, cleanup := startFs(t, useAndroid)
+	defer cleanup()
+
+	_, err := os.Lstat(root + "/Music")
 	if err != nil {
 		t.Fatal("Music not found", err)
 	}
@@ -136,4 +157,12 @@ func TestDevice(t *testing.T) {
 	if fi, err := os.Lstat(newName); err == nil {
 		t.Fatal("should have disappeared after Remove", fi)
 	}
+}
+
+func TestAndroid(t *testing.T) {
+	testDevice(t, true)
+}
+
+func TestNormal(t *testing.T) {
+	testDevice(t, false)
 }
