@@ -17,6 +17,8 @@ import (
 func main() {
 	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
 	mtpDebug := flag.Bool("mtp-debug", false, "switch on MTP debugging")
+	dataDebug := flag.Bool("data-debug", false, "switch on data debugging")
+	usbTimeout := flag.Int("usb-timeout", 2000, "timeout in milliseconds")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
@@ -35,6 +37,7 @@ func main() {
 	}
 	defer dev.Close()
 
+	dev.Timeout = *usbTimeout
 	if err = dev.Configure(); err != nil {
 		log.Fatalf("Configure failed: %v", err)
 	}
@@ -45,6 +48,7 @@ func main() {
 	}
 
 	dev.DebugPrint = *mtpDebug
+	dev.DataPrint = *dataDebug
 	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
 		Android: *android,
