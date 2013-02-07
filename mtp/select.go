@@ -3,7 +3,6 @@ package mtp
 import (
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/hanwen/go-mtpfs/usb"
 )
@@ -100,19 +99,12 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 		}
 	}
 
-	if len(cands) > 1 {
-		return nil, fmt.Errorf("ambiguous devices: %s",
-			strings.Join(ids, ", "))
-	}
-
 	if len(cands) == 0 {
 		return nil, fmt.Errorf("no device matched")
 	}
 
-	cand := cands[0]
-
 	// TODO - set active configuration
-	return cand, nil
+	return cands[0], nil
 }
 
 // Return opened MTP device that matches given pattern.
