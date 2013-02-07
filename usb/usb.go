@@ -562,14 +562,14 @@ func (d *Device) GetConfigDescriptorByValue(value byte) (*ConfigDescriptor, erro
 }
 
 // Determine the ConfigurationValue of the currently active configuration.
-func (h *DeviceHandle) GetConfiguration() (int, error) {
+func (h *DeviceHandle) GetConfiguration() (byte, error) {
 	var r C.int
 	err := C.libusb_get_configuration(h.me(), &r)
-	return int(r), toErr(err)
+ 	return byte(r), toErr(err)
 }
 
 // Set the active configuration for a device.
-func (h *DeviceHandle) SetConfiguration(c int) error {
+func (h *DeviceHandle) SetConfiguration(c byte) error {
 	err := C.libusb_set_configuration(h.me(), C.int(c))
 	return toErr(err)
 }
