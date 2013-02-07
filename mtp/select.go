@@ -84,7 +84,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	found = nil
 	var ids []string
 	for i, cand := range cands {
-		id, err := cand.Id()
+		id, err := cand.ID()
 		if err != nil {
 			// TODO - close cands
 			return nil, fmt.Errorf("Id dev %d: %v", i, err)

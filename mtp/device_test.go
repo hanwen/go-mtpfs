@@ -272,7 +272,7 @@ func TestDeviceInfo(t *testing.T) {
 	}
 	defer dev.Close()
 
-	i, _ := dev.Id()
+	i, _ := dev.ID()
 	t.Log("device:", i)
 	err = dev.Claim()
 	if err != nil {
@@ -296,7 +296,7 @@ func TestDeviceStorage(t *testing.T) {
 	}
 	defer dev.Close()
 
-	i, _ := dev.Id()
+	i, _ := dev.ID()
 	t.Log("device:", i)
 	err = dev.Claim()
 	if err != nil {

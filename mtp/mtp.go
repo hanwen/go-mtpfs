@@ -116,7 +116,7 @@ func (d *Device) Open() error {
 }
 
 // Id is the manufacturer + product + serial
-func (d *Device) Id() (string, error) {
+func (d *Device) ID() (string, error) {
 	if d.h == nil {
 		return "", fmt.Errorf("device not open")
 	}
