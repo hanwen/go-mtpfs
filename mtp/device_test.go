@@ -30,11 +30,6 @@ func TestAndroid(t *testing.T) {
 		return
 	}
 
-	err = dev.Claim()
-	if err != nil {
-		t.Log("device claim failed:", err)
-	}
-
 	if err = dev.OpenSession(); err != nil {
 		t.Fatal("OpenSession failed:", err)
 	}
@@ -179,11 +174,6 @@ func TestDeviceProperties(t *testing.T) {
 	}
 	defer dev.Close()
 
-	err = dev.Claim()
-	if err != nil {
-		t.Log("device claim failed:", err)
-	}
-
 	err = dev.OpenSession()
 	if err != nil {
 		t.Log("OpenSession failed:", err)
@@ -274,12 +264,6 @@ func TestDeviceInfo(t *testing.T) {
 
 	i, _ := dev.ID()
 	t.Log("device:", i)
-	err = dev.Claim()
-	if err != nil {
-		t.Error("device claim failed:", err)
-	}
-
-	t.Log("devinfo:")
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
 	if err != nil {
@@ -298,18 +282,13 @@ func TestDeviceStorage(t *testing.T) {
 
 	i, _ := dev.ID()
 	t.Log("device:", i)
-	err = dev.Claim()
-	if err != nil {
-		t.Log("device claim failed:", err)
-	}
 
-	t.Log("devinfo:")
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
 	if err != nil {
 		t.Log("GetDeviceInfo failed:", err)
 	} else {
-		t.Logf("%v\n", &info)
+		t.Logf("device info %v\n", &info)
 	}
 
 	err = dev.OpenSession()

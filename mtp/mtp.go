@@ -86,6 +86,20 @@ func (d *Device) Done() {
 	d.dev = nil
 }
 
+// Claims the USB interface of the device.
+func (d *Device) claim() error {
+	if d.h == nil {
+		return fmt.Errorf("device not open")
+	}
+
+	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
+	if err == nil {
+		d.claimed = true
+	}
+
+	return err
+}
+
 // Open opens an MTP device.
 func (d *Device) Open() error {
 	if d.Timeout == 0 {
@@ -112,7 +126,8 @@ func (d *Device) Open() error {
 		d.Close()
 		return fmt.Errorf("has no MTP in interface string")
 	}
-	return nil
+
+	return d.claim()
 }
 
 // Id is the manufacturer + product + serial

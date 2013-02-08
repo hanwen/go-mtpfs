@@ -169,20 +169,6 @@ func (d *Device) ResetDevicePropValue(propCode uint32) error {
 	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
-// Claims the USB interface of the device.
-func (d *Device) Claim() error {
-	if d.h == nil {
-		return fmt.Errorf("device not open")
-	}
-
-	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
-	if err == nil {
-		d.claimed = true
-	}
-
-	return err
-}
-
 func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
 	var req, rep Container
 	req.Code = OC_GetStorageInfo
