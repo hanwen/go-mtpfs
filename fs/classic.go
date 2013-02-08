@@ -60,8 +60,7 @@ func (n *classicNode) send() error {
 	if n.obj.Filename == "" {
 		return nil
 	}
-
-	if n.fs.GetStorageInfo(n.StorageID()).IsRemovable() && n.fs.options.RemovableVFat {
+	if n.fs.mungeVfat[n.StorageID()] {
 		f.Filename = SanitizeDosName(f.Filename)
 	}
 

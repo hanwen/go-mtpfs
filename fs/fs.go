@@ -38,7 +38,7 @@ type DeviceFs struct {
 	dev          *mtp.Device
 	devInfo      mtp.DeviceInfo
 	storages     []uint32
-	storageInfos []mtp.StorageInfo
+	mungeVfat    map[uint32]bool
 	
 	options *DeviceFsOptions
 }
@@ -70,24 +70,18 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 			return nil, err
 		}
 	}
+
+	fs.mungeVfat = make(map[uint32]bool)
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
-		err := d.GetStorageInfo(sid, &info)
 		if err != nil {
 			return nil, err
 		}
-		fs.storageInfos = append(fs.storageInfos, info)
-	}
-	return fs, nil
-}
 
-func (fs *DeviceFs) GetStorageInfo(want uint32) *mtp.StorageInfo {
-	for i, sid := range fs.storages {
-		if sid == want {
-			return &fs.storageInfos[i]
-		}
+		fs.mungeVfat[sid] = info.IsRemovable() && o.RemovableVFat
 	}
-	return nil
+
+	return fs, nil
 }
 
 func (fs *DeviceFs) Root() fuse.FsNode {
@@ -98,12 +92,20 @@ func (fs *DeviceFs) String() string {
 	return fmt.Sprintf("DeviceFs(%s)", fs.devInfo.Model)
 }
 
+// TODO - this should be per storage and return just the free space in
+// the storage.
 func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
-	for _, s := range fs.storageInfos {
-		total += uint64(s.MaxCapability)
-		free += uint64(s.FreeSpaceInBytes)
+	for _, sid := range fs.storages {
+		var info mtp.StorageInfo
+		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
+			log.Println("GetStorageInfo %x: %v", sid, err)
+			continue
+		}
+		
+		total += uint64(info.MaxCapability)
+		free += uint64(info.FreeSpaceInBytes)
 	}
 
 	bs := uint64(1024)
@@ -151,15 +153,21 @@ func (n *rootNode) StatFs() *fuse.StatfsOut {
 const NOPARENT_ID = 0xFFFFFFFF
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
-	for i, s := range fs.storageInfos {
+	for _, sid := range fs.storages {
+		var info mtp.StorageInfo
+		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
+			log.Println("GetStorageInfo %x: %v", sid, err)
+			continue
+		}
+		
 		obj := mtp.ObjectInfo{
 			ParentObject: NOPARENT_ID,
-			StorageID:    fs.storages[i],
-			Filename:     s.StorageDescription,
+			StorageID:    sid,
+			Filename:     info.StorageDescription,
 		}
 		folder := fs.newFolder(obj, NOPARENT_ID)
 		inode := fs.root.Inode().New(true, folder)
-		fs.root.Inode().AddChild(s.StorageDescription, inode)
+		fs.root.Inode().AddChild(info.StorageDescription, inode)
 	}
 }
 
