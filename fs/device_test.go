@@ -60,8 +60,8 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 		t.Fatalf("mount failed: %v", err)
 	}
 
-	mount.Debug = true
-	dev.DebugPrint = true
+	mount.Debug = fuse.VerboseTest()
+	dev.DebugPrint = fuse.VerboseTest()
 	go mount.Loop()
 
 	for i := 0; i < 10; i++ {
