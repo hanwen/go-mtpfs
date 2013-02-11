@@ -100,7 +100,7 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
 		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
-			log.Println("GetStorageInfo %x: %v", sid, err)
+			log.Printf("GetStorageInfo %x: %v", sid, err)
 			continue
 		}
 		
@@ -156,7 +156,7 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
 		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
-			log.Println("GetStorageInfo %x: %v", sid, err)
+			log.Printf("GetStorageInfo %x: %v", sid, err)
 			continue
 		}
 		

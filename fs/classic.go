@@ -210,7 +210,7 @@ func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
 func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	if p.loopback == nil {
 		if err := p.node.fetch(); err!= nil {
-			log.Println("fetch failed: %v", err)
+			log.Printf("fetch failed: %v", err)
 			return nil, fuse.EIO
 		}
 		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
