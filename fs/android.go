@@ -33,6 +33,10 @@ func (f *androidFile) String() string {
 }
 
 func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse.Status) {
+	if !f.node.startEdit() {
+		return 0, fuse.EIO
+	}
+	
 	b := bytes.NewBuffer(dest)
 	err := f.node.fs.dev.AndroidSendPartialObject(f.node.Handle(), off, uint32(len(dest)), b)
 	if err != nil {
@@ -46,6 +50,9 @@ func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse
 	return written, fuse.OK
 }
 
-func (f *androidFile) Release() {
-	f.node.endEdit()
+func (f *androidFile) Flush() fuse.Status {
+	if !f.node.endEdit() {
+		return fuse.EIO
+	}
+	return fuse.OK
 }

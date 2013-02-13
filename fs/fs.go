@@ -303,13 +303,6 @@ func (n *fileNode) endEdit() bool {
 }
 
 func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	write := (flags&fuse.O_ANYWRITE != 0)
-	if write {
-		if !n.startEdit() {
-			return nil, fuse.EIO
-		}
-	}
-
 	return &androidFile{node: n}, fuse.OK
 }
 
