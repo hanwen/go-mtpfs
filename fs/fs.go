@@ -39,7 +39,7 @@ type DeviceFs struct {
 	devInfo      mtp.DeviceInfo
 	storages     []uint32
 	mungeVfat    map[uint32]bool
-	
+
 	options *DeviceFsOptions
 }
 
@@ -103,7 +103,7 @@ func (fs *DeviceFs) statFs() *fuse.StatfsOut {
 			log.Printf("GetStorageInfo %x: %v", sid, err)
 			continue
 		}
-		
+
 		total += uint64(info.MaxCapability)
 		free += uint64(info.FreeSpaceInBytes)
 	}
@@ -130,7 +130,7 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 		Size:      size,
 	}
 	if fs.options.Android {
-		node = &fileNode{
+		node = &androidNode{
 			mtpNodeImpl:mNode,
 		}
 	} else {
@@ -159,7 +159,7 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 			log.Printf("GetStorageInfo %x: %v", sid, err)
 			continue
 		}
-		
+
 		obj := mtp.ObjectInfo{
 			ParentObject: NOPARENT_ID,
 			StorageID:    sid,
@@ -205,9 +205,9 @@ type mtpNodeImpl struct {
 	handle uint32
 
 	obj *mtp.ObjectInfo
-	
+
 	fs *DeviceFs
-	
+
 	// This is needed because obj.CompressedSize only goes to
 	// 0xFFFFFFFF
 	Size int64
@@ -261,70 +261,10 @@ func (n *mtpNodeImpl) StorageID() uint32 {
 	return n.obj.StorageID
 }
 
-var _ = mtpNode((*fileNode)(nil))
 var _ = mtpNode((*folderNode)(nil))
-	
+
 ////////////////
 // files
-
-type fileNode struct {
-	mtpNodeImpl
-	
-	// If set, the backing file was changed.
-	write bool
-}
-
-func (n *fileNode) startEdit() bool {
-	if n.write {
-		return true
-	}
-
-	err := n.fs.dev.AndroidBeginEditObject(n.Handle())
-	if err != nil {
-		log.Println("AndroidBeginEditObject failed:", err)
-		return false
-	}
-	n.write = true
-	return true
-}
-
-func (n *fileNode) endEdit() bool {
-	if !n.write {
-		return true
-	}
-
-	err := n.fs.dev.AndroidEndEditObject(n.Handle())
-	if err != nil {
-		log.Println("AndroidEndEditObject failed:", err)
-		return false
-	}
-	n.write = false
-	return true
-}
-
-func (n *fileNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	return &androidFile{node: n}, fuse.OK
-}
-
-func (n *fileNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
-	w := n.write
-	if !n.startEdit() {
-		return fuse.EIO
-	}
-	err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size))
-	if err != nil {
-		log.Println("AndroidTruncate failed:", err)
-		return fuse.EIO
-	}
-	n.Size = int64(size)
-
-	if !w {
-		if !n.endEdit() {
-			return fuse.EIO
-		}
-	}
-	return fuse.OK
-}
 
 //////////////////
 // folders
@@ -574,7 +514,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			return nil, nil, fuse.EIO
 		}
 
-		node = &fileNode{
+		node = &androidNode{
 			mtpNodeImpl: mtpNodeImpl{
 				obj:       &obj,
 				fs:        n.fs,
@@ -583,7 +523,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			write:     true,
 		}
 		file = &androidFile{
-			node: node.(*fileNode),
+			node: node.(*androidNode),
 		}
 	} else {
 		var err error
