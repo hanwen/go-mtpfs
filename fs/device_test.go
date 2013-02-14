@@ -86,6 +86,16 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	}
 }
 
+// Use this function to simulate improper connection handling of a
+// predecessor.
+func xTestBoom(t *testing.T) {
+	root, clean := startFs(t, true)
+	_ = root
+	_ = clean
+	go func() { panic("boom") }()
+}
+
+
 func testDevice(t *testing.T, useAndroid bool) {
 	root, cleanup := startFs(t, useAndroid)
 	defer cleanup()

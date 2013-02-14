@@ -233,6 +233,10 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 // function will return an RCError instance.
 func (d *Device) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
+	if d.h == nil {
+		return fmt.Errorf("mtp: cannot run operation %v, device is not open",
+			OC_names[int(req.Code)])
+	}
 	if d.session != nil {
 		req.SessionID = d.session.sid
 		req.TransactionID = d.session.tid
@@ -244,7 +248,11 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	}
 
 	err := d.sendReq(req)
+	
 	if err != nil {
+		if d.DebugPrint {
+			log.Printf("MTP sendreq failed: %v\n", err)
+		}
 		return err
 	}
 
@@ -421,6 +429,13 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 // the device and reopens the device and the session.
 func (d *Device) Configure() error {
 	err := d.OpenSession()
+	if err == RCError(RC_SessionAlreadyOpened) {
+		// It's open, so close the session. Fortunately, this
+		// even works without a transaction ID.
+		d.CloseSession()
+		err = d.OpenSession()
+	}
+
 	if err == usb.ERROR_IO || err == RCError(RC_SessionAlreadyOpened) ||
 		err == usb.ERROR_TIMEOUT {
 		d.h.Reset()
