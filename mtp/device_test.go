@@ -22,7 +22,7 @@ func TestAndroid(t *testing.T) {
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
 	if err != nil {
-		t.Log("GetDeviceInfo failed:", err)
+		t.Fatal("GetDeviceInfo failed:", err)
 	}
 
 	if !strings.Contains(info.MTPExtension, "android.com:") {
@@ -30,8 +30,8 @@ func TestAndroid(t *testing.T) {
 		return
 	}
 
-	if err = dev.OpenSession(); err != nil {
-		t.Fatal("OpenSession failed:", err)
+	if err = dev.Configure(); err != nil {
+		t.Fatal("Configure failed:", err)
 	}
 
 	sids := Uint32Array{}
@@ -174,9 +174,9 @@ func TestDeviceProperties(t *testing.T) {
 	}
 	defer dev.Close()
 
-	err = dev.OpenSession()
+	err = dev.Configure()
 	if err != nil {
-		t.Log("OpenSession failed:", err)
+		t.Log("Configure failed:", err)
 	}
 
 	// Test non-supported device property first.
@@ -291,9 +291,9 @@ func TestDeviceStorage(t *testing.T) {
 		t.Logf("device info %v\n", &info)
 	}
 
-	err = dev.OpenSession()
+	err = dev.Configure()
 	if err != nil {
-		t.Log("Session failed:", err)
+		t.Log("Configure failed:", err)
 	}
 
 	sids := Uint32Array{}
