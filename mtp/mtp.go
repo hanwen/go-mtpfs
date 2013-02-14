@@ -428,6 +428,12 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 // Configure is a robust version of OpenSession. On failure, it resets
 // the device and reopens the device and the session.
 func (d *Device) Configure() error {
+	if d.h == nil {
+		err := d.Open()
+		if err != nil {
+			return err
+		}
+	}
 	err := d.OpenSession()
 	if err == RCError(RC_SessionAlreadyOpened) {
 		// It's open, so close the session. Fortunately, this
@@ -436,8 +442,8 @@ func (d *Device) Configure() error {
 		err = d.OpenSession()
 	}
 
-	if err == usb.ERROR_IO || err == RCError(RC_SessionAlreadyOpened) ||
-		err == usb.ERROR_TIMEOUT {
+ 	if err != nil {
+		log.Printf("OpenSession failed: %v; attempting reset", err)
 		d.h.Reset()
 		d.Close()
 
