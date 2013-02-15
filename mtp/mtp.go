@@ -89,7 +89,7 @@ func (d *Device) Done() {
 // Claims the USB interface of the device.
 func (d *Device) claim() error {
 	if d.h == nil {
-		return fmt.Errorf("device not open")
+		return fmt.Errorf("mtp: claim: device not open")
 	}
 
 	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
@@ -133,7 +133,7 @@ func (d *Device) Open() error {
 // Id is the manufacturer + product + serial
 func (d *Device) ID() (string, error) {
 	if d.h == nil {
-		return "", fmt.Errorf("device not open")
+		return "", fmt.Errorf("mtp: ID: device not open")
 	}
 
 	var ids []string
@@ -276,10 +276,14 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	if err != nil {
 		return err
 	}
+	var unexpectedData bool 
 	if h.Type == USB_CONTAINER_DATA {
 		if dest == nil {
-			d.Close()
-			return fmt.Errorf("no sink for data")
+			dest = &NullWriter{}
+			unexpectedData = true
+			if d.DebugPrint {
+				log.Printf("MTP discarding unexpected data 0x%x bytes", h.Length)
+			}
 		}
 		if d.DebugPrint {
 			log.Printf("MTP data 0x%x bytes", h.Length)
@@ -303,6 +307,10 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	if d.DebugPrint {
 		log.Printf("MTP response %s %v", RC_names[int(rep.Code)], rep.Param)
 	}
+	if unexpectedData {
+		return fmt.Errorf("unexpected data for code %s", RC_names[int(req.Code)])
+	}
+	
 	if err != nil {
 		return err
 	}
@@ -444,7 +452,9 @@ func (d *Device) Configure() error {
 
  	if err != nil {
 		log.Printf("OpenSession failed: %v; attempting reset", err)
-		d.h.Reset()
+		if d.h != nil {
+			d.h.Reset()
+		}
 		d.Close()
 
 		// Give the device some rest.
