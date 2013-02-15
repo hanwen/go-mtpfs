@@ -670,7 +670,7 @@ func (h *DeviceHandle) ClearHalt(endpoint byte) error {
 }
 
 // Determine if a kernel driver is active on an interface.
-func (h *DeviceHandle) KernelDriverActive(ifaceNum int) (bool, error) {
+func (h *DeviceHandle) KernelDriverActive(ifaceNum byte) (bool, error) {
 	ret := C.libusb_kernel_driver_active(h.me(), C.int(ifaceNum))
 	if ret == 0 {
 		return false, nil
@@ -682,11 +682,11 @@ func (h *DeviceHandle) KernelDriverActive(ifaceNum int) (bool, error) {
 }
 
 // Detach a kernel driver from an interface.
-func (h *DeviceHandle) DetachKernelDriver(ifaceNum int) error {
+func (h *DeviceHandle) DetachKernelDriver(ifaceNum byte) error {
 	return toErr(C.libusb_detach_kernel_driver(h.me(), C.int(ifaceNum)))
 }
 
 // Re-attach an interface's kernel driver, which was previously detached using libusb_detach_kernel_driver().
-func (h *DeviceHandle) AttachKernelDriver(ifaceNum int) error {
+func (h *DeviceHandle) AttachKernelDriver(ifaceNum byte) error {
 	return toErr(C.libusb_attach_kernel_driver(h.me(), C.int(ifaceNum)))
 }
