@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+
+// VerboseTest returns true if the testing framework is run with -v.
+func VerboseTest() bool {
+	flag := flag.Lookup("test.v")
+	return flag != nil && flag.Value.String() == "true"
+}
+
 func TestAndroid(t *testing.T) {
 	dev, err := SelectDevice("")
 	if err != nil {
@@ -173,7 +180,10 @@ func TestDeviceProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dev.Close()
-
+	
+	dev.DataPrint = VerboseTest()
+	dev.DebugPrint = VerboseTest()
+	dev.USBPrint = VerboseTest()
 	err = dev.Configure()
 	if err != nil {
 		t.Log("Configure failed:", err)
