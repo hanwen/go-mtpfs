@@ -34,6 +34,9 @@ type Device struct {
 	// Print request/response codes.
 	DebugPrint bool
 
+	// Print USB calls.
+	USBPrint bool
+	
 	// Print data as it passes over the USB connection.
 	DataPrint bool
 
@@ -68,15 +71,25 @@ func (d *Device) Close() error {
 	if d.session != nil {
 		err := d.CloseSession()
 		if err != nil {
- 			d.h.Reset()
+ 			err = d.h.Reset()
+			if d.USBPrint {
+				log.Printf("USB: Reset, err: %v", err)
+			}
 		}
 	}
 	
 	if d.claimed {
-		d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
+		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
+		if d.USBPrint {
+			log.Printf("USB: ReleaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
+		}
 	}
 	err := d.h.Close()
 	d.h = nil
+
+	if d.USBPrint {
+		log.Printf("USB: Close, err: %v", err)
+	}
 	return err
 }
 
@@ -93,6 +106,9 @@ func (d *Device) claim() error {
 	}
 
 	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
+	if d.USBPrint {
+		log.Printf("USB: ClaimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
+	}
 	if err == nil {
 		d.claimed = true
 	}
@@ -112,6 +128,9 @@ func (d *Device) Open() error {
 
 	var err error
 	d.h, err = d.dev.Open()
+	if d.USBPrint {
+		log.Printf("USB: Open, err: %v", err)
+	}
 	if err != nil {
 		return err
 	}
@@ -127,7 +146,12 @@ func (d *Device) Open() error {
 		return fmt.Errorf("has no MTP in interface string")
 	}
 
-	return d.claim()
+	if err := d.claim(); err != nil {
+		if d.USBPrint {
+			log.Printf("USB: Claim, err: %v", err)
+		}
+	}
+	return nil
 }
 
 // Id is the manufacturer + product + serial
@@ -143,6 +167,9 @@ func (d *Device) ID() (string, error) {
 		d.devDescr.SerialNumber} {
 		s, err := d.h.GetStringDescriptorASCII(b)
 		if err != nil {
+			if d.USBPrint {
+				log.Printf("USB: GetStringDescriptorASCII, err: %v", err)
+			}
 			return "", err
 		}
 		ids = append(ids, s)
