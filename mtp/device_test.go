@@ -187,7 +187,7 @@ func TestDeviceProperties(t *testing.T) {
 	dev.USBDebug = VerboseTest()
 	err = dev.Configure()
 	if err != nil {
-		t.Log("Configure failed:", err)
+		t.Fatal("Configure failed:", err)
 	}
 
 	// Test non-supported device property first.
@@ -304,7 +304,7 @@ func TestDeviceStorage(t *testing.T) {
 
 	err = dev.Configure()
 	if err != nil {
-		t.Log("Configure failed:", err)
+		t.Fatal("Configure failed:", err)
 	}
 
 	sids := Uint32Array{}
