@@ -5,7 +5,6 @@ package fs
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -61,7 +60,7 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	}
 
 	mount.Debug = fuse.VerboseTest()
-	dev.DebugPrint = fuse.VerboseTest()
+	dev.MTPDebug = fuse.VerboseTest()
 	go mount.Loop()
 
 	for i := 0; i < 10; i++ {
@@ -125,10 +124,8 @@ func testDevice(t *testing.T, useAndroid bool) {
 	}
 	defer f.Close()
 	
-	log.Println("writing...")
 	golden += "hello"
 	_, err = f.Write([]byte("hello"))
-	log.Println("done...")
 	if err != nil {
 		t.Fatal("file.Write failed", err)
 	}

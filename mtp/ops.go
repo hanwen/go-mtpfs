@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 )
-
+var _  = log.Println
 
 // OpenSession opens a session, which is necesary for any command that
 // queries or modifies storage. It is an error to open a session twice.

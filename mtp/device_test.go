@@ -5,6 +5,7 @@ package mtp
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -181,9 +182,9 @@ func TestDeviceProperties(t *testing.T) {
 	}
 	defer dev.Close()
 	
-	dev.DataPrint = VerboseTest()
-	dev.DebugPrint = VerboseTest()
-	dev.USBPrint = VerboseTest()
+	dev.DataDebug = VerboseTest()
+	dev.MTPDebug = VerboseTest()
+	dev.USBDebug = VerboseTest()
 	err = dev.Configure()
 	if err != nil {
 		t.Log("Configure failed:", err)

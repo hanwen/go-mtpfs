@@ -8,6 +8,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-mtpfs/fs"
@@ -15,9 +16,7 @@ import (
 )
 
 func main() {
-	fsdebug := flag.Bool("fs-debug", false, "switch on FS debugging")
-	mtpDebug := flag.Bool("mtp-debug", false, "switch on MTP debugging")
-	dataDebug := flag.Bool("data-debug", false, "switch on data debugging")
+	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, fuse")
 	usbTimeout := flag.Int("usb-timeout", 2000, "timeout in milliseconds")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
@@ -47,8 +46,14 @@ func main() {
 		log.Fatalf("selectStorages failed: %v", err)
 	}
 
-	dev.DebugPrint = *mtpDebug
-	dev.DataPrint = *dataDebug
+	debugs := map[string]bool{}
+	for _, s := range strings.Split(*debug, ",") {
+		debugs[s] = true
+	}
+	dev.MTPDebug = debugs["mtp"]
+	dev.DataDebug = debugs["data"]
+	dev.USBDebug = debugs["usb"]
+	
 	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
 		Android: *android,
@@ -68,8 +73,8 @@ func main() {
 		log.Fatalf("mount failed: %v", err)
 	}
 
-	conn.Debug = *fsdebug
-	mount.Debug = *fsdebug
+	conn.Debug = debugs["fuse"]
+	mount.Debug = debugs["fuse"]
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
 	fs.OnUnmount()

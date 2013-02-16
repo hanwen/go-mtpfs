@@ -32,13 +32,13 @@ type Device struct {
 	Timeout int
 
 	// Print request/response codes.
-	DebugPrint bool
+	MTPDebug bool
 
 	// Print USB calls.
-	USBPrint bool
+	USBDebug bool
 	
 	// Print data as it passes over the USB connection.
-	DataPrint bool
+	DataDebug bool
 
 	// If set, send header in separate write.
 	SeparateHeader bool
@@ -72,7 +72,7 @@ func (d *Device) Close() error {
 		err := d.CloseSession()
 		if err != nil {
  			err = d.h.Reset()
-			if d.USBPrint {
+			if d.USBDebug {
 				log.Printf("USB: Reset, err: %v", err)
 			}
 		}
@@ -80,14 +80,14 @@ func (d *Device) Close() error {
 	
 	if d.claimed {
 		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
-		if d.USBPrint {
+		if d.USBDebug {
 			log.Printf("USB: ReleaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 		}
 	}
 	err := d.h.Close()
 	d.h = nil
 
-	if d.USBPrint {
+	if d.USBDebug {
 		log.Printf("USB: Close, err: %v", err)
 	}
 	return err
@@ -106,7 +106,7 @@ func (d *Device) claim() error {
 	}
 
 	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
-	if d.USBPrint {
+	if d.USBDebug {
 		log.Printf("USB: ClaimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 	}
 	if err == nil {
@@ -128,7 +128,7 @@ func (d *Device) Open() error {
 
 	var err error
 	d.h, err = d.dev.Open()
-	if d.USBPrint {
+	if d.USBDebug {
 		log.Printf("USB: Open, err: %v", err)
 	}
 	if err != nil {
@@ -147,14 +147,14 @@ func (d *Device) Open() error {
 	}
 
 	if err := d.claim(); err != nil {
-		if d.USBPrint {
+		if d.USBDebug {
 			log.Printf("USB: Claim, err: %v", err)
 		}
 	}
 	return nil
 }
 
-// Id is the manufacturer + product + serial
+// ID is the manufacturer + product + serial
 func (d *Device) ID() (string, error) {
 	if d.h == nil {
 		return "", fmt.Errorf("mtp: ID: device not open")
@@ -167,7 +167,7 @@ func (d *Device) ID() (string, error) {
 		d.devDescr.SerialNumber} {
 		s, err := d.h.GetStringDescriptorASCII(b)
 		if err != nil {
-			if d.USBPrint {
+			if d.USBDebug {
 				log.Printf("USB: GetStringDescriptorASCII, err: %v", err)
 			}
 			return "", err
@@ -270,14 +270,14 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 		d.session.tid++
 	}
 
-	if d.DebugPrint {
+	if d.MTPDebug {
 		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
 	err := d.sendReq(req)
 	
 	if err != nil {
-		if d.DebugPrint {
+		if d.MTPDebug {
 			log.Printf("MTP sendreq failed: %v\n", err)
 		}
 		return err
@@ -308,11 +308,11 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 		if dest == nil {
 			dest = &NullWriter{}
 			unexpectedData = true
-			if d.DebugPrint {
+			if d.MTPDebug {
 				log.Printf("MTP discarding unexpected data 0x%x bytes", h.Length)
 			}
 		}
-		if d.DebugPrint {
+		if d.MTPDebug {
 			log.Printf("MTP data 0x%x bytes", h.Length)
 		}
 
@@ -331,7 +331,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	}
 
 	err = d.decodeRep(h, rest, rep)
-	if d.DebugPrint {
+	if d.MTPDebug {
 		log.Printf("MTP response %s %v", RC_names[int(rep.Code)], rep.Param)
 	}
 	if unexpectedData {
@@ -351,7 +351,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 // Prints data going over the USB connection.
 func (d *Device) dataPrint(ep byte, data []byte) {
-	if !d.DataPrint {
+	if !d.DataDebug {
 		return
 	}
 	dir := "send"
