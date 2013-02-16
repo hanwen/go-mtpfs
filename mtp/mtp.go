@@ -146,11 +146,7 @@ func (d *Device) Open() error {
 		return fmt.Errorf("has no MTP in interface string")
 	}
 
-	if err := d.claim(); err != nil {
-		if d.USBDebug {
-			log.Printf("USB: Claim, err: %v", err)
-		}
-	}
+	d.claim()
 	return nil
 }
 
@@ -235,9 +231,6 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 	}
 
 	rep.Code = h.Code
-	if rep.Code != RC_OK {
-		return RCError(rep.Code)
-	}
 	rep.TransactionID = h.TransactionID
 
 	restLen := int(h.Length) - usbHdrLen
@@ -250,6 +243,9 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 		rep.Param = append(rep.Param, byteOrder.Uint32(rest[4*i:]))
 	}
 
+	if rep.Code != RC_OK {
+		return RCError(rep.Code)
+	}
 	return nil
 }
 
@@ -472,7 +468,7 @@ func (d *Device) Configure() error {
 	err := d.OpenSession()
 	if err == RCError(RC_SessionAlreadyOpened) {
 		// It's open, so close the session. Fortunately, this
-		// even works without a transaction ID.
+		// even works without a transaction ID, at least on Android.
 		d.CloseSession()
 		err = d.OpenSession()
 	}
@@ -485,7 +481,7 @@ func (d *Device) Configure() error {
 		d.Close()
 
 		// Give the device some rest.
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 		if err := d.Open(); err != nil {
 			return fmt.Errorf("opening after reset: %v", err)
 		}
