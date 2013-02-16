@@ -5,18 +5,29 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
+	"time"
 )
+
 var _  = log.Println
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+	
 // OpenSession opens a session, which is necesary for any command that
-// queries or modifies storage. It is an error to open a session twice.
+// queries or modifies storage. It is an error to open a session
+// twice.  
 func (d *Device) OpenSession() error {
 	if d.session != nil {
 		return fmt.Errorf("session already open")
 	}
 	var req, rep Container
 	req.Code = OC_OpenSession
-	req.Param = []uint32{1} // session
+
+	// avoid 0xFFFFFFFF and 0x00000000 for session IDs.
+	sid := uint32(rand.Int31()) | 1
+	req.Param = []uint32{sid} // session
 	err := d.RunTransaction(&req, &rep, nil, nil, 0)
 	if err != nil {
 		return err
@@ -24,7 +35,7 @@ func (d *Device) OpenSession() error {
 
 	d.session = &sessionData{
 		tid: 1,
-		sid: 1,
+		sid: sid,
 	}
 	return nil
 }
