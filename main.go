@@ -35,7 +35,13 @@ func main() {
 		log.Fatalf("detect failed: %v", err)
 	}
 	defer dev.Close()
-
+	debugs := map[string]bool{}
+	for _, s := range strings.Split(*debug, ",") {
+		debugs[s] = true
+	}
+	dev.MTPDebug = debugs["mtp"]
+	dev.DataDebug = debugs["data"]
+	dev.USBDebug = debugs["usb"]
 	dev.Timeout = *usbTimeout
 	if err = dev.Configure(); err != nil {
 		log.Fatalf("Configure failed: %v", err)
@@ -46,17 +52,9 @@ func main() {
 		log.Fatalf("selectStorages failed: %v", err)
 	}
 
-	debugs := map[string]bool{}
-	for _, s := range strings.Split(*debug, ",") {
-		debugs[s] = true
-	}
-	dev.MTPDebug = debugs["mtp"]
-	dev.DataDebug = debugs["data"]
-	dev.USBDebug = debugs["usb"]
-	
 	opts := fs.DeviceFsOptions{
 		RemovableVFat: *vfat,
-		Android: *android,
+		Android:       *android,
 	}
 	fs, err := fs.NewDeviceFs(dev, sids, opts)
 	if err != nil {
