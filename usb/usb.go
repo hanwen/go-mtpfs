@@ -20,6 +20,14 @@ const SPEED_FULL = C.LIBUSB_SPEED_FULL
 const SPEED_HIGH = C.LIBUSB_SPEED_HIGH
 const SPEED_SUPER = C.LIBUSB_SPEED_SUPER
 
+var SPEED_names = map[byte]string{
+	byte(C.LIBUSB_SPEED_UNKNOWN): "UNKNOWN",
+	byte(C.LIBUSB_SPEED_LOW): "LOW",
+	byte(C.LIBUSB_SPEED_FULL): "FULL",
+	byte(C.LIBUSB_SPEED_HIGH): "HIGH",
+	byte(C.LIBUSB_SPEED_SUPER): "SUPER",
+}
+
 type ControlSetup C.struct_libusb_control_setup
 type Transfer C.struct_libusb_transfer
 
@@ -42,6 +50,28 @@ const CLASS_DIAGNOSTIC_DEVICE = 0xdc
 const CLASS_WIRELESS = 0xe0
 const CLASS_APPLICATION = 0xfe
 const CLASS_VENDOR_SPEC = 0xff
+
+// Device and/or interface class codes.
+var CLASS_names = map[byte]string{
+	0: "PER_INTERFACE",
+	1: "AUDIO",
+	2: "COMM",
+	3: "HID",
+	5: "PHYSICAL",
+	7: "PRINTER",
+	6: "IMAGE",
+	8: "MASS_STORAGE",
+	9: "HUB",
+	10: "DATA",
+	0x0b: "SMART_CARD",
+	0x0d: "CONTENT_SECURITY",
+	0x0e: "VIDEO",
+	0x0f: "PERSONAL_HEALTHCARE",
+	0xdc: "DIAGNOSTIC_DEVICE",
+	0xe0: "WIRELESS",
+	0xfe: "APPLICATION",
+	0xff: "VENDOR_SPEC",
+}
 
 // Descriptor types as defined by the USB specification.
 const DT_DEVICE = 0x01
