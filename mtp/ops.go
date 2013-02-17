@@ -58,11 +58,7 @@ func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
-	if err != nil {
-		return err
-	}
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetStorageIDs(info *Uint32Array) error {
@@ -73,8 +69,7 @@ func (d *Device) GetStorageIDs(info *Uint32Array) error {
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *ObjectPropDesc) error {
@@ -87,8 +82,7 @@ func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *Obje
 		return err
 	}
 
-	err = Decode(&buf, info)
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
@@ -101,8 +95,7 @@ func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value 
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, value)
-	return err
+	return Decode(&buf, value)
 }
 
 func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
@@ -128,8 +121,7 @@ func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Arra
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, props)
-	return err
+	return Decode(&buf, props)
 }
 
 func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error {
@@ -143,8 +135,7 @@ func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error 
 		return err
 	}
 
-	err = info.Decode(&buf)
-	return err
+	return info.Decode(&buf)
 }
 
 func (d *Device) SetDevicePropValue(propCode uint32, src interface{}) error {
@@ -170,8 +161,7 @@ func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, dest)
-	return err
+	return Decode(&buf, dest)
 }
 
 func (d *Device) ResetDevicePropValue(propCode uint32) error {
@@ -190,11 +180,7 @@ func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
-	if err != nil {
-		return err
-	}
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetObjectHandles(storageID, objFormatCode, parent uint32, info *Uint32Array) error {
@@ -206,8 +192,7 @@ func (d *Device) GetObjectHandles(storageID, objFormatCode, parent uint32, info 
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetObjectInfo(handle uint32, info *ObjectInfo) error {
@@ -219,11 +204,7 @@ func (d *Device) GetObjectInfo(handle uint32, info *ObjectInfo) error {
 	if err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
-	if err != nil {
-		return err
-	}
-	return err
+	return Decode(&buf, info)
 }
 
 func (d *Device) GetNumObjects(storageId uint32, formatCode uint16, parent uint32) (uint32, error) {
