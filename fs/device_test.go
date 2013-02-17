@@ -61,13 +61,15 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 
 	mount.Debug = fuse.VerboseTest()
 	dev.MTPDebug = fuse.VerboseTest()
+	dev.USBDebug = fuse.VerboseTest()
+	dev.DataDebug = fuse.VerboseTest()
 	go mount.Loop()
 
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
 		if err == nil && len(fis) > 0 {
 			root = filepath.Join(tempdir, fis[0].Name())
-			break;
+			break
 		}
 		time.Sleep(1)
 	}
@@ -93,7 +95,6 @@ func xTestBoom(t *testing.T) {
 	_ = clean
 	go func() { panic("boom") }()
 }
-
 
 func testDevice(t *testing.T, useAndroid bool) {
 	root, cleanup := startFs(t, useAndroid)
@@ -123,7 +124,7 @@ func testDevice(t *testing.T, useAndroid bool) {
 		t.Fatal("OpenFile failed:", err)
 	}
 	defer f.Close()
-	
+
 	golden += "hello"
 	_, err = f.Write([]byte("hello"))
 	if err != nil {
@@ -133,7 +134,7 @@ func testDevice(t *testing.T, useAndroid bool) {
 	if err != nil {
 		t.Fatal("Close failed", err)
 	}
-	
+
 	got, err = ioutil.ReadFile(name)
 	if err != nil {
 		t.Fatal("ReadFile failed", err)
