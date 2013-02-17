@@ -13,11 +13,16 @@ import (
 	"time"
 )
 
-
 // VerboseTest returns true if the testing framework is run with -v.
 func VerboseTest() bool {
 	flag := flag.Lookup("test.v")
 	return flag != nil && flag.Value.String() == "true"
+}
+
+func setDebug(dev *Device) {
+	dev.DataDebug = VerboseTest()
+	dev.MTPDebug = VerboseTest()
+	dev.USBDebug = VerboseTest()
 }
 
 func TestAndroid(t *testing.T) {
@@ -26,6 +31,7 @@ func TestAndroid(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dev.Close()
+	setDebug(dev)
 
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
@@ -181,10 +187,8 @@ func TestDeviceProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dev.Close()
-	
-	dev.DataDebug = VerboseTest()
-	dev.MTPDebug = VerboseTest()
-	dev.USBDebug = VerboseTest()
+
+	setDebug(dev)
 	err = dev.Configure()
 	if err != nil {
 		t.Fatal("Configure failed:", err)
@@ -272,6 +276,7 @@ func TestDeviceInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dev.Close()
+	setDebug(dev)
 
 	i, _ := dev.ID()
 	t.Log("device:", i)
@@ -290,6 +295,7 @@ func TestDeviceStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dev.Close()
+	setDebug(dev)
 
 	i, _ := dev.ID()
 	t.Log("device:", i)
