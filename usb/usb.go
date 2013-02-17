@@ -4,6 +4,17 @@
 
 package usb
 
+/* the following flags may need adjusting for your system. Use
+pkg-config to find out the right values.
+
+$ pkg-config --cflags libusb-1.0
+-I/usr/include/libusb-1.0
+
+$ pkg-config --libs libusb-1.0
+-L/lib64 -lusb-1.0
+
+*/
+
 // #cgo LDFLAGS: -L/lib64 -lusb-1.0
 // #cgo CFLAGS: -I/usr/include/libusb-1.0
 // #include <libusb.h>
@@ -22,10 +33,10 @@ const SPEED_SUPER = C.LIBUSB_SPEED_SUPER
 
 var SPEED_names = map[byte]string{
 	byte(C.LIBUSB_SPEED_UNKNOWN): "UNKNOWN",
-	byte(C.LIBUSB_SPEED_LOW): "LOW",
-	byte(C.LIBUSB_SPEED_FULL): "FULL",
-	byte(C.LIBUSB_SPEED_HIGH): "HIGH",
-	byte(C.LIBUSB_SPEED_SUPER): "SUPER",
+	byte(C.LIBUSB_SPEED_LOW):     "LOW",
+	byte(C.LIBUSB_SPEED_FULL):    "FULL",
+	byte(C.LIBUSB_SPEED_HIGH):    "HIGH",
+	byte(C.LIBUSB_SPEED_SUPER):   "SUPER",
 }
 
 type ControlSetup C.struct_libusb_control_setup
@@ -53,16 +64,16 @@ const CLASS_VENDOR_SPEC = 0xff
 
 // Device and/or interface class codes.
 var CLASS_names = map[byte]string{
-	0: "PER_INTERFACE",
-	1: "AUDIO",
-	2: "COMM",
-	3: "HID",
-	5: "PHYSICAL",
-	7: "PRINTER",
-	6: "IMAGE",
-	8: "MASS_STORAGE",
-	9: "HUB",
-	10: "DATA",
+	0:    "PER_INTERFACE",
+	1:    "AUDIO",
+	2:    "COMM",
+	3:    "HID",
+	5:    "PHYSICAL",
+	7:    "PRINTER",
+	6:    "IMAGE",
+	8:    "MASS_STORAGE",
+	9:    "HUB",
+	10:   "DATA",
 	0x0b: "SMART_CARD",
 	0x0d: "CONTENT_SECURITY",
 	0x0e: "VIDEO",
@@ -114,7 +125,6 @@ const REQUEST_SET_INTERFACE = 0x0B
 
 // Set then report an endpoint's synchronization frame
 const REQUEST_SYNCH_FRAME = 0x0C
-
 
 // The error codes returned by libusb.
 type Error int
@@ -595,7 +605,7 @@ func (d *Device) GetConfigDescriptorByValue(value byte) (*ConfigDescriptor, erro
 func (h *DeviceHandle) GetConfiguration() (byte, error) {
 	var r C.int
 	err := C.libusb_get_configuration(h.me(), &r)
- 	return byte(r), toErr(err)
+	return byte(r), toErr(err)
 }
 
 // Set the active configuration for a device. The argument should be
