@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -202,6 +203,8 @@ func decodeTime(r io.Reader, f reflect.Value) error {
 	}
 	var t time.Time
 	if s != "" {
+		// Samsung has trailing dots.
+		s = strings.TrimRight(s, ".")
 		t, err = time.Parse(timeFormat, s)
 		if err != nil {
 			return err

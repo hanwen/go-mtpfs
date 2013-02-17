@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const deviceInfoStr = `6400 0600
@@ -136,5 +137,36 @@ func TestEncodeStrEmpty(t *testing.T) {
 	}
 	if string(b.Bytes()) != "\000" {
 		t.Fatalf("string encode mismatch %q ", b.Bytes())
+	}
+}
+
+type TimeValue struct {
+	Value time.Time
+}
+func TestDecodeTime(t *testing.T) {
+	ts := &TestStr{"20120101T010022."}
+	samsung := &bytes.Buffer{}
+	if err := Encode(samsung, ts); err != nil {
+		t.Fatalf("str encode failed: %v", err)
+	}
+	
+	tv := &TimeValue{}
+	if err := Decode(samsung, tv); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	buf := bytes.Buffer{}
+	if err := Encode(&buf, tv); err != nil {
+		t.Fatalf("encode failed: %v", err)
+	}
+	
+	if err := Decode(&buf, ts); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	
+	want := "20120101T010022"
+	got := ts.S
+	if got != want {
+		t.Errorf("time encode/decode: got %q want %q", got, want)
 	}
 }
