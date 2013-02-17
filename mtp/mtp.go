@@ -190,7 +190,8 @@ func (d *Device) sendReq(req *Container) error {
 	var wData [usbBulkLen]byte
 	buf := bytes.NewBuffer(wData[:0])
 
-	err := binary.Write(buf, binary.LittleEndian, c)
+	binary.Write(buf, binary.LittleEndian, c.usbBulkHeader)
+	err := binary.Write(buf, binary.LittleEndian, c.Param[:len(req.Param)])
 	if err != nil {
 		panic(err)
 	}
