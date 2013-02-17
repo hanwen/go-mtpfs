@@ -9,15 +9,15 @@ import (
 	"time"
 )
 
-var _  = log.Println
+var _ = log.Println
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
-	
+
 // OpenSession opens a session, which is necesary for any command that
 // queries or modifies storage. It is an error to open a session
-// twice.  
+// twice.  If OpenSession() fails, it will not attempt to close the device.
 func (d *Device) OpenSession() error {
 	if d.session != nil {
 		return fmt.Errorf("session already open")
@@ -28,7 +28,10 @@ func (d *Device) OpenSession() error {
 	// avoid 0xFFFFFFFF and 0x00000000 for session IDs.
 	sid := uint32(rand.Int31()) | 1
 	req.Param = []uint32{sid} // session
-	err := d.RunTransaction(&req, &rep, nil, nil, 0)
+
+	// If opening the session fails, we want to be able to reset
+	// the device, so don't do sanity checks afterwards.
+	err := d.runTransaction(&req, &rep, nil, nil, 0)
 	if err != nil {
 		return err
 	}

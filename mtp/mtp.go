@@ -36,7 +36,7 @@ type Device struct {
 
 	// Print USB calls.
 	USBDebug bool
-	
+
 	// Print data as it passes over the USB connection.
 	DataDebug bool
 
@@ -69,15 +69,19 @@ func (d *Device) Close() error {
 	}
 
 	if d.session != nil {
-		err := d.CloseSession()
+		var req, rep Container
+		req.Code = OC_CloseSession
+		// RunTransaction runs close, so can't use CloseSession().
+		err := d.runTransaction(&req, &rep, nil, nil, 0)
+
 		if err != nil {
- 			err = d.h.Reset()
+			err = d.h.Reset()
 			if d.USBDebug {
 				log.Printf("USB: Reset, err: %v", err)
 			}
 		}
 	}
-	
+
 	if d.claimed {
 		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
 		if d.USBDebug {
@@ -250,17 +254,46 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 	return nil
 }
 
+// SyncError is an error type that indicates lost transaction
+// synchronization in the protocol.
+type SyncError string
+
+func (s SyncError) Error() string {
+	return string(s)
+}
+
 // Runs a single MTP transaction. dest and src cannot be specified at
 // the same time.  The request should fill out Code and Param as
 // necessary. The response is provided here, but usually only the
 // return code is of interest.  If the return code is an error, this
 // function will return an RCError instance.
+//
+// Errors that are likely to affect future transactions lead to
+// closing the connection. Such errors include: invalid transaction
+// IDs, USB errors (BUSY, IO, ACCESS etc.), and receiving data for
+// operations that expect no data.
 func (d *Device) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	if d.h == nil {
 		return fmt.Errorf("mtp: cannot run operation %v, device is not open",
 			OC_names[int(req.Code)])
 	}
+	err := d.runTransaction(req, rep, dest, src, writeSize)
+	if err != nil {
+		_, ok2 := err.(SyncError)
+		_, ok1 := err.(usb.Error)
+		if ok1 || ok2 {
+			d.Close()
+			log.Printf("fatal error %v; closing connection.", err)
+		}
+	}
+	return err
+}
+
+// runTransaction is like RunTransaction, but without sanity checking
+// before and after the call.
+func (d *Device) runTransaction(req *Container, rep *Container,
+	dest io.Writer, src io.Reader, writeSize int64) error {
 	if d.session != nil {
 		req.SessionID = d.session.sid
 		req.TransactionID = d.session.tid
@@ -272,7 +305,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	}
 
 	err := d.sendReq(req)
-	
+
 	if err != nil {
 		if d.MTPDebug {
 			log.Printf("MTP sendreq failed: %v\n", err)
@@ -290,7 +323,6 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 		_, err := d.bulkWrite(&hdr, src, writeSize)
 		if err != nil {
-			d.Close()
 			return err
 		}
 	}
@@ -300,7 +332,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 	if err != nil {
 		return err
 	}
-	var unexpectedData bool 
+	var unexpectedData bool
 	if h.Type == USB_CONTAINER_DATA {
 		if dest == nil {
 			dest = &NullWriter{}
@@ -332,15 +364,15 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 		log.Printf("MTP response %s %v", RC_names[int(rep.Code)], rep.Param)
 	}
 	if unexpectedData {
-		return fmt.Errorf("unexpected data for code %s", RC_names[int(req.Code)])
+		return SyncError(fmt.Sprintf("unexpected data for code %s", RC_names[int(req.Code)]))
 	}
-	
+
 	if err != nil {
 		return err
 	}
 	if d.session != nil && rep.TransactionID != req.TransactionID {
-		return fmt.Errorf("transaction ID mismatch got %x want %x",
-			rep.TransactionID, req.TransactionID)
+		return SyncError(fmt.Sprintf("transaction ID mismatch got %x want %x",
+			rep.TransactionID, req.TransactionID))
 	}
 	rep.SessionID = req.SessionID
 	return nil
@@ -466,6 +498,7 @@ func (d *Device) Configure() error {
 			return err
 		}
 	}
+
 	err := d.OpenSession()
 	if err == RCError(RC_SessionAlreadyOpened) {
 		// It's open, so close the session. Fortunately, this
@@ -474,7 +507,7 @@ func (d *Device) Configure() error {
 		err = d.OpenSession()
 	}
 
- 	if err != nil {
+	if err != nil {
 		log.Printf("OpenSession failed: %v; attempting reset", err)
 		if d.h != nil {
 			d.h.Reset()
