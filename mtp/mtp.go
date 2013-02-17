@@ -232,7 +232,7 @@ func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, e
 
 func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
 	if h.Type != USB_CONTAINER_RESPONSE {
-		return fmt.Errorf("got type %d in response", h.Type)
+		return SyncError(fmt.Sprintf("got type %d (%s) in response, want CONTAINER_RESPONSE.", h.Type, USB_names[int(h.Type)]))
 	}
 
 	rep.Code = h.Code
