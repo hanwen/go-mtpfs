@@ -35,6 +35,15 @@ func hexDump(data []byte) {
 	}
 }
 
+// extract single name.
+func getName(m map[int]string, val int) string {
+	n, ok := m[val]
+	if !ok {
+		n = fmt.Sprintf("0x%x", val)
+	}
+	return n
+}
+
 // Extract names from name map.
 func getNames(m map[int]string, vals []uint16) string {
 	r := []string{}

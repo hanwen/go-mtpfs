@@ -283,8 +283,8 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 		_, ok2 := err.(SyncError)
 		_, ok1 := err.(usb.Error)
 		if ok1 || ok2 {
-			d.Close()
 			log.Printf("fatal error %v; closing connection.", err)
+			d.Close()
 		}
 	}
 	return err
@@ -361,10 +361,10 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 
 	err = d.decodeRep(h, rest, rep)
 	if d.MTPDebug {
-		log.Printf("MTP response %s %v", RC_names[int(rep.Code)], rep.Param)
+		log.Printf("MTP response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	}
 	if unexpectedData {
-		return SyncError(fmt.Sprintf("unexpected data for code %s", RC_names[int(req.Code)]))
+		return SyncError(fmt.Sprintf("unexpected data for code %s", getName(RC_names, int(req.Code))))
 	}
 
 	if err != nil {

@@ -52,119 +52,92 @@ func (d *Device) CloseSession() error {
 	return err
 }
 
-func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
-	var req, rep Container
-
-	req.Code = OC_GetDeviceInfo
+func (d *Device) GetData(req *Container, info interface{}) error {
 	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
+	var rep Container
+	err := d.RunTransaction(req, &rep, &buf, nil, 0)
 	if err != nil {
 		return err
 	}
-	return Decode(&buf, info)
+	err = Decode(&buf, info)
+	if d.MTPDebug && err == nil {
+		log.Printf("MTP decoded %#v", info)
+	}
+	return err
+}
+
+func (d *Device) GetDeviceInfo(info *DeviceInfo) error {
+	var req Container
+	req.Code = OC_GetDeviceInfo
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetStorageIDs(info *Uint32Array) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetStorageIDs
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, info)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *ObjectPropDesc) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_MTP_GetObjectPropDesc
 	req.Param = []uint32{uint32(objPropCode), uint32(objFormatCode)}
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-
-	return Decode(&buf, info)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
-	var req, rep Container
-	var buf bytes.Buffer
-
+	var req Container
 	req.Code = OC_MTP_GetObjectPropValue
 	req.Param = []uint32{objHandle, uint32(objPropCode)}
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, value)
+	return d.GetData(&req, value)
 }
 
 func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
 	var req, rep Container
 	req.Code = OC_MTP_SetObjectPropValue
 	req.Param = []uint32{objHandle, uint32(objPropCode)}
+	return d.SendData(&req, &rep, value)
+}
+
+func (d *Device) SendData(req *Container, rep *Container, value interface{}) error {
 	var buf bytes.Buffer
 	err := Encode(&buf, value)
 	if err != nil {
 		return err
 	}
-
-	return d.RunTransaction(&req, &rep, nil, &buf, int64(buf.Len()))
+	if d.MTPDebug {
+		log.Printf("MTP encoded %#v", value)
+	}
+	return d.RunTransaction(req, rep, nil, &buf, int64(buf.Len()))
 }
 
 func (d *Device) GetObjectPropsSupported(objFormatCode uint16, props *Uint16Array) error {
-	var req, rep Container
-	var buf bytes.Buffer
+	var req Container
 
 	req.Code = OC_MTP_GetObjectPropsSupported
 	req.Param = []uint32{uint32(objFormatCode)}
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, props)
+	return d.GetData(&req, props)
 }
 
 func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetDevicePropDesc
 	req.Param = append(req.Param, uint32(propCode))
-
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-
-	return info.Decode(&buf)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) SetDevicePropValue(propCode uint32, src interface{}) error {
 	var req, rep Container
 	req.Code = OC_SetDevicePropValue
 	req.Param = []uint32{propCode}
-
-	var buf bytes.Buffer
-	err := Encode(&buf, src)
-	if err != nil {
-		return err
-	}
-	return d.RunTransaction(&req, &rep, nil, &buf, int64(buf.Len()))
+	return d.SendData(&req, &rep, src)
 }
 
 func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetDevicePropValue
 	req.Param = []uint32{propCode}
-
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, dest)
+	return d.GetData(&req, dest)
 }
 
 func (d *Device) ResetDevicePropValue(propCode uint32) error {
@@ -175,39 +148,24 @@ func (d *Device) ResetDevicePropValue(propCode uint32) error {
 }
 
 func (d *Device) GetStorageInfo(ID uint32, info *StorageInfo) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetStorageInfo
 	req.Param = []uint32{ID}
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, info)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetObjectHandles(storageID, objFormatCode, parent uint32, info *Uint32Array) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetObjectHandles
 	req.Param = []uint32{storageID, objFormatCode, parent}
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, info)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetObjectInfo(handle uint32, info *ObjectInfo) error {
-	var req, rep Container
+	var req Container
 	req.Code = OC_GetObjectInfo
 	req.Param = []uint32{handle}
-	var buf bytes.Buffer
-	err := d.RunTransaction(&req, &rep, &buf, nil, 0)
-	if err != nil {
-		return err
-	}
-	return Decode(&buf, info)
+	return d.GetData(&req, info)
 }
 
 func (d *Device) GetNumObjects(storageId uint32, formatCode uint16, parent uint32) (uint32, error) {
@@ -234,13 +192,7 @@ func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectIn
 	req.Code = OC_SendObjectInfo
 	req.Param = []uint32{wantStorageID, wantParent}
 
-	buf := &bytes.Buffer{}
-	err = Encode(buf, info)
-	if err != nil {
-		return
-	}
-
-	err = d.RunTransaction(&req, &rep, nil, buf, int64(buf.Len()))
+	err = d.SendData(&req, &rep, info)
 	if err != nil {
 		return
 	}
