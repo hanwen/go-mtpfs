@@ -49,10 +49,8 @@ type DeviceFs struct {
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store.
 func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
-	o := options
-
 	root := rootNode{}
-	fs := &DeviceFs{root: &root, dev: d, options: &o}
+	fs := &DeviceFs{root: &root, dev: d, options: &options}
 	root.fs = fs
 	fs.storages = storages
 	err := d.GetDeviceInfo(&fs.devInfo)
@@ -61,7 +59,7 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 	}
 
 	if !strings.Contains(fs.devInfo.MTPExtension, "android.com") {
-		options.Android = false
+		fs.options.Android = false
 	}
 
 	if !options.Android {
@@ -78,7 +76,7 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 			return nil, err
 		}
 
-		fs.mungeVfat[sid] = info.IsRemovable() && o.RemovableVFat
+		fs.mungeVfat[sid] = info.IsRemovable() && fs.options.RemovableVFat
 	}
 
 	return fs, nil
