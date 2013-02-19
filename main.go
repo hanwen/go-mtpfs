@@ -71,8 +71,8 @@ func main() {
 		log.Fatalf("mount failed: %v", err)
 	}
 
-	conn.Debug = debugs["fuse"]
-	mount.Debug = debugs["fuse"]
+	conn.Debug = debugs["fuse"] || debugs["fs"]
+	mount.Debug = debugs["fuse"] || debugs["fs"]
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
 	fs.OnUnmount()
