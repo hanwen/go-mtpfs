@@ -46,6 +46,10 @@ type Decoder interface {
 	Decode(r io.Reader) error
 }
 
+type Encoder interface {
+	Encode(w io.Writer) error
+}
+
 type PropDescRangeForm struct {
 	MinimumValue DataDependentType
 	MaximumValue DataDependentType

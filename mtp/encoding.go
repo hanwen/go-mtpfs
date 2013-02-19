@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -94,7 +95,7 @@ func kindSize(k reflect.Kind) int {
 	case reflect.Uint32:
 		return 4
 	default:
-		panic("type")
+		panic(fmt.Sprintf("unknown kind %v", k))
 	}
 	return 0
 }
@@ -109,6 +110,7 @@ func decodeArray(r io.Reader, t reflect.Type) (reflect.Value, error) {
 	}
 
 	ksz := int(kindSize(t.Elem().Kind()))
+
 	data := make([]byte, int(sz)*ksz)
 	_, err = r.Read(data)
 	if err != nil {
@@ -142,7 +144,13 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 	}
 
 	kind := val.Type().Elem().Kind()
-	ksz := int(kindSize(kind))
+	ksz := 0
+	if kind == reflect.Interface {
+		log.Println("OK")
+		ksz = int(kindSize(val.Index(0).Elem().Kind()))
+	} else {
+		ksz = int(kindSize(kind))
+	}
 	data := make([]byte, int(sz)*ksz)
 	for i := 0; i < int(sz); i++ {
 		elt := val.Index(i)
@@ -167,7 +175,7 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 		case reflect.Int64:
 			byteOrder.PutUint64(to, uint64(elt.Int()))
 		default:
-			panic("unimp")
+			panic(fmt.Sprintf("unimplemented: encode for kind %v", kind))
 		}
 	}
 	_, err = w.Write(data)
@@ -288,6 +296,8 @@ func encodeField(w io.Writer, f reflect.Value) error {
 		return encodeStrField(w, f)
 	case reflect.Slice:
 		return encodeArray(w, f)
+	case reflect.Interface:
+		return encodeField(w, f.Elem())
 	default:
 		panic(fmt.Sprintf("unimplemented kind %v", f))
 	}
@@ -329,9 +339,16 @@ func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector
 
 // Encode MTP data stream into data structure.
 func Encode(w io.Writer, iface interface{}) error {
+	encoder, ok := iface.(Encoder)
+	if ok {
+		return encoder.Encode(w)
+	}
+
 	val := reflect.ValueOf(iface)
 	if val.Kind() != reflect.Ptr {
-		return fmt.Errorf("need ptr argument: %T", iface)
+		msg := fmt.Sprintf("need ptr argument: %T", iface)
+		return fmt.Errorf(msg)
+		//panic("need ptr argument: %T")
 	}
 	val = val.Elem()
 	t := val.Type()
@@ -393,12 +410,14 @@ func InstantiateType(t DataTypeSelector) reflect.Value {
 func decodePropDescForm(r io.Reader, selector DataTypeSelector, formFlag uint8) (DataDependentType, error) {
 	if formFlag == DPFF_Range {
 		f := PropDescRangeForm{}
-		err := decodeWithSelector(r, reflect.ValueOf(&f).Elem(), selector)
-		return f, err
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(),
+			selector)
+		return &f, err
 	} else if formFlag == DPFF_Enumeration {
 		f := PropDescEnumForm{}
-		err := decodeWithSelector(r, reflect.ValueOf(&f).Elem(), selector)
-		return f, err
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(),
+			selector)
+		return &f, err
 	}
 	return nil, nil
 }
@@ -421,4 +440,22 @@ func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
 	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
 	pd.Form = form
 	return err
+}
+
+func (pd *DevicePropDesc) Encode(w io.Writer) (err error) {
+	err = Encode(w, &pd.DevicePropDescFixed)
+	if err != nil {
+		return err
+	}
+
+	err = Encode(w, pd.Form)
+	return err
+}
+
+func (pd *ObjectPropDesc) Encode(w io.Writer) (err error) {
+	err = Encode(w, &pd.ObjectPropDescFixed)
+	if err != nil {
+		return err
+	}
+	return Encode(w, pd.Form)
 }

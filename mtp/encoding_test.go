@@ -3,6 +3,7 @@ package mtp
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -143,13 +144,14 @@ func TestEncodeStrEmpty(t *testing.T) {
 type TimeValue struct {
 	Value time.Time
 }
+
 func TestDecodeTime(t *testing.T) {
 	ts := &TestStr{"20120101T010022."}
 	samsung := &bytes.Buffer{}
 	if err := Encode(samsung, ts); err != nil {
 		t.Fatalf("str encode failed: %v", err)
 	}
-	
+
 	tv := &TimeValue{}
 	if err := Decode(samsung, tv); err != nil {
 		t.Fatalf("decode failed: %v", err)
@@ -159,14 +161,82 @@ func TestDecodeTime(t *testing.T) {
 	if err := Encode(&buf, tv); err != nil {
 		t.Fatalf("encode failed: %v", err)
 	}
-	
+
 	if err := Decode(&buf, ts); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	
+
 	want := "20120101T010022"
 	got := ts.S
 	if got != want {
 		t.Errorf("time encode/decode: got %q want %q", got, want)
+	}
+}
+
+func TestVariantDPD(t *testing.T) {
+	uint16range := PropDescRangeForm{
+		MinimumValue: uint16(1),
+		MaximumValue: uint16(11),
+		StepSize:     uint16(2),
+	}
+
+	fixed := DevicePropDescFixed{
+		DevicePropertyCode:  DPC_BatteryLevel,
+		DataType:            DTC_UINT16,
+		GetSet:              DPGS_GetSet,
+		FactoryDefaultValue: uint16(3),
+		CurrentValue:        uint16(5),
+		FormFlag:            DPFF_Range,
+	}
+
+	dp := DevicePropDesc{fixed, &uint16range}
+
+	buf := &bytes.Buffer{}
+	err := Encode(buf, &dp)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+
+	back := DevicePropDesc{}
+	if err := Decode(buf, &back); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+
+	if !reflect.DeepEqual(back, dp) {
+		t.Fatalf("reflect.DeepEqual failed: got %#v, want %#v",
+			dp, back)
+	}
+}
+
+func DisabledTestVariantOPD(t *testing.T) {
+	uint16enum := PropDescEnumForm{
+		Values: []DataDependentType{uint16(1), uint16(11), uint16(2)},
+	}
+
+	fixed := ObjectPropDescFixed{
+		ObjectPropertyCode:  OPC_WirelessConfigurationFile,
+		DataType:            DTC_UINT16,
+		GetSet:              DPGS_GetSet,
+		FactoryDefaultValue: uint16(3),
+		GroupCode:           0x21,
+		FormFlag:            DPFF_Enumeration,
+	}
+
+	dp := ObjectPropDesc{fixed, &uint16enum}
+
+	buf := &bytes.Buffer{}
+	err := Encode(buf, &dp)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+
+	back := ObjectPropDesc{}
+	if err := Decode(buf, &back); err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+
+	if !reflect.DeepEqual(back, dp) {
+		t.Fatalf("reflect.DeepEqual failed: got %#v, want %#v",
+			dp, back)
 	}
 }
