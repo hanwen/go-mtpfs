@@ -8,10 +8,10 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"syscall"
 
 	"github.com/hanwen/go-fuse/fuse"
 )
-
 
 type androidNode struct {
 	mtpNodeImpl
@@ -80,6 +80,11 @@ type androidFile struct {
 }
 
 func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status) {
+	if off > f.node.Size {
+		// ENXIO = no such address.
+		return nil, fuse.Status(int(syscall.ENXIO))
+	}
+
 	b := bytes.NewBuffer(dest[:0])
 	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.Handle(), b, off, uint32(len(dest)))
 	if err != nil {

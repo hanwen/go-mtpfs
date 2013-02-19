@@ -125,6 +125,11 @@ func testDevice(t *testing.T, useAndroid bool) {
 	}
 	defer f.Close()
 
+	n, _ := f.ReadAt(make([]byte, 4096), 4096)
+	if n > 0 {
+		t.Fatalf("beyond EOF read should fail: got %d bytes", n)
+	}
+
 	golden += "hello"
 	_, err = f.Write([]byte("hello"))
 	if err != nil {
