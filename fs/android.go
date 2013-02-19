@@ -80,11 +80,14 @@ type androidFile struct {
 }
 
 func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status) {
-	if off > f.node.Size {
+	if off >= f.node.Size {
 		// ENXIO = no such address.
 		return nil, fuse.Status(int(syscall.ENXIO))
 	}
 
+	if off+int64(len(dest)) > f.node.Size {
+		dest = dest[:f.node.Size-off]
+	}
 	b := bytes.NewBuffer(dest[:0])
 	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.Handle(), b, off, uint32(len(dest)))
 	if err != nil {
