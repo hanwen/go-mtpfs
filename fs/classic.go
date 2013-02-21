@@ -330,7 +330,7 @@ func (fs *DeviceFs) ensureFreeSpace(want int64) error {
 func (fs *DeviceFs) setupClassic() error {
 	if fs.options.Dir == "" {
 		var err error
-		fs.options.Dir, err = ioutil.TempDir("", "go-mtpfs")
+		fs.options.Dir, err = ioutil.TempDir(os.TempDir(), "go-mtpfs")
 		if err != nil {
 			return err
 		}
