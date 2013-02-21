@@ -22,12 +22,12 @@ func TestDevice(t *testing.T) {
 		}
 
 		t.Logf("Vendor/Product %x:%x Class/subclass/protocol %x:%x:%x: %s\n",
-			dd.IdVendor,  dd.IdProduct, dd.DeviceClass, dd.DeviceSubClass, dd.DeviceProtocol, CLASS_names[dd.DeviceClass])
+			dd.IdVendor, dd.IdProduct, dd.DeviceClass, dd.DeviceSubClass, dd.DeviceProtocol, CLASS_names[dd.DeviceClass])
 
-		stringDescs :=[]byte{
+		stringDescs := []byte{
 			dd.Manufacturer, dd.Product, dd.SerialNumber,
 		}
-		
+
 		for i := 0; i < int(dd.NumConfigurations); i++ {
 			cd, err := dev.GetConfigDescriptor(byte(i))
 			if err != nil {
@@ -35,7 +35,7 @@ func TestDevice(t *testing.T) {
 				continue
 			}
 			stringDescs = append(stringDescs, cd.ConfigurationIndex)
-			t.Logf(" config value %x, attributes %x power %d\n", cd.ConfigurationValue, 
+			t.Logf(" config value %x, attributes %x power %d\n", cd.ConfigurationValue,
 				cd.Attributes, cd.MaxPower)
 			for idx, iface := range cd.Interfaces {
 				t.Logf("  iface %d\n", idx)
@@ -67,6 +67,3 @@ func TestDevice(t *testing.T) {
 		dh.Close()
 	}
 }
-
-	
-

@@ -2,19 +2,19 @@ package fs
 
 import (
 	"fmt"
-	"log"
 	"io/ioutil"
+	"log"
 	"os"
 	"syscall"
 	"time"
-	
+
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
 type classicNode struct {
 	mtpNodeImpl
-	
+
 	// local file containing the contents.
 	backing string
 
@@ -89,19 +89,19 @@ func (n *classicNode) send() error {
 	_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), f.ParentObject, f)
 	if err != nil {
 		log.Printf("SendObjectInfo failed %v", err)
-		return syscall.EINVAL	
+		return syscall.EINVAL
 	}
 	err = n.fs.dev.SendObject(backing, fi.Size())
 	if err != nil {
 		log.Printf("SendObject failed %v", err)
-		return syscall.EINVAL	
+		return syscall.EINVAL
 	}
 	dt := time.Now().Sub(start)
 	log.Printf("sent %d bytes in %d ms. %.1f MB/s", fi.Size(),
 		dt.Nanoseconds()/1e6, 1e3*float64(fi.Size())/float64(dt.Nanoseconds()))
 	n.dirty = false
 	n.handle = handle
-	
+
 	// We could leave the file for future reading, but the
 	// management of free space is a hassle when doing large
 	// copies.
@@ -168,7 +168,7 @@ func (n *classicNode) fetch() error {
 
 func (n *classicNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
 	return &pendingFile{
-		node:         n,
+		node: n,
 	}, fuse.OK
 }
 
@@ -186,9 +186,9 @@ func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 
 type pendingFile struct {
 	fuse.DefaultFile
-	flags uint32
+	flags    uint32
 	loopback *fuse.LoopbackFile
-	node *classicNode
+	node     *classicNode
 }
 
 func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
@@ -209,7 +209,7 @@ func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
 
 func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	if p.loopback == nil {
-		if err := p.node.fetch(); err!= nil {
+		if err := p.node.fetch(); err != nil {
 			log.Printf("fetch failed: %v", err)
 			return nil, fuse.EIO
 		}
@@ -220,7 +220,7 @@ func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status
 		p.loopback = &fuse.LoopbackFile{File: f}
 	}
 	return p.loopback.Read(data, off)
-}	
+}
 
 func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	p.node.dirty = true
@@ -228,7 +228,7 @@ func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	if !code.Ok() {
 		return 0, code
 	}
-		
+
 	n, code := f.Write(data, off)
 	if !code.Ok() {
 		p.node.error = code
@@ -241,7 +241,7 @@ func (p *pendingFile) Truncate(size uint64) fuse.Status {
 	if !code.Ok() {
 		return code
 	}
-	
+
 	code = f.Truncate(size)
 	if !code.Ok() {
 		return code
@@ -276,7 +276,6 @@ func (p *pendingFile) Release() {
 }
 
 ////////////////////////////////////////////////////////////////
-
 
 func (fs *DeviceFs) trimUnused(todo int64, node *fuse.Inode) (done int64) {
 	for _, ch := range node.Children() {
@@ -335,7 +334,7 @@ func (fs *DeviceFs) setupClassic() error {
 		}
 		fs.delBackingDir = true
 	}
-	if fi, err :=  os.Lstat(fs.options.Dir); err != nil || !fi.IsDir() {
+	if fi, err := os.Lstat(fs.options.Dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory")
 	}
 	return nil
@@ -349,19 +348,19 @@ func (fs *DeviceFs) OnUnmount() {
 
 func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file fuse.File, node fuse.FsNode, err error) {
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
-	cl:= &classicNode{
+	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
-			obj:       &obj,
-			fs:        fs,
+			obj: &obj,
+			fs:  fs,
 		},
-		dirty:      true,
+		dirty:   true,
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
 		loopback: &fuse.LoopbackFile{File: backingFile},
-		node: cl, 
+		node:     cl,
 	}
 
 	node = cl
-	return 
+	return
 }

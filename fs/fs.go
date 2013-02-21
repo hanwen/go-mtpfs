@@ -27,18 +27,17 @@ type DeviceFsOptions struct {
 	Android bool
 }
 
-
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
 type DeviceFs struct {
 	fuse.DefaultNodeFileSystem
-	backingDir   string
+	backingDir    string
 	delBackingDir bool
-	root         *rootNode
-	dev          *mtp.Device
-	devInfo      mtp.DeviceInfo
-	storages     []uint32
-	mungeVfat    map[uint32]bool
+	root          *rootNode
+	dev           *mtp.Device
+	devInfo       mtp.DeviceInfo
+	storages      []uint32
+	mungeVfat     map[uint32]bool
 
 	options *DeviceFsOptions
 }
@@ -122,14 +121,14 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 	}
 
 	mNode := mtpNodeImpl{
-		obj: &obj,
+		obj:    &obj,
 		handle: id,
-		fs: fs,
-		Size:      size,
+		fs:     fs,
+		Size:   size,
 	}
 	if fs.options.Android {
 		node = &androidNode{
-			mtpNodeImpl:mNode,
+			mtpNodeImpl: mNode,
 		}
 	} else {
 		node = &classicNode{
@@ -275,10 +274,10 @@ type folderNode struct {
 func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
 	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
-	mtpNodeImpl: mtpNodeImpl{
+		mtpNodeImpl: mtpNodeImpl{
 			handle: h,
-			obj: &obj,
-			fs: fs,
+			obj:    &obj,
+			fs:     fs,
 		},
 	}
 }
@@ -514,11 +513,11 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 
 		node = &androidNode{
 			mtpNodeImpl: mtpNodeImpl{
-				obj:       &obj,
-				fs:        n.fs,
-				handle:        handle,
+				obj:    &obj,
+				fs:     n.fs,
+				handle: handle,
 			},
-			write:     true,
+			write: true,
 		}
 		file = &androidFile{
 			node: node.(*androidNode),

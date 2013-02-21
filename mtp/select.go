@@ -6,7 +6,7 @@ import (
 
 	"github.com/hanwen/go-mtpfs/usb"
 )
- 
+
 func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 	dd, err := d.GetDeviceDescriptor()
 	if err != nil {
@@ -21,7 +21,7 @@ func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 			for _, a := range iface.AltSetting {
 				if len(a.EndPoints) != 3 {
 					continue
-				}	
+				}
 				m := Device{}
 				for _, s := range a.EndPoints {
 					switch {
