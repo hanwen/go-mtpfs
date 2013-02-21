@@ -82,6 +82,8 @@ func (n *classicNode) send() error {
 
 	if fi.Size() > 0xFFFFFFFF {
 		f.CompressedSize = 0xFFFFFFFF
+	} else {
+		f.CompressedSize = uint32(fi.Size())
 	}
 	n.Size = fi.Size()
 	start := time.Now()
