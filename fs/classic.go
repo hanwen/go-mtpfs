@@ -324,7 +324,7 @@ func (fs *DeviceFs) ensureFreeSpace(want int64) error {
 		return nil
 	}
 
-	return fmt.Errorf("not enough space. Have %d, want %d", free, want)
+	return fmt.Errorf("not enough space in %s. Have %d, want %d", fs.options.Dir, free, want)
 }
 
 func (fs *DeviceFs) setupClassic() error {
