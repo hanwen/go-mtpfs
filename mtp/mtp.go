@@ -477,6 +477,9 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 				break
 			}
 		}
+		if d.MTPDebug {
+			log.Printf("MTP bulk read 0x%x bytes.", lastRead)
+		}
 		if lastRead < len(toread) {
 			// short read.
 			break
