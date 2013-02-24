@@ -17,7 +17,7 @@ import (
 
 func main() {
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, fuse")
-	usbTimeout := flag.Int("usb-timeout", 2000, "timeout in milliseconds")
+	usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
