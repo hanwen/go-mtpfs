@@ -345,9 +345,9 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 			log.Printf("MTP data 0x%x bytes", h.Length)
 		}
 
-		size := int(h.Length)
+		size := int64(h.Length)
 		dest.Write(rest)
-		size -= len(rest) + usbHdrLen
+		size -= int64(len(rest) + usbHdrLen)
 		if size > 0 {
 			_, err = d.bulkRead(dest)
 			if err != nil {
