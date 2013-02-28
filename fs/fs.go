@@ -301,19 +301,18 @@ func (n *folderNode) fetch() bool {
 		return false
 	}
 
-	infos := []*mtp.ObjectInfo{}
+	infos := map[uint32]*mtp.ObjectInfo{}
 	sizes := map[uint32]int64{}
 	for _, handle := range handles.Values {
 		obj := mtp.ObjectInfo{}
 		err := n.fs.dev.GetObjectInfo(handle, &obj)
 		if err != nil {
-			log.Printf("GetObjectInfo failed: %v", err)
-			return false
+			log.Printf("GetObjectInfo for handle %d failed: %v", handle, err)
+			continue
 		}
 		if obj.Filename == "" {
 			log.Printf("ignoring handle 0x%x with empty name in dir 0x%x",
 				handle, n.Handle())
-			infos = append(infos, nil)
 			continue
 		}
 
@@ -327,26 +326,22 @@ func (n *folderNode) fetch() bool {
 
 			sizes[handle] = int64(val.Value)
 		}
-		infos = append(infos, &obj)
+		infos[handle] = &obj
 	}
 
-	for i, handle := range handles.Values {
+	for handle, info := range infos {
 		var node fuse.FsNode
-		if infos[i] == nil {
-			continue
-		}
-		obj := *infos[i]
-		obj.ParentObject = n.Handle()
-		isdir := obj.ObjectFormat == mtp.OFC_Association
+		info.ParentObject = n.Handle()
+		isdir := info.ObjectFormat == mtp.OFC_Association
 		if isdir {
-			fNode := n.fs.newFolder(obj, handle)
+			fNode := n.fs.newFolder(*info, handle)
 			node = fNode
 		} else {
 			sz := sizes[handle]
-			node = n.fs.newFile(obj, sz, handle)
+			node = n.fs.newFile(*info, sz, handle)
 		}
 
-		n.Inode().AddChild(obj.Filename, n.Inode().New(isdir, node))
+		n.Inode().AddChild(info.Filename, n.Inode().New(isdir, node))
 	}
 	n.fetched = true
 	return true
