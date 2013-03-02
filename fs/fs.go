@@ -501,22 +501,21 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			return nil, nil, fuse.EIO
 		}
 
-		if err := n.fs.dev.AndroidBeginEditObject(handle); err != nil {
-			log.Println("AndroidBeginEditObject failed:", err)
-			return nil, nil, fuse.EIO
-		}
-
-		node = &androidNode{
+		aNode := &androidNode{
 			mtpNodeImpl: mtpNodeImpl{
 				obj:    &obj,
 				fs:     n.fs,
 				handle: handle,
 			},
-			write: true,
+		}
+
+		if !aNode.startEdit() {
+			return nil, nil, fuse.EIO
 		}
 		file = &androidFile{
-			node: node.(*androidNode),
+			node: aNode,
 		}
+		node = aNode
 	} else {
 		var err error
 		file, node, err = n.fs.createClassicFile(obj)

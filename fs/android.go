@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 )
@@ -17,7 +18,9 @@ type androidNode struct {
 	mtpNodeImpl
 
 	// If set, the backing file was changed.
-	write bool
+	write     bool
+	start     time.Time
+	byteCount int64
 }
 
 func (n *androidNode) startEdit() bool {
@@ -25,6 +28,8 @@ func (n *androidNode) startEdit() bool {
 		return true
 	}
 
+	n.start = time.Now()
+	n.byteCount = 0
 	err := n.fs.dev.AndroidBeginEditObject(n.Handle())
 	if err != nil {
 		log.Println("AndroidBeginEditObject failed:", err)
@@ -38,6 +43,10 @@ func (n *androidNode) endEdit() bool {
 	if !n.write {
 		return true
 	}
+
+	dt := time.Now().Sub(n.start)
+	log.Printf("%d bytes in %v: %d mb/s",
+		n.byteCount, dt, (1e3*n.byteCount)/(dt.Nanoseconds()))
 
 	err := n.fs.dev.AndroidEndEditObject(n.Handle())
 	if err != nil {
@@ -106,7 +115,7 @@ func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse
 	if !f.node.startEdit() {
 		return 0, fuse.EIO
 	}
-
+	f.node.byteCount += int64(len(dest))
 	b := bytes.NewBuffer(dest)
 	err := f.node.fs.dev.AndroidSendPartialObject(f.node.Handle(), off, uint32(len(dest)), b)
 	if err != nil {
