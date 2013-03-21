@@ -91,29 +91,6 @@ func (fs *DeviceFs) String() string {
 
 // TODO - this should be per storage and return just the free space in
 // the storage.
-func (fs *DeviceFs) statFs() *fuse.StatfsOut {
-	total := uint64(0)
-	free := uint64(0)
-	for _, sid := range fs.storages {
-		var info mtp.StorageInfo
-		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
-			log.Printf("GetStorageInfo %x: %v", sid, err)
-			continue
-		}
-
-		total += uint64(info.MaxCapability)
-		free += uint64(info.FreeSpaceInBytes)
-	}
-
-	bs := uint64(1024)
-
-	return &fuse.StatfsOut{
-		Bsize:  uint32(bs),
-		Blocks: total / bs,
-		Bavail: free / bs,
-		Bfree:  free / bs,
-	}
-}
 
 func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fuse.FsNode) {
 	if obj.CompressedSize != 0xFFFFFFFF {
@@ -143,10 +120,6 @@ type rootNode struct {
 	fs *DeviceFs
 }
 
-func (n *rootNode) StatFs() *fuse.StatfsOut {
-	return n.fs.statFs()
-}
-
 const NOPARENT_ID = 0xFFFFFFFF
 
 func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
@@ -165,6 +138,24 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 		folder := fs.newFolder(obj, NOPARENT_ID)
 		inode := fs.root.Inode().New(true, folder)
 		fs.root.Inode().AddChild(info.StorageDescription, inode)
+	}
+}
+
+func (n *rootNode) StatFs() *fuse.StatfsOut {
+	total := uint64(0)
+	free := uint64(0)
+	for _, ch := range n.Inode().Children() {
+		if s := ch.FsNode().StatFs(); s != nil {
+			total += s.Blocks
+			free += s.Bfree
+		}
+	}
+
+	return &fuse.StatfsOut{
+		Bsize:  uint32(1024),
+		Blocks: total,
+		Bavail: free,
+		Bfree:  free,
 	}
 }
 
@@ -210,6 +201,28 @@ type mtpNodeImpl struct {
 	Size int64
 }
 
+func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
+	total := uint64(0)
+	free := uint64(0)
+	
+	var info mtp.StorageInfo
+	if err := n.fs.dev.GetStorageInfo(n.StorageID(), &info); err != nil {
+		log.Printf("GetStorageInfo %x: %v", n.StorageID(), err)
+		return nil
+	}
+
+	total += uint64(info.MaxCapability)
+	free += uint64(info.FreeSpaceInBytes)
+	bs := uint64(1024)
+
+	return &fuse.StatfsOut{
+		Bsize:  uint32(bs),
+		Blocks: total / bs,
+		Bavail: free / bs,
+		Bfree:  free / bs,
+	}
+}
+
 func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
 	out.Mode = fuse.S_IFREG | 0644
 	f := n.obj
@@ -248,10 +261,6 @@ func (n *mtpNodeImpl) Handle() uint32 {
 
 func (n *mtpNodeImpl) SetName(nm string) {
 	n.obj.Filename = nm
-}
-
-func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
-	return n.fs.statFs()
 }
 
 func (n *mtpNodeImpl) StorageID() uint32 {
