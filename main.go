@@ -61,7 +61,7 @@ func main() {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
-	rawFs := fuse.NewLockingRawFileSystem(conn)
+	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 
 	mount := fuse.NewMountState(rawFs)
 	mOpts := &fuse.MountOptions{
@@ -71,8 +71,8 @@ func main() {
 		log.Fatalf("mount failed: %v", err)
 	}
 
-	conn.Debug = debugs["fuse"] || debugs["fs"]
-	mount.Debug = debugs["fuse"] || debugs["fs"]
+	conn.SetDebug(debugs["fuse"] || debugs["fs"])
+	mount.SetDebug(debugs["fuse"] || debugs["fs"])
 	log.Printf("starting FUSE %v", fuse.Version())
 	mount.Loop()
 	fs.OnUnmount()
