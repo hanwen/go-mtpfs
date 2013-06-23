@@ -58,7 +58,7 @@ func (n *androidNode) endEdit() bool {
 }
 
 func (n *androidNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	return &androidFile{node: n}, fuse.OK
+	return &androidFile{node: n, File: fuse.NewDefaultFile()}, fuse.OK
 }
 
 func (n *androidNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
@@ -84,7 +84,7 @@ func (n *androidNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 var _ = mtpNode((*androidNode)(nil))
 
 type androidFile struct {
-	fuse.DefaultFile
+	fuse.File
 	node *androidNode
 }
 

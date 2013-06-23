@@ -187,13 +187,13 @@ func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 // writing files.
 
 type pendingFile struct {
-	fuse.DefaultFile
+	fuse.File
 	flags    uint32
-	loopback *fuse.LoopbackFile
+	loopback fuse.File
 	node     *classicNode
 }
 
-func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
+func (p *pendingFile) rwLoopback() (fuse.File, fuse.Status) {
 	if p.loopback == nil {
 		err := p.node.fetch()
 		if err != nil {
@@ -204,7 +204,7 @@ func (p *pendingFile) rwLoopback() (*fuse.LoopbackFile, fuse.Status) {
 			return nil, fuse.ToStatus(err)
 		}
 
-		p.loopback = &fuse.LoopbackFile{File: f}
+		p.loopback = fuse.NewLoopbackFile(f)
 	}
 	return p.loopback, fuse.OK
 }
@@ -219,7 +219,7 @@ func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status
 		if err != nil {
 			return nil, fuse.ToStatus(err)
 		}
-		p.loopback = &fuse.LoopbackFile{File: f}
+		p.loopback = fuse.NewLoopbackFile(f)
 	}
 	return p.loopback.Read(data, off)
 }
@@ -359,8 +359,9 @@ func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file fuse.File, node 
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
-		loopback: &fuse.LoopbackFile{File: backingFile},
+		loopback: fuse.NewLoopbackFile(backingFile),
 		node:     cl,
+		File:     fuse.NewDefaultFile(),
 	}
 
 	node = cl

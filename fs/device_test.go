@@ -53,7 +53,7 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 		t.Fatal("NewDeviceFs failed:", err)
 	}
 	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
-	rawFs := fuse.NewLockingRawFileSystem(conn)
+	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 	mount := fuse.NewMountState(rawFs)
 	if err := mount.Mount(tempdir, nil); err != nil {
 		t.Fatalf("mount failed: %v", err)
