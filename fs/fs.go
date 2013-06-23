@@ -30,7 +30,8 @@ type DeviceFsOptions struct {
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
 type DeviceFs struct {
-	fuse.DefaultNodeFileSystem
+	fuse.NodeFileSystem
+
 	backingDir    string
 	delBackingDir bool
 	root          *rootNode
@@ -48,8 +49,13 @@ type DeviceFs struct {
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store.
 func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
-	root := rootNode{}
-	fs := &DeviceFs{root: &root, dev: d, options: &options}
+	root := rootNode{FsNode: fuse.NewDefaultFsNode()}
+	fs := &DeviceFs{
+		NodeFileSystem: fuse.NewDefaultNodeFileSystem(),
+		root:           &root,
+		dev:            d,
+		options:        &options,
+	}
 	root.fs = fs
 	fs.storages = storages
 	err := d.GetDeviceInfo(&fs.devInfo)
@@ -98,6 +104,7 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 	}
 
 	mNode := mtpNodeImpl{
+		FsNode: fuse.NewDefaultFsNode(),
 		obj:    &obj,
 		handle: id,
 		fs:     fs,
@@ -116,7 +123,7 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 }
 
 type rootNode struct {
-	fuse.DefaultFsNode
+	fuse.FsNode
 	fs *DeviceFs
 }
 
@@ -187,7 +194,7 @@ type mtpNode interface {
 }
 
 type mtpNodeImpl struct {
-	fuse.DefaultFsNode
+	fuse.FsNode
 
 	// MTP handle.
 	handle uint32
@@ -204,7 +211,7 @@ type mtpNodeImpl struct {
 func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
-	
+
 	var info mtp.StorageInfo
 	if err := n.fs.dev.GetStorageInfo(n.StorageID(), &info); err != nil {
 		log.Printf("GetStorageInfo %x: %v", n.StorageID(), err)
@@ -360,7 +367,7 @@ func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, sta
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	return n.DefaultFsNode.OpenDir(context)
+	return n.FsNode.OpenDir(context)
 }
 
 func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
