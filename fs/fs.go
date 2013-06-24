@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -30,7 +31,7 @@ type DeviceFsOptions struct {
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
 type DeviceFs struct {
-	fuse.NodeFileSystem
+	nodefs.FileSystem
 
 	backingDir    string
 	delBackingDir bool
@@ -49,12 +50,12 @@ type DeviceFs struct {
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store.
 func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
-	root := rootNode{FsNode: fuse.NewDefaultFsNode()}
+	root := rootNode{Node: nodefs.NewDefaultNode()}
 	fs := &DeviceFs{
-		NodeFileSystem: fuse.NewDefaultNodeFileSystem(),
-		root:           &root,
-		dev:            d,
-		options:        &options,
+		FileSystem: nodefs.NewDefaultFileSystem(),
+		root:       &root,
+		dev:        d,
+		options:    &options,
 	}
 	root.fs = fs
 	fs.storages = storages
@@ -87,7 +88,7 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 	return fs, nil
 }
 
-func (fs *DeviceFs) Root() fuse.FsNode {
+func (fs *DeviceFs) Root() nodefs.Node {
 	return fs.root
 }
 
@@ -98,13 +99,13 @@ func (fs *DeviceFs) String() string {
 // TODO - this should be per storage and return just the free space in
 // the storage.
 
-func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fuse.FsNode) {
+func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nodefs.Node) {
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
 
 	mNode := mtpNodeImpl{
-		FsNode: fuse.NewDefaultFsNode(),
+		Node:   nodefs.NewDefaultNode(),
 		obj:    &obj,
 		handle: id,
 		fs:     fs,
@@ -123,13 +124,13 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fus
 }
 
 type rootNode struct {
-	fuse.FsNode
+	nodefs.Node
 	fs *DeviceFs
 }
 
 const NOPARENT_ID = 0xFFFFFFFF
 
-func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
+func (fs *DeviceFs) OnMount(conn *nodefs.FileSystemConnector) {
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
 		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
@@ -148,17 +149,17 @@ func (fs *DeviceFs) OnMount(conn *fuse.FileSystemConnector) {
 	}
 }
 
-func (n *rootNode) StatFs() *fuse.StatfsOut {
+func (n *rootNode) StatFs() *nodefs.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
 	for _, ch := range n.Inode().Children() {
-		if s := ch.FsNode().StatFs(); s != nil {
+		if s := ch.Node().StatFs(); s != nil {
 			total += s.Blocks
 			free += s.Bfree
 		}
 	}
 
-	return &fuse.StatfsOut{
+	return &nodefs.StatfsOut{
 		Bsize:  uint32(1024),
 		Blocks: total,
 		Bavail: free,
@@ -187,14 +188,14 @@ func SanitizeDosName(name string) string {
 // mtpNode
 
 type mtpNode interface {
-	fuse.FsNode
+	nodefs.Node
 	Handle() uint32
 	StorageID() uint32
 	SetName(string)
 }
 
 type mtpNodeImpl struct {
-	fuse.FsNode
+	nodefs.Node
 
 	// MTP handle.
 	handle uint32
@@ -208,7 +209,7 @@ type mtpNodeImpl struct {
 	Size int64
 }
 
-func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
+func (n *mtpNodeImpl) StatFs() *nodefs.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
 
@@ -222,7 +223,7 @@ func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
 	free += uint64(info.FreeSpaceInBytes)
 	bs := uint64(1024)
 
-	return &fuse.StatfsOut{
+	return &nodefs.StatfsOut{
 		Bsize:  uint32(bs),
 		Blocks: total / bs,
 		Bavail: free / bs,
@@ -230,7 +231,7 @@ func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
 	}
 }
 
-func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
+func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Context) (code fuse.Status) {
 	out.Mode = fuse.S_IFREG | 0644
 	f := n.obj
 	if f != nil {
@@ -242,17 +243,17 @@ func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Cont
 	return fuse.OK
 }
 
-func (n *mtpNodeImpl) Chown(file fuse.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
+func (n *mtpNodeImpl) Chown(file nodefs.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
 	// Get rid of pesky messages from cp -a.
 	return fuse.OK
 }
 
-func (n *mtpNodeImpl) Chmod(file fuse.File, perms uint32, context *fuse.Context) (code fuse.Status) {
+func (n *mtpNodeImpl) Chmod(file nodefs.File, perms uint32, context *fuse.Context) (code fuse.Status) {
 	// Get rid of pesky messages from cp -a.
 	return fuse.OK
 }
 
-func (n *mtpNodeImpl) Utimens(file fuse.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
+func (n *mtpNodeImpl) Utimens(file nodefs.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
 	// Unfortunately, we can't set the modtime; it's READONLY in
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
@@ -346,7 +347,7 @@ func (n *folderNode) fetch() bool {
 	}
 
 	for handle, info := range infos {
-		var node fuse.FsNode
+		var node nodefs.Node
 		info.ParentObject = n.Handle()
 		isdir := info.ObjectFormat == mtp.OFC_Association
 		if isdir {
@@ -367,10 +368,10 @@ func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, sta
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
-	return n.FsNode.OpenDir(context)
+	return n.Node.OpenDir(context)
 }
 
-func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Context) (code fuse.Status) {
+func (n *folderNode) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Context) (code fuse.Status) {
 	out.Mode = fuse.S_IFDIR | 0755
 	return fuse.OK
 }
@@ -378,7 +379,7 @@ func (n *folderNode) GetAttr(out *fuse.Attr, file fuse.File, context *fuse.Conte
 func (n *folderNode) basenameRename(oldName string, newName string) error {
 	ch := n.Inode().GetChild(oldName)
 
-	mFile := ch.FsNode().(mtpNode)
+	mFile := ch.Node().(mtpNode)
 
 	if mFile.Handle() != 0 {
 		// Only rename on device if it was sent already.
@@ -393,7 +394,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 	return nil
 }
 
-func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName string, context *fuse.Context) (code fuse.Status) {
+func (n *folderNode) Rename(oldName string, newParent nodefs.Node, newName string, context *fuse.Context) (code fuse.Status) {
 	fn, ok := newParent.(*folderNode)
 	if !ok {
 		return fuse.ENOSYS
@@ -426,7 +427,7 @@ func (n *folderNode) Rename(oldName string, newParent fuse.FsNode, newName strin
 	return fuse.OK
 }
 
-func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node fuse.FsNode, code fuse.Status) {
+func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node nodefs.Node, code fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
@@ -435,11 +436,11 @@ func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) 
 		return nil, fuse.ENOENT
 	}
 
-	s := ch.FsNode().GetAttr(out, nil, context)
-	return ch.FsNode(), s
+	s := ch.Node().GetAttr(out, nil, context)
+	return ch.Node(), s
 }
 
-func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (fuse.FsNode, fuse.Status) {
+func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (nodefs.Node, fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
@@ -472,7 +473,7 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 		return fuse.ENOENT
 	}
 
-	f := ch.FsNode().(mtpNode)
+	f := ch.Node().(mtpNode)
 	if f.Handle() != 0 {
 		err := n.fs.dev.DeleteObject(f.Handle())
 		if err != nil {
@@ -490,7 +491,7 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	return n.Unlink(name, c)
 }
 
-func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file fuse.File, node fuse.FsNode, code fuse.Status) {
+func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, node nodefs.Node, code fuse.Status) {
 	if !n.fetch() {
 		return nil, nil, fuse.EIO
 	}

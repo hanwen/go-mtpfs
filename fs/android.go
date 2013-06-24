@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 )
 
 type androidNode struct {
@@ -57,11 +58,11 @@ func (n *androidNode) endEdit() bool {
 	return true
 }
 
-func (n *androidNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
-	return &androidFile{node: n, File: fuse.NewDefaultFile()}, fuse.OK
+func (n *androidNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+	return &androidFile{node: n, File: nodefs.NewDefaultFile()}, fuse.OK
 }
 
-func (n *androidNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
+func (n *androidNode) Truncate(file nodefs.File, size uint64, context *fuse.Context) (code fuse.Status) {
 	w := n.write
 	if !n.startEdit() {
 		return fuse.EIO
@@ -84,7 +85,7 @@ func (n *androidNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 var _ = mtpNode((*androidNode)(nil))
 
 type androidFile struct {
-	fuse.File
+	nodefs.File
 	node *androidNode
 }
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
@@ -60,7 +61,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
-	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
+	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 
 	mount := fuse.NewMountState(rawFs)

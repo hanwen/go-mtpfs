@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -52,7 +53,7 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	if err != nil {
 		t.Fatal("NewDeviceFs failed:", err)
 	}
-	conn := fuse.NewFileSystemConnector(fs, fuse.NewFileSystemOptions())
+	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 	mount := fuse.NewMountState(rawFs)
 	if err := mount.Mount(tempdir, nil); err != nil {

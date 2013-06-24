@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -168,13 +169,13 @@ func (n *classicNode) fetch() error {
 	return err
 }
 
-func (n *classicNode) Open(flags uint32, context *fuse.Context) (file fuse.File, code fuse.Status) {
+func (n *classicNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	return &pendingFile{
 		node: n,
 	}, fuse.OK
 }
 
-func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Context) (code fuse.Status) {
+func (n *classicNode) Truncate(file nodefs.File, size uint64, context *fuse.Context) (code fuse.Status) {
 	if file != nil {
 		return file.Truncate(size)
 	} else if n.backing != "" {
@@ -187,13 +188,13 @@ func (n *classicNode) Truncate(file fuse.File, size uint64, context *fuse.Contex
 // writing files.
 
 type pendingFile struct {
-	fuse.File
+	nodefs.File
 	flags    uint32
-	loopback fuse.File
+	loopback nodefs.File
 	node     *classicNode
 }
 
-func (p *pendingFile) rwLoopback() (fuse.File, fuse.Status) {
+func (p *pendingFile) rwLoopback() (nodefs.File, fuse.Status) {
 	if p.loopback == nil {
 		err := p.node.fetch()
 		if err != nil {
@@ -204,7 +205,7 @@ func (p *pendingFile) rwLoopback() (fuse.File, fuse.Status) {
 			return nil, fuse.ToStatus(err)
 		}
 
-		p.loopback = fuse.NewLoopbackFile(f)
+		p.loopback = nodefs.NewLoopbackFile(f)
 	}
 	return p.loopback, fuse.OK
 }
@@ -219,7 +220,7 @@ func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status
 		if err != nil {
 			return nil, fuse.ToStatus(err)
 		}
-		p.loopback = fuse.NewLoopbackFile(f)
+		p.loopback = nodefs.NewLoopbackFile(f)
 	}
 	return p.loopback.Read(data, off)
 }
@@ -279,13 +280,13 @@ func (p *pendingFile) Release() {
 
 ////////////////////////////////////////////////////////////////
 
-func (fs *DeviceFs) trimUnused(todo int64, node *fuse.Inode) (done int64) {
+func (fs *DeviceFs) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
 	for _, ch := range node.Children() {
 		if done > todo {
 			break
 		}
 
-		if fn, ok := ch.FsNode().(*classicNode); ok {
+		if fn, ok := ch.Node().(*classicNode); ok {
 			done += fn.trim()
 		} else if ch.IsDir() {
 			done += fs.trimUnused(todo-done, ch)
@@ -348,7 +349,7 @@ func (fs *DeviceFs) OnUnmount() {
 	}
 }
 
-func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file fuse.File, node fuse.FsNode, err error) {
+func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, node nodefs.Node, err error) {
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
@@ -359,9 +360,9 @@ func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file fuse.File, node 
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
-		loopback: fuse.NewLoopbackFile(backingFile),
+		loopback: nodefs.NewLoopbackFile(backingFile),
 		node:     cl,
-		File:     fuse.NewDefaultFile(),
+		File:     nodefs.NewDefaultFile(),
 	}
 
 	node = cl
