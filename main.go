@@ -64,17 +64,17 @@ func main() {
 	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 
-	mount := fuse.NewMountState(rawFs)
 	mOpts := &fuse.MountOptions{
 		AllowOther: *other,
 	}
-	if err := mount.Mount(mountpoint, mOpts); err != nil {
+	mount, err := fuse.NewServer(rawFs, mountpoint, mOpts)
+	if err != nil {
 		log.Fatalf("mount failed: %v", err)
 	}
 
 	conn.SetDebug(debugs["fuse"] || debugs["fs"])
 	mount.SetDebug(debugs["fuse"] || debugs["fs"])
 	log.Printf("starting FUSE %v", fuse.Version())
-	mount.Loop()
+	mount.Serve()
 	fs.OnUnmount()
 }

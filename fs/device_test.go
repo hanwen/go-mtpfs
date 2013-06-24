@@ -55,8 +55,8 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	}
 	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
-	mount := fuse.NewMountState(rawFs)
-	if err := mount.Mount(tempdir, nil); err != nil {
+	mount, err := fuse.NewServer(rawFs, tempdir, nil)
+	if err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	dev.MTPDebug = fuse.VerboseTest()
 	dev.USBDebug = fuse.VerboseTest()
 	dev.DataDebug = fuse.VerboseTest()
-	go mount.Loop()
+	go mount.Serve()
 
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
