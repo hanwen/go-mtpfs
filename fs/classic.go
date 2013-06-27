@@ -171,6 +171,7 @@ func (n *classicNode) fetch() error {
 
 func (n *classicNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	return &pendingFile{
+		File: nodefs.NewDefaultFile(),
 		node: n,
 	}, fuse.OK
 }
@@ -353,6 +354,7 @@ func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, nod
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
+			Node:   nodefs.NewDefaultNode(),
 			obj: &obj,
 			fs:  fs,
 		},

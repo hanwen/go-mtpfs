@@ -292,6 +292,7 @@ func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
 	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
 		mtpNodeImpl: mtpNodeImpl{
+			Node:   nodefs.NewDefaultNode(),
 			handle: h,
 			obj:    &obj,
 			fs:     fs,
@@ -520,6 +521,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 
 		aNode := &androidNode{
 			mtpNodeImpl: mtpNodeImpl{
+				Node:   nodefs.NewDefaultNode(),
 				obj:    &obj,
 				fs:     n.fs,
 				handle: handle,
@@ -530,6 +532,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			return nil, nil, fuse.EIO
 		}
 		file = &androidFile{
+			File: nodefs.NewDefaultFile(),
 			node: aNode,
 		}
 		node = aNode

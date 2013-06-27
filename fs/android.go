@@ -59,7 +59,10 @@ func (n *androidNode) endEdit() bool {
 }
 
 func (n *androidNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
-	return &androidFile{node: n, File: nodefs.NewDefaultFile()}, fuse.OK
+	return &androidFile{
+		node: n,
+		File: nodefs.NewDefaultFile(),
+	}, fuse.OK
 }
 
 func (n *androidNode) Truncate(file nodefs.File, size uint64, context *fuse.Context) (code fuse.Status) {
