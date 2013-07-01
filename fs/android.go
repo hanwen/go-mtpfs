@@ -108,7 +108,7 @@ func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 		return nil, fuse.EIO
 	}
 
-	return &fuse.ReadResultData{dest[:b.Len()]}, fuse.OK
+	return fuse.ReadResultData(dest[:b.Len()]), fuse.OK
 }
 
 func (f *androidFile) String() string {
