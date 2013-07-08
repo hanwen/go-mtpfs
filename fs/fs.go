@@ -149,7 +149,7 @@ func (fs *DeviceFs) OnMount(conn *nodefs.FileSystemConnector) {
 	}
 }
 
-func (n *rootNode) StatFs() *nodefs.StatfsOut {
+func (n *rootNode) StatFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
 	for _, ch := range n.Inode().Children() {
@@ -159,7 +159,7 @@ func (n *rootNode) StatFs() *nodefs.StatfsOut {
 		}
 	}
 
-	return &nodefs.StatfsOut{
+	return &fuse.StatfsOut{
 		Bsize:  uint32(1024),
 		Blocks: total,
 		Bavail: free,
@@ -209,7 +209,7 @@ type mtpNodeImpl struct {
 	Size int64
 }
 
-func (n *mtpNodeImpl) StatFs() *nodefs.StatfsOut {
+func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
 	total := uint64(0)
 	free := uint64(0)
 
@@ -223,7 +223,7 @@ func (n *mtpNodeImpl) StatFs() *nodefs.StatfsOut {
 	free += uint64(info.FreeSpaceInBytes)
 	bs := uint64(1024)
 
-	return &nodefs.StatfsOut{
+	return &fuse.StatfsOut{
 		Bsize:  uint32(bs),
 		Blocks: total / bs,
 		Bavail: free / bs,
