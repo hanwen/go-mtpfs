@@ -74,7 +74,7 @@ func main() {
 
 	conn.SetDebug(debugs["fuse"] || debugs["fs"])
 	mount.SetDebug(debugs["fuse"] || debugs["fs"])
-	log.Printf("starting FUSE %v", fuse.Version())
+	log.Printf("starting FUSE.")
 	mount.Serve()
 	fs.OnUnmount()
 }
