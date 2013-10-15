@@ -3,6 +3,7 @@ package mtp
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/hanwen/go-mtpfs/usb"
 )
@@ -109,7 +110,11 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	if len(cands) == 0 {
 		return nil, fmt.Errorf("no device matched")
 	}
-
+	
+	if len(cands) > 1 {
+		return nil, fmt.Errorf("mtp: more than 1 device: %s", strings.Join(ids, ","))
+	}
+	
 	cand := cands[0]
 	config, err := cand.h.GetConfiguration()
 	if err != nil {
