@@ -21,7 +21,9 @@ func main() {
 	usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
 	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
 	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
-	deviceFilter := flag.String("dev", "", "regular expression to filter devices.")
+	deviceFilter := flag.String("dev", "",
+		"regular expression to filter device IDs, " +
+		"which are composed of manufacturer/product/serial.")
 	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
 	android := flag.Bool("android", true, "use android extensions if available")
 	flag.Parse()
