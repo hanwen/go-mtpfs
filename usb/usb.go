@@ -4,19 +4,7 @@
 
 package usb
 
-/* the following flags may need adjusting for your system. Use
-pkg-config to find out the right values.
-
-$ pkg-config --cflags libusb-1.0
--I/usr/include/libusb-1.0
-
-$ pkg-config --libs libusb-1.0
--L/lib64 -lusb-1.0
-
-*/
-
-// #cgo LDFLAGS: -L/lib64 -lusb-1.0
-// #cgo CFLAGS: -I/usr/include/libusb-1.0
+// #cgo pkg-config: libusb-1.0
 // #include <libusb.h>
 import "C"
 import (
