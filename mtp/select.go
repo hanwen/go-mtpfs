@@ -107,15 +107,15 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 		}
 	}
 
-	if len(cands) == 0 {
+	if len(found) == 0 {
 		return nil, fmt.Errorf("no device matched")
 	}
 	
-	if len(cands) > 1 {
+	if len(found) > 1 {
 		return nil, fmt.Errorf("mtp: more than 1 device: %s", strings.Join(ids, ","))
 	}
 	
-	cand := cands[0]
+	cand := found[0]
 	config, err := cand.h.GetConfiguration()
 	if err != nil {
 		return nil, fmt.Errorf("could not get configuration of %v: %v",
@@ -128,7 +128,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 				ids[0], err)
 		}
 	}
-	return cands[0], nil
+	return found[0], nil
 }
 
 // Return opened MTP device that matches given pattern.
