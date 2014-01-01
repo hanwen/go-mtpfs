@@ -3,6 +3,7 @@ package fs
 // This test requires an unlocked android MTP device plugged in.
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -15,6 +16,12 @@ import (
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
+
+// VerboseTest returns true if the testing framework is run with -v.
+func VerboseTest() bool {
+	flag := flag.Lookup("test.v")
+	return flag != nil && flag.Value.String() == "true"
+}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -60,10 +67,10 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 		t.Fatalf("mount failed: %v", err)
 	}
 
-	mount.SetDebug(fuse.VerboseTest())
-	dev.MTPDebug = fuse.VerboseTest()
-	dev.USBDebug = fuse.VerboseTest()
-	dev.DataDebug = fuse.VerboseTest()
+	mount.SetDebug(VerboseTest())
+	dev.MTPDebug = VerboseTest()
+	dev.USBDebug = VerboseTest()
+	dev.DataDebug = VerboseTest()
 	go mount.Serve()
 
 	for i := 0; i < 10; i++ {
