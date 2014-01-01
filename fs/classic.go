@@ -354,9 +354,9 @@ func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, nod
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
-			Node:   nodefs.NewDefaultNode(),
-			obj: &obj,
-			fs:  fs,
+			Node: nodefs.NewDefaultNode(),
+			obj:  &obj,
+			fs:   fs,
 		},
 		dirty:   true,
 		backing: backingFile.Name(),

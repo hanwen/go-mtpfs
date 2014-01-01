@@ -110,11 +110,11 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	if len(found) == 0 {
 		return nil, fmt.Errorf("no device matched")
 	}
-	
+
 	if len(found) > 1 {
 		return nil, fmt.Errorf("mtp: more than 1 device: %s", strings.Join(ids, ","))
 	}
-	
+
 	cand := found[0]
 	config, err := cand.h.GetConfiguration()
 	if err != nil {
