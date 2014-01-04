@@ -144,8 +144,7 @@ func (fs *DeviceFs) OnMount(conn *nodefs.FileSystemConnector) {
 			Filename:     info.StorageDescription,
 		}
 		folder := fs.newFolder(obj, NOPARENT_ID)
-		inode := fs.root.Inode().New(true, folder)
-		fs.root.Inode().AddChild(info.StorageDescription, inode)
+		fs.root.Inode().NewChild(info.StorageDescription, true, folder)
 	}
 }
 
@@ -359,7 +358,7 @@ func (n *folderNode) fetch() bool {
 			node = n.fs.newFile(*info, sz, handle)
 		}
 
-		n.Inode().AddChild(info.Filename, n.Inode().New(isdir, node))
+		n.Inode().NewChild(info.Filename, isdir, node)
 	}
 	n.fetched = true
 	return true
@@ -460,7 +459,7 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (nod
 	}
 
 	f := n.fs.newFolder(obj, newId)
-	n.Inode().AddChild(name, n.Inode().New(true, f))
+	n.Inode().NewChild(name, true, f)
 	return f, fuse.OK
 }
 
@@ -543,6 +542,6 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			return nil, nil, fuse.ToStatus(err)
 		}
 	}
-	n.Inode().AddChild(name, n.Inode().New(false, node))
+	n.Inode().NewChild(name, false, node)
 	return file, node, fuse.OK
 }
