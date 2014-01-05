@@ -59,11 +59,11 @@ func main() {
 		RemovableVFat: *vfat,
 		Android:       *android,
 	}
-	fs, err := fs.NewDeviceFs(dev, sids, opts)
+	root, err := fs.NewDeviceFSRoot(dev, sids, opts)
 	if err != nil {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
-	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
+	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 
 	mOpts := &fuse.MountOptions{
@@ -78,5 +78,5 @@ func main() {
 	mount.SetDebug(debugs["fuse"] || debugs["fs"])
 	log.Printf("starting FUSE.")
 	mount.Serve()
-	fs.OnUnmount()
+	root.OnUnmount()
 }

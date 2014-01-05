@@ -30,9 +30,7 @@ type DeviceFsOptions struct {
 
 // DeviceFS implements a fuse.NodeFileSystem that mounts multiple
 // storages.
-type DeviceFs struct {
-	nodefs.FileSystem
-
+type deviceFS struct {
 	backingDir    string
 	delBackingDir bool
 	root          *rootNode
@@ -49,19 +47,18 @@ type DeviceFs struct {
 // threadsafe.  The file system assumes the device does not touch the
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store.
-func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*DeviceFs, error) {
+func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) (nodefs.Node, error) {
 	root := rootNode{Node: nodefs.NewDefaultNode()}
-	fs := &DeviceFs{
-		FileSystem: nodefs.NewDefaultFileSystem(),
-		root:       &root,
-		dev:        d,
-		options:    &options,
+	fs := &deviceFS{
+		root:    &root,
+		dev:     d,
+		options: &options,
 	}
 	root.fs = fs
 	fs.storages = storages
 	err := d.GetDeviceInfo(&fs.devInfo)
 	if err != nil {
-		return fs, nil
+		return nil, err
 	}
 
 	if !strings.Contains(fs.devInfo.MTPExtension, "android.com") {
@@ -85,21 +82,39 @@ func NewDeviceFs(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*De
 		fs.mungeVfat[sid] = info.IsRemovable() && fs.options.RemovableVFat
 	}
 
-	return fs, nil
+	return fs.Root(), nil
 }
 
-func (fs *DeviceFs) Root() nodefs.Node {
+func (fs *deviceFS) Root() nodefs.Node {
 	return fs.root
 }
 
-func (fs *DeviceFs) String() string {
-	return fmt.Sprintf("DeviceFs(%s)", fs.devInfo.Model)
+func (fs *deviceFS) String() string {
+	return fmt.Sprintf("deviceFS(%s)", fs.devInfo.Model)
+}
+
+func (fs *deviceFS) onMount() {
+	for _, sid := range fs.storages {
+		var info mtp.StorageInfo
+		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
+			log.Printf("GetStorageInfo %x: %v", sid, err)
+			continue
+		}
+
+		obj := mtp.ObjectInfo{
+			ParentObject: NOPARENT_ID,
+			StorageID:    sid,
+			Filename:     info.StorageDescription,
+		}
+		folder := fs.newFolder(obj, NOPARENT_ID)
+		fs.root.Inode().NewChild(info.StorageDescription, true, folder)
+	}
 }
 
 // TODO - this should be per storage and return just the free space in
 // the storage.
 
-func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nodefs.Node) {
+func (fs *deviceFS) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nodefs.Node) {
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
@@ -125,27 +140,13 @@ func (fs *DeviceFs) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nod
 
 type rootNode struct {
 	nodefs.Node
-	fs *DeviceFs
+	fs *deviceFS
 }
 
 const NOPARENT_ID = 0xFFFFFFFF
 
-func (fs *DeviceFs) OnMount(conn *nodefs.FileSystemConnector) {
-	for _, sid := range fs.storages {
-		var info mtp.StorageInfo
-		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
-			log.Printf("GetStorageInfo %x: %v", sid, err)
-			continue
-		}
-
-		obj := mtp.ObjectInfo{
-			ParentObject: NOPARENT_ID,
-			StorageID:    sid,
-			Filename:     info.StorageDescription,
-		}
-		folder := fs.newFolder(obj, NOPARENT_ID)
-		fs.root.Inode().NewChild(info.StorageDescription, true, folder)
-	}
+func (n *rootNode) OnMount(conn *nodefs.FileSystemConnector) {
+	n.fs.onMount()
 }
 
 func (n *rootNode) StatFs() *fuse.StatfsOut {
@@ -201,7 +202,7 @@ type mtpNodeImpl struct {
 
 	obj *mtp.ObjectInfo
 
-	fs *DeviceFs
+	fs *deviceFS
 
 	// This is needed because obj.CompressedSize only goes to
 	// 0xFFFFFFFF
@@ -287,7 +288,7 @@ type folderNode struct {
 	fetched bool
 }
 
-func (fs *DeviceFs) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
+func (fs *deviceFS) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
 	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
 		mtpNodeImpl: mtpNodeImpl{

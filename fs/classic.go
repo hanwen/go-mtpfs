@@ -281,7 +281,7 @@ func (p *pendingFile) Release() {
 
 ////////////////////////////////////////////////////////////////
 
-func (fs *DeviceFs) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
+func (fs *deviceFS) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
 	for _, ch := range node.Children() {
 		if done > todo {
 			break
@@ -296,7 +296,7 @@ func (fs *DeviceFs) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
 	return
 }
 
-func (fs *DeviceFs) freeBacking() (int64, error) {
+func (fs *deviceFS) freeBacking() (int64, error) {
 	t := syscall.Statfs_t{}
 	err := syscall.Statfs(fs.options.Dir, &t)
 	if err != nil {
@@ -306,7 +306,7 @@ func (fs *DeviceFs) freeBacking() (int64, error) {
 	return int64(t.Bfree * uint64(t.Bsize)), nil
 }
 
-func (fs *DeviceFs) ensureFreeSpace(want int64) error {
+func (fs *deviceFS) ensureFreeSpace(want int64) error {
 	free, err := fs.freeBacking()
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func (fs *DeviceFs) ensureFreeSpace(want int64) error {
 	return fmt.Errorf("not enough space in %s. Have %d, want %d", fs.options.Dir, free, want)
 }
 
-func (fs *DeviceFs) setupClassic() error {
+func (fs *deviceFS) setupClassic() error {
 	if fs.options.Dir == "" {
 		var err error
 		fs.options.Dir, err = ioutil.TempDir(os.TempDir(), "go-mtpfs")
@@ -344,13 +344,13 @@ func (fs *DeviceFs) setupClassic() error {
 	return nil
 }
 
-func (fs *DeviceFs) OnUnmount() {
+func (fs *deviceFS) OnUnmount() {
 	if fs.delBackingDir {
 		os.RemoveAll(fs.options.Dir)
 	}
 }
 
-func (fs *DeviceFs) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, node nodefs.Node, err error) {
+func (fs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, node nodefs.Node, err error) {
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{

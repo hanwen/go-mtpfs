@@ -27,7 +27,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
+func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func()) {
 	dev, err := mtp.SelectDevice("")
 	if err != nil {
 		t.Fatalf("SelectDevice failed: %v", err)
@@ -56,11 +56,11 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	opts := DeviceFsOptions{
 		Android: useAndroid,
 	}
-	fs, err := NewDeviceFs(dev, sids, opts)
+	root, err := NewDeviceFSRoot(dev, sids, opts)
 	if err != nil {
 		t.Fatal("NewDeviceFs failed:", err)
 	}
-	conn := nodefs.NewFileSystemConnector(fs, nodefs.NewOptions())
+	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
 	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 	mount, err := fuse.NewServer(rawFs, tempdir, nil)
 	if err != nil {
@@ -76,20 +76,20 @@ func startFs(t *testing.T, useAndroid bool) (root string, cleanup func()) {
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
 		if err == nil && len(fis) > 0 {
-			root = filepath.Join(tempdir, fis[0].Name())
+			storageRoot = filepath.Join(tempdir, fis[0].Name())
 			break
 		}
 		time.Sleep(1)
 	}
 
-	if root == "" {
+	if storageRoot == "" {
 		mount.Unmount()
 		t.Fatal("could not find entries in mount point.")
 	}
 
 	d := dev
 	dev = nil
-	return root, func() {
+	return storageRoot, func() {
 		mount.Unmount()
 		d.Close()
 	}
