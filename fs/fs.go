@@ -428,7 +428,7 @@ func (n *folderNode) Rename(oldName string, newParent nodefs.Node, newName strin
 	return fuse.OK
 }
 
-func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node nodefs.Node, code fuse.Status) {
+func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node *nodefs.Inode, code fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
@@ -437,11 +437,10 @@ func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) 
 		return nil, fuse.ENOENT
 	}
 
-	s := ch.Node().GetAttr(out, nil, context)
-	return ch.Node(), s
+	return ch, ch.Node().GetAttr(out, nil, context)
 }
 
-func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (nodefs.Node, fuse.Status) {
+func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*nodefs.Inode, fuse.Status) {
 	if !n.fetch() {
 		return nil, fuse.EIO
 	}
@@ -460,8 +459,7 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (nod
 	}
 
 	f := n.fs.newFolder(obj, newId)
-	n.Inode().NewChild(name, true, f)
-	return f, fuse.OK
+	return n.Inode().NewChild(name, true, f), fuse.OK
 }
 
 func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
@@ -492,7 +490,7 @@ func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
 	return n.Unlink(name, c)
 }
 
-func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (file nodefs.File, node nodefs.Node, code fuse.Status) {
+func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (nodefs.File, *nodefs.Inode, fuse.Status) {
 	if !n.fetch() {
 		return nil, nil, fuse.EIO
 	}
@@ -506,6 +504,8 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		CompressedSize:   0,
 	}
 
+	var file nodefs.File
+	var fsNode nodefs.Node
 	if n.fs.options.Android {
 		_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 		if err != nil {
@@ -535,14 +535,13 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			File: nodefs.NewDefaultFile(),
 			node: aNode,
 		}
-		node = aNode
+		fsNode = aNode
 	} else {
 		var err error
-		file, node, err = n.fs.createClassicFile(obj)
+		file, fsNode, err = n.fs.createClassicFile(obj)
 		if err != nil {
 			return nil, nil, fuse.ToStatus(err)
 		}
 	}
-	n.Inode().NewChild(name, false, node)
-	return file, node, fuse.OK
+	return file, n.Inode().NewChild(name, false, fsNode), fuse.OK
 }
