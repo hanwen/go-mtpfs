@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -76,7 +77,14 @@ func main() {
 
 	conn.SetDebug(debugs["fuse"] || debugs["fs"])
 	mount.SetDebug(debugs["fuse"] || debugs["fs"])
-	log.Printf("starting FUSE.")
-	mount.Serve()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		mount.Serve()
+		wg.Done()
+	}()
+	mount.WaitMount()
+	log.Printf("FUSE mounted")
+	wg.Wait()
 	root.OnUnmount()
 }
