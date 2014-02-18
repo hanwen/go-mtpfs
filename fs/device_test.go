@@ -3,8 +3,10 @@ package fs
 // This test requires an unlocked android MTP device plugged in.
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -178,6 +180,46 @@ func testDevice(t *testing.T, useAndroid bool) {
 	if fi, err := os.Lstat(newName); err == nil {
 		t.Fatal("should have disappeared after Remove", fi)
 	}
+}
+
+func testReadBlockBoundary(t *testing.T, android bool) {
+	root, cleanup := startFs(t, android)
+	defer cleanup()
+
+	name := filepath.Join(root, fmt.Sprintf("mtpfs-test-%x", rand.Int31()))
+
+	page := 4096
+	buf := bytes.Repeat([]byte("a"), 32*page)
+	if err := ioutil.WriteFile(name, buf, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatalf("Open: %v", name)
+	}
+
+	total := 0
+	for {
+		b := make([]byte, page)
+		n, err := f.Read(b)
+		total += n
+		if n == 0 && err == io.EOF {
+			break
+		}
+		if n != 4096 || err != nil {
+			t.Fatalf("Read: %v (%d bytes)", err, n)
+		}
+	}
+	f.Close()
+}
+
+func TestReadBlockBoundaryAndroid(t *testing.T) {
+	testReadBlockBoundary(t, true)
+}
+
+func TestReadBlockBoundaryNormal(t *testing.T) {
+	testReadBlockBoundary(t, false)
 }
 
 func TestAndroid(t *testing.T) {

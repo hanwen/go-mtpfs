@@ -93,7 +93,7 @@ type androidFile struct {
 }
 
 func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status) {
-	if off >= f.node.Size {
+	if off > f.node.Size {
 		// ENXIO = no such address.
 		return nil, fuse.Status(int(syscall.ENXIO))
 	}
