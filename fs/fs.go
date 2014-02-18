@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -147,6 +148,13 @@ const NOPARENT_ID = 0xFFFFFFFF
 
 func (n *rootNode) OnMount(conn *nodefs.FileSystemConnector) {
 	n.fs.onMount()
+}
+
+func (n *rootNode) OnUnmount() {
+	if n.fs.delBackingDir {
+		os.RemoveAll(n.fs.options.Dir)
+		n.fs.delBackingDir = false
+	}
 }
 
 func (n *rootNode) StatFs() *fuse.StatfsOut {

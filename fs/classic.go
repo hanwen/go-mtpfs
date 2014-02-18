@@ -344,12 +344,6 @@ func (fs *deviceFS) setupClassic() error {
 	return nil
 }
 
-func (fs *deviceFS) OnUnmount() {
-	if fs.delBackingDir {
-		os.RemoveAll(fs.options.Dir)
-	}
-}
-
 func (fs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, node nodefs.Node, err error) {
 	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
 	cl := &classicNode{
