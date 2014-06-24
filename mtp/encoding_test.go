@@ -240,3 +240,31 @@ func DisabledTestVariantOPD(t *testing.T) {
 			dp, back)
 	}
 }
+
+func TestDecodeStr(t *testing.T) {
+	enc := make([]byte, 100)
+	test := "ö"
+	out, err := encodeStr(enc, test)
+	if err != nil {
+		t.Fatalf("encodeStr: %v", err)
+	}
+	buf := bytes.NewBuffer(out)
+	roundtrip, err := decodeStr(buf)
+	if err != nil {
+		t.Fatalf("encodeStr: %v", err)
+	}
+	if roundtrip != test {
+		t.Fatalf("got %q, want %q", roundtrip, test)
+	}
+}
+
+func TestEncodeStr(t *testing.T) {
+	mtpStr := []byte("\x02\xe4\x00\x00\x00")
+	str := "ä"
+
+	if out, err := encodeStr(nil, str); err != nil {
+		t.Fatalf("encodeStr: %v", err)
+	} else if bytes.Compare(out, mtpStr) != 0 {
+		t.Fatalf("got %q, want %q", out, mtpStr)
+	}
+}

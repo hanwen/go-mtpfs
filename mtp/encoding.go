@@ -45,27 +45,28 @@ func decodeStr(r io.Reader) (string, error) {
 }
 
 func encodeStr(buf []byte, s string) ([]byte, error) {
-	if len(s) > 254 {
-		return nil, fmt.Errorf("range")
-	}
-
 	if s == "" {
 		buf[0] = 0
 		return buf[:1], nil
 	}
 
-	i := 0
-	buf[i] = byte(len(s) + 1)
-	i++
+	codepoints := 0
+	buf = append(buf[:0], 0)
+
+	var rune [2]byte
 	for _, r := range s {
-		byteOrder.PutUint16(buf[i:], uint16(r))
-		i += 2
+		byteOrder.PutUint16(rune[:], uint16(r))
+		buf = append(buf, rune[0], rune[1])
+		codepoints++
 	}
-	buf[i] = 0
-	i++
-	buf[i] = 0
-	i++
-	return buf[:i], nil
+	buf = append(buf, 0, 0)
+	codepoints++
+	if codepoints > 254 {
+		return nil, fmt.Errorf("string too long")
+	}
+
+	buf[0] = byte(codepoints)
+	return buf, nil
 }
 
 func encodeStrField(w io.Writer, f reflect.Value) error {
