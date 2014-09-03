@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/hanwen/go-mtpfs/usb"
+	"github.com/hanwen/usb"
 )
 
 func candidateFromDeviceDescriptor(d *usb.Device) *Device {

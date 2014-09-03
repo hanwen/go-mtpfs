@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hanwen/go-mtpfs/usb"
+	"github.com/hanwen/usb"
 )
 
 // An MTP device.
