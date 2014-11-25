@@ -186,6 +186,7 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 var timeType = reflect.ValueOf(time.Now()).Type()
 
 const timeFormat = "20060102T150405"
+const timeFormatNumTZ = "20060102T150405-0700"
 
 var zeroTime = time.Time{}
 
@@ -216,7 +217,11 @@ func decodeTime(r io.Reader, f reflect.Value) error {
 		s = strings.TrimRight(s, ".")
 		t, err = time.Parse(timeFormat, s)
 		if err != nil {
-			return err
+			// Nokia lumia has numTZ
+			t, err = time.Parse(timeFormatNumTZ, s)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	f.Set(reflect.ValueOf(t))
