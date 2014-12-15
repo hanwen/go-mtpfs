@@ -215,6 +215,10 @@ func decodeTime(r io.Reader, f reflect.Value) error {
 	if s != "" {
 		// Samsung has trailing dots.
 		s = strings.TrimRight(s, ".")
+
+		// Jolla Sailfish has trailing "Z".
+		s = strings.TrimRight(s, "Z")
+
 		t, err = time.Parse(timeFormat, s)
 		if err != nil {
 			// Nokia lumia has numTZ
