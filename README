@@ -26,7 +26,7 @@ COMPILATION
 
 * Then run
 
-    mkdir /tmp/go 
+    mkdir /tmp/go
     export GOPATH=/tmp/go
     go get github.com/hanwen/go-mtpfs
 
@@ -69,3 +69,8 @@ FEEDBACK
 
 You can send your feedback through the issue tracker at
 https://github.com/hanwen/go-mtpfs
+
+
+DISCLAIMER
+
+This is not an official Google product.
