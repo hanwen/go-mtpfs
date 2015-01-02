@@ -18,26 +18,26 @@ which is based on libusb.
 
 * Install the Go compiler suite; e.g. on Ubuntu:
 ```
-    sudo apt-get install golang-go
+sudo apt-get install golang-go
 ```
 * Install libmtp header files
 ```
-    sudo apt-get install libusb1-devel
+sudo apt-get install libusb1-devel
 ```
 * Then run
 ```
-    mkdir /tmp/go
-    export GOPATH=/tmp/go
-    go get github.com/hanwen/go-mtpfs
+mkdir /tmp/go
+export GOPATH=/tmp/go
+go get github.com/hanwen/go-mtpfs
 ```
   /tmp/go/bin/go-mtpfs will then contain the program binary.
 
 * You may need some tweaking to get libusb to compile.  See the
   comment near the top of usb/usb.go, ie.
 ```
-    # edit to suit libusb installation:
-    vi /tmp/go/src/github.com/hanwen/go-mtpfs/usb/usb.go
-    go install github.com/hanwen/go-mtpfs
+# edit to suit libusb installation:
+vi /tmp/go/src/github.com/hanwen/go-mtpfs/usb/usb.go
+go install github.com/hanwen/go-mtpfs
 ```
 * A 32 and 64-bit linux x86 binaries are at
 
@@ -46,10 +46,10 @@ which is based on libusb.
 
 ###USAGE
 ```
-  mkdir xoom
-  go-mtpfs xoom &
-  cp -a ~/Music/Some-Album xoom/Music/
-  fusermount -u xoom
+mkdir xoom
+go-mtpfs xoom &
+cp -a ~/Music/Some-Album xoom/Music/
+fusermount -u xoom
 ```
 After a file is closed (eg. if "cp" completes), it is safe to unplug
 the device; the filesystem then will continue to function, but
