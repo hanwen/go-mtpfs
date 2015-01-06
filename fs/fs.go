@@ -17,6 +17,8 @@ import (
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
+const blockSize = 1024
+
 type DeviceFsOptions struct {
 	// Assume removable volumes are VFAT and munge filenames
 	// accordingly.
@@ -168,7 +170,7 @@ func (n *rootNode) StatFs() *fuse.StatfsOut {
 	}
 
 	return &fuse.StatfsOut{
-		Bsize:  uint32(1024),
+		Bsize:  blockSize,
 		Blocks: total,
 		Bavail: free,
 		Bfree:  free,
@@ -229,13 +231,12 @@ func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
 
 	total += uint64(info.MaxCapability)
 	free += uint64(info.FreeSpaceInBytes)
-	bs := uint64(1024)
 
 	return &fuse.StatfsOut{
-		Bsize:  uint32(bs),
-		Blocks: total / bs,
-		Bavail: free / bs,
-		Bfree:  free / bs,
+		Bsize:  blockSize,
+		Blocks: total / blockSize,
+		Bavail: free / blockSize,
+		Bfree:  free / blockSize,
 	}
 }
 
@@ -246,6 +247,8 @@ func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Co
 		out.Size = uint64(n.Size)
 		t := f.ModificationDate
 		out.SetTimes(&t, &t, &t)
+
+		out.Blocks = (out.Size + blockSize - 1) / blockSize
 	}
 
 	return fuse.OK
