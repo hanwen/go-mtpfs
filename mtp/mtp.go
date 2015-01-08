@@ -139,15 +139,26 @@ func (d *Device) Open() error {
 		return err
 	}
 
-	iface, err := d.h.GetStringDescriptorASCII(d.ifaceDescr.InterfaceStringIndex)
-	if err != nil {
-		d.Close()
-		return err
-	}
+	if d.ifaceDescr.InterfaceStringIndex == 0 {
+		// Some of the win8phones not given the iface index
+		info := DeviceInfo{}
+		d.GetDeviceInfo(&info)
 
-	if !strings.Contains(iface, "MTP") {
-		d.Close()
-		return fmt.Errorf("has no MTP in interface string")
+		if !strings.Contains(info.MTPExtension, "microsoft/WindowsPhone") {
+			d.Close()
+			return fmt.Errorf("has no keywords for mtp")
+		}
+	} else {
+		iface, err := d.h.GetStringDescriptorASCII(d.ifaceDescr.InterfaceStringIndex)
+		if err != nil {
+			d.Close()
+			return err
+		}
+
+		if !strings.Contains(iface, "MTP") {
+			d.Close()
+			return fmt.Errorf("has no MTP in interface string")
+		}
 	}
 
 	d.claim()
