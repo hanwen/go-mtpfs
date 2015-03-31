@@ -72,10 +72,9 @@ func (d *Device) Close() error {
 		var req, rep Container
 		req.Code = OC_CloseSession
 		// RunTransaction runs close, so can't use CloseSession().
-		err := d.runTransaction(&req, &rep, nil, nil, 0)
 
-		if err != nil {
-			err = d.h.Reset()
+		if err := d.runTransaction(&req, &rep, nil, nil, 0); err != nil {
+			err := d.h.Reset()
 			if d.USBDebug {
 				log.Printf("USB: Reset, err: %v", err)
 			}
@@ -206,13 +205,12 @@ func (d *Device) sendReq(req *Container) error {
 	buf := bytes.NewBuffer(wData[:0])
 
 	binary.Write(buf, binary.LittleEndian, c.usbBulkHeader)
-	err := binary.Write(buf, binary.LittleEndian, c.Param[:len(req.Param)])
-	if err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, c.Param[:len(req.Param)]); err != nil {
 		panic(err)
 	}
 
 	d.dataPrint(d.sendEp, buf.Bytes())
-	_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
+	_, err := d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
 	if err != nil {
 		return err
 	}
@@ -234,8 +232,7 @@ func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, e
 	}
 
 	buf := bytes.NewBuffer(dest[:n])
-	err = binary.Read(buf, binary.LittleEndian, header)
-	if err != nil {
+	if err = binary.Read(buf, binary.LittleEndian, header); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -289,8 +286,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 		return fmt.Errorf("mtp: cannot run operation %v, device is not open",
 			OC_names[int(req.Code)])
 	}
-	err := d.runTransaction(req, rep, dest, src, writeSize)
-	if err != nil {
+	if err := d.runTransaction(req, rep, dest, src, writeSize); err != nil {
 		_, ok2 := err.(SyncError)
 		_, ok1 := err.(usb.Error)
 		if ok1 || ok2 {
@@ -298,7 +294,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 			d.Close()
 		}
 	}
-	return err
+	return nil
 }
 
 // runTransaction is like RunTransaction, but without sanity checking
@@ -315,9 +311,7 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
-	err := d.sendReq(req)
-
-	if err != nil {
+	if err := d.sendReq(req); err != nil {
 		if d.MTPDebug {
 			log.Printf("MTP sendreq failed: %v\n", err)
 		}
@@ -507,8 +501,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 // the device and reopens the device and the session.
 func (d *Device) Configure() error {
 	if d.h == nil {
-		err := d.Open()
-		if err != nil {
+		if err := d.Open(); err != nil {
 			return err
 		}
 	}

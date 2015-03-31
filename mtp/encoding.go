@@ -104,15 +104,14 @@ var nullValue reflect.Value
 
 func decodeArray(r io.Reader, t reflect.Type) (reflect.Value, error) {
 	var sz uint32
-	err := binary.Read(r, byteOrder, &sz)
-	if err != nil {
+	if err := binary.Read(r, byteOrder, &sz); err != nil {
 		return nullValue, err
 	}
 
 	ksz := int(kindSize(t.Elem().Kind()))
 
 	data := make([]byte, int(sz)*ksz)
-	_, err = r.Read(data)
+	_, err := r.Read(data)
 	if err != nil {
 		return nullValue, err
 	}
@@ -138,8 +137,7 @@ func decodeArray(r io.Reader, t reflect.Type) (reflect.Value, error) {
 
 func encodeArray(w io.Writer, val reflect.Value) error {
 	sz := uint32(val.Len())
-	err := binary.Write(w, byteOrder, &sz)
-	if err != nil {
+	if err := binary.Write(w, byteOrder, &sz); err != nil {
 		return err
 	}
 
@@ -178,7 +176,7 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 			panic(fmt.Sprintf("unimplemented: encode for kind %v", kind))
 		}
 	}
-	_, err = w.Write(data)
+	_, err := w.Write(data)
 	return err
 }
 
@@ -332,9 +330,7 @@ func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector
 	t := val.Type()
 
 	for i := 0; i < t.NumField(); i++ {
-		err := decodeField(r, val.Field(i), typeSel)
-
-		if err != nil {
+		if err := decodeField(r, val.Field(i), typeSel); err != nil {
 			return err
 		}
 		if val.Field(i).Type().Name() == "DataTypeSelector" {
@@ -362,8 +358,7 @@ func Encode(w io.Writer, iface interface{}) error {
 	t := val.Type()
 
 	for i := 0; i < t.NumField(); i++ {
-		err := encodeField(w, val.Field(i))
-		if err != nil {
+		if err := encodeField(w, val.Field(i)); err != nil {
 			return err
 		}
 	}
@@ -430,9 +425,8 @@ func decodePropDescForm(r io.Reader, selector DataTypeSelector, formFlag uint8) 
 	return nil, nil
 }
 
-func (pd *ObjectPropDesc) Decode(r io.Reader) (err error) {
-	err = Decode(r, &pd.ObjectPropDescFixed)
-	if err != nil {
+func (pd *ObjectPropDesc) Decode(r io.Reader) error {
+	if err := Decode(r, &pd.ObjectPropDescFixed); err != nil {
 		return err
 	}
 	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
@@ -440,9 +434,8 @@ func (pd *ObjectPropDesc) Decode(r io.Reader) (err error) {
 	return err
 }
 
-func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
-	err = Decode(r, &pd.DevicePropDescFixed)
-	if err != nil {
+func (pd *DevicePropDesc) Decode(r io.Reader) error {
+	if err := Decode(r, &pd.DevicePropDescFixed); err != nil {
 		return err
 	}
 	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
@@ -450,19 +443,16 @@ func (pd *DevicePropDesc) Decode(r io.Reader) (err error) {
 	return err
 }
 
-func (pd *DevicePropDesc) Encode(w io.Writer) (err error) {
-	err = Encode(w, &pd.DevicePropDescFixed)
-	if err != nil {
+func (pd *DevicePropDesc) Encode(w io.Writer) error {
+	if err := Encode(w, &pd.DevicePropDescFixed); err != nil {
 		return err
 	}
 
-	err = Encode(w, pd.Form)
-	return err
+	return Encode(w, pd.Form)
 }
 
-func (pd *ObjectPropDesc) Encode(w io.Writer) (err error) {
-	err = Encode(w, &pd.ObjectPropDescFixed)
-	if err != nil {
+func (pd *ObjectPropDesc) Encode(w io.Writer) error {
+	if err := Encode(w, &pd.ObjectPropDescFixed); err != nil {
 		return err
 	}
 	return Encode(w, pd.Form)

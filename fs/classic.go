@@ -74,8 +74,7 @@ func (n *classicNode) send() error {
 	log.Printf("sending file %q to device: %d bytes.", f.Filename, fi.Size())
 	if n.Handle() != 0 {
 		// Apparently, you can't overwrite things in MTP.
-		err := n.fs.dev.DeleteObject(n.Handle())
-		if err != nil {
+		if err := n.fs.dev.DeleteObject(n.Handle()); err != nil {
 			return err
 		}
 		n.handle = 0
@@ -94,8 +93,7 @@ func (n *classicNode) send() error {
 		log.Printf("SendObjectInfo failed %v", err)
 		return syscall.EINVAL
 	}
-	err = n.fs.dev.SendObject(backing, fi.Size())
-	if err != nil {
+	if err = n.fs.dev.SendObject(backing, fi.Size()); err != nil {
 		log.Printf("SendObject failed %v", err)
 		return syscall.EINVAL
 	}
@@ -127,8 +125,7 @@ func (n *classicNode) trim() int64 {
 	}
 
 	log.Printf("removing local cache for %q, %d bytes", n.obj.Filename, fi.Size())
-	err = os.Remove(n.backing)
-	if err != nil {
+	if err := os.Remove(n.backing); err != nil {
 		return 0
 	}
 	n.backing = ""
@@ -197,8 +194,7 @@ type pendingFile struct {
 
 func (p *pendingFile) rwLoopback() (nodefs.File, fuse.Status) {
 	if p.loopback == nil {
-		err := p.node.fetch()
-		if err != nil {
+		if err := p.node.fetch(); err != nil {
 			return nil, fuse.ToStatus(err)
 		}
 		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
@@ -298,8 +294,7 @@ func (fs *deviceFS) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
 
 func (fs *deviceFS) freeBacking() (int64, error) {
 	t := syscall.Statfs_t{}
-	err := syscall.Statfs(fs.options.Dir, &t)
-	if err != nil {
+	if err := syscall.Statfs(fs.options.Dir, &t); err != nil {
 		return 0, err
 	}
 

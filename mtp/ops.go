@@ -31,8 +31,7 @@ func (d *Device) OpenSession() error {
 
 	// If opening the session fails, we want to be able to reset
 	// the device, so don't do sanity checks afterwards.
-	err := d.runTransaction(&req, &rep, nil, nil, 0)
-	if err != nil {
+	if err := d.runTransaction(&req, &rep, nil, nil, 0); err != nil {
 		return err
 	}
 
@@ -55,11 +54,10 @@ func (d *Device) CloseSession() error {
 func (d *Device) GetData(req *Container, info interface{}) error {
 	var buf bytes.Buffer
 	var rep Container
-	err := d.RunTransaction(req, &rep, &buf, nil, 0)
-	if err != nil {
+	if err := d.RunTransaction(req, &rep, &buf, nil, 0); err != nil {
 		return err
 	}
-	err = Decode(&buf, info)
+	err := Decode(&buf, info)
 	if d.MTPDebug && err == nil {
 		log.Printf("MTP decoded %#v", info)
 	}
@@ -101,8 +99,7 @@ func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value 
 
 func (d *Device) SendData(req *Container, rep *Container, value interface{}) error {
 	var buf bytes.Buffer
-	err := Encode(&buf, value)
-	if err != nil {
+	if err := Encode(&buf, value); err != nil {
 		return err
 	}
 	if d.MTPDebug {
@@ -172,8 +169,7 @@ func (d *Device) GetNumObjects(storageId uint32, formatCode uint16, parent uint3
 	var req, rep Container
 	req.Code = OC_GetNumObjects
 	req.Param = []uint32{storageId, uint32(formatCode), parent}
-	err := d.RunTransaction(&req, &rep, nil, nil, 0)
-	if err != nil {
+	if err := d.RunTransaction(&req, &rep, nil, nil, 0); err != nil {
 		return 0, err
 	}
 	return rep.Param[0], nil
@@ -192,11 +188,9 @@ func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectIn
 	req.Code = OC_SendObjectInfo
 	req.Param = []uint32{wantStorageID, wantParent}
 
-	err = d.SendData(&req, &rep, info)
-	if err != nil {
+	if err = d.SendData(&req, &rep, info); err != nil {
 		return
 	}
-
 	return rep.Param[0], rep.Param[1], rep.Param[2], nil
 }
 

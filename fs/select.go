@@ -9,8 +9,7 @@ import (
 
 func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
 	sids := mtp.Uint32Array{}
-	err := dev.GetStorageIDs(&sids)
-	if err != nil {
+	if err := dev.GetStorageIDs(&sids); err != nil {
 		return nil, err
 	}
 
@@ -22,8 +21,7 @@ func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
 	filtered := []uint32{}
 	for _, id := range sids.Values {
 		var s mtp.StorageInfo
-		err := dev.GetStorageInfo(id, &s)
-		if err != nil {
+		if err := dev.GetStorageInfo(id, &s); err != nil {
 			return nil, err
 		}
 

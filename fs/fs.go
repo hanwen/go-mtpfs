@@ -59,8 +59,7 @@ func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) 
 	}
 	root.fs = fs
 	fs.storages = storages
-	err := d.GetDeviceInfo(&fs.devInfo)
-	if err != nil {
+	if err := d.GetDeviceInfo(&fs.devInfo); err != nil {
 		return nil, err
 	}
 
@@ -69,8 +68,7 @@ func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) 
 	}
 
 	if !options.Android {
-		err = fs.setupClassic()
-		if err != nil {
+		if err := fs.setupClassic(); err != nil {
 			return nil, err
 		}
 	}
@@ -78,10 +76,10 @@ func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) 
 	fs.mungeVfat = make(map[uint32]bool)
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
+		var err error
 		if err != nil {
 			return nil, err
 		}
-
 		fs.mungeVfat[sid] = info.IsRemovable() && fs.options.RemovableVFat
 	}
 
@@ -323,9 +321,7 @@ func (n *folderNode) fetch() bool {
 	}
 
 	handles := mtp.Uint32Array{}
-	err := n.fs.dev.GetObjectHandles(n.StorageID(), 0x0,
-		n.Handle(), &handles)
-	if err != nil {
+	if err := n.fs.dev.GetObjectHandles(n.StorageID(), 0x0, n.Handle(), &handles); err != nil {
 		log.Printf("GetObjectHandles failed: %v", err)
 		return false
 	}
@@ -334,8 +330,7 @@ func (n *folderNode) fetch() bool {
 	sizes := map[uint32]int64{}
 	for _, handle := range handles.Values {
 		obj := mtp.ObjectInfo{}
-		err := n.fs.dev.GetObjectInfo(handle, &obj)
-		if err != nil {
+		if err := n.fs.dev.GetObjectInfo(handle, &obj); err != nil {
 			log.Printf("GetObjectInfo for handle %d failed: %v", handle, err)
 			continue
 		}
@@ -347,8 +342,7 @@ func (n *folderNode) fetch() bool {
 
 		if obj.CompressedSize == 0xFFFFFFFF {
 			var val mtp.Uint64Value
-			err := n.fs.dev.GetObjectPropValue(handle, mtp.OPC_ObjectSize, &val)
-			if err != nil {
+			if err := n.fs.dev.GetObjectPropValue(handle, mtp.OPC_ObjectSize, &val); err != nil {
 				log.Printf("GetObjectPropValue handle %d failed: %v", handle, err)
 				return false
 			}
@@ -396,8 +390,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 	if mFile.Handle() != 0 {
 		// Only rename on device if it was sent already.
 		v := mtp.StringValue{Value: newName}
-		err := n.fs.dev.SetObjectPropValue(mFile.Handle(), mtp.OPC_ObjectFileName, &v)
-		if err != nil {
+		if err := n.fs.dev.SetObjectPropValue(mFile.Handle(), mtp.OPC_ObjectFileName, &v); err != nil {
 			return err
 		}
 	}
@@ -428,8 +421,7 @@ func (n *folderNode) Rename(oldName string, newParent nodefs.Node, newName strin
 	}
 
 	if newName != oldName {
-		err := n.basenameRename(oldName, newName)
-		if err != nil {
+		if err := n.basenameRename(oldName, newName); err != nil {
 			log.Printf("basenameRename failed: %v", err)
 			return fuse.EIO
 		}
@@ -484,8 +476,7 @@ func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
 
 	f := ch.Node().(mtpNode)
 	if f.Handle() != 0 {
-		err := n.fs.dev.DeleteObject(f.Handle())
-		if err != nil {
+		if err := n.fs.dev.DeleteObject(f.Handle()); err != nil {
 			log.Printf("DeleteObject failed: %v", err)
 			return fuse.EIO
 		}
@@ -523,8 +514,7 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 			return nil, nil, fuse.EIO
 		}
 
-		err = n.fs.dev.SendObject(&bytes.Buffer{}, 0)
-		if err != nil {
+		if err = n.fs.dev.SendObject(&bytes.Buffer{}, 0); err != nil {
 			log.Println("SendObject failed:", err)
 			return nil, nil, fuse.EIO
 		}

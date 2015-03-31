@@ -31,8 +31,7 @@ func (n *androidNode) startEdit() bool {
 
 	n.start = time.Now()
 	n.byteCount = 0
-	err := n.fs.dev.AndroidBeginEditObject(n.Handle())
-	if err != nil {
+	if err := n.fs.dev.AndroidBeginEditObject(n.Handle()); err != nil {
 		log.Println("AndroidBeginEditObject failed:", err)
 		return false
 	}
@@ -49,8 +48,7 @@ func (n *androidNode) endEdit() bool {
 	log.Printf("%d bytes in %v: %d mb/s",
 		n.byteCount, dt, (1e3*n.byteCount)/(dt.Nanoseconds()))
 
-	err := n.fs.dev.AndroidEndEditObject(n.Handle())
-	if err != nil {
+	if err := n.fs.dev.AndroidEndEditObject(n.Handle()); err != nil {
 		log.Println("AndroidEndEditObject failed:", err)
 		return false
 	}
@@ -70,8 +68,7 @@ func (n *androidNode) Truncate(file nodefs.File, size uint64, context *fuse.Cont
 	if !n.startEdit() {
 		return fuse.EIO
 	}
-	err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size))
-	if err != nil {
+	if err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size)); err != nil {
 		log.Println("AndroidTruncate failed:", err)
 		return fuse.EIO
 	}

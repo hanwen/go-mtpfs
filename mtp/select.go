@@ -76,8 +76,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 
 	var found []*Device
 	for _, cand := range cands {
-		err := cand.Open()
-		if err != nil {
+		if err := cand.Open(); err != nil {
 			continue
 		}
 
@@ -122,8 +121,8 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 			ids[0], err)
 	}
 	if config != cand.configValue {
-		err := cand.h.SetConfiguration(cand.configValue)
-		if err != nil {
+
+		if err := cand.h.SetConfiguration(cand.configValue); err != nil {
 			return nil, fmt.Errorf("could not set configuration of %v: %v",
 				ids[0], err)
 		}
