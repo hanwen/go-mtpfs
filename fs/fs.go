@@ -76,8 +76,7 @@ func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) 
 	fs.mungeVfat = make(map[uint32]bool)
 	for _, sid := range fs.storages {
 		var info mtp.StorageInfo
-		var err error
-		if err != nil {
+		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
 			return nil, err
 		}
 		fs.mungeVfat[sid] = info.IsRemovable() && fs.options.RemovableVFat
