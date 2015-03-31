@@ -329,14 +329,14 @@ func TestDeviceStorage(t *testing.T) {
 	var storageInfo StorageInfo
 	dev.GetStorageInfo(id, &storageInfo)
 	if err != nil {
-		t.Fatalf("GetStorageInfo failed:", err)
+		t.Fatalf("GetStorageInfo failed: %s", err)
 	} else {
 		t.Logf("%#v\n", storageInfo)
 	}
 
 	resp, err := dev.GetNumObjects(id, 0x0, 0x0)
 	if err != nil {
-		t.Fatalf("GenericRPC failed:", err)
+		t.Fatalf("GenericRPC failed: %s", err)
 	} else {
 		t.Logf("num objects %#v\n", resp)
 	}
@@ -362,7 +362,7 @@ func TestDeviceStorage(t *testing.T) {
 
 	_, _, handle, err := dev.SendObjectInfo(id, 0xFFFFFFFF, &send)
 	if err != nil {
-		t.Fatalf("SendObjectInfo failed:", err)
+		t.Fatalf("SendObjectInfo failed: %s", err)
 	} else {
 		t.Logf("Sent objectinfo handle: 0x%x\n", handle)
 		err = dev.SendObject(buf, int64(len(data)))

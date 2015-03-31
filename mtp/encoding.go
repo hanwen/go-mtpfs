@@ -98,7 +98,6 @@ func kindSize(k reflect.Kind) int {
 	default:
 		panic(fmt.Sprintf("unknown kind %v", k))
 	}
-	return 0
 }
 
 var nullValue reflect.Value
@@ -311,7 +310,6 @@ func encodeField(w io.Writer, f reflect.Value) error {
 	default:
 		panic(fmt.Sprintf("unimplemented kind %v", f))
 	}
-	return nil
 }
 
 // Decode MTP data stream into data structure.

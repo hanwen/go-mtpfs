@@ -395,7 +395,7 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 
 	if mFile.Handle() != 0 {
 		// Only rename on device if it was sent already.
-		v := mtp.StringValue{newName}
+		v := mtp.StringValue{Value: newName}
 		err := n.fs.dev.SetObjectPropValue(mFile.Handle(), mtp.OPC_ObjectFileName, &v)
 		if err != nil {
 			return err

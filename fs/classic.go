@@ -339,7 +339,7 @@ func (fs *deviceFS) setupClassic() error {
 		fs.delBackingDir = true
 	}
 	if fi, err := os.Lstat(fs.options.Dir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory")
+		return fmt.Errorf("%s is not a directory", fs.options.Dir)
 	}
 	return nil
 }
