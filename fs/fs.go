@@ -419,9 +419,8 @@ func (n *folderNode) Rename(oldName string, newParent nodefs.Node, newName strin
 			// TODO - delete destination?
 			log.Printf("old folder already has child %q", newName)
 			return fuse.ENOSYS
-		} else {
-			// does mtp overwrite the destination?
 		}
+		// does mtp overwrite the destination?
 	}
 
 	if fn != n {

@@ -98,26 +98,25 @@ func TestAndroid(t *testing.T) {
 	if err != nil {
 		t.Errorf("AndroidBeginEditObject: %v", err)
 		return
-	} else {
-		err = dev.AndroidTruncate(handle, int64(magicSize))
-		if err != nil {
-			t.Errorf("AndroidTruncate: %v", err)
-		}
-		buf := bytes.NewBufferString(magicStr)
-		err = dev.AndroidSendPartialObject(handle, int64(magicOff), uint32(buf.Len()), buf)
-		if err != nil {
-			t.Errorf("AndroidSendPartialObject: %v", err)
-		}
-		if buf.Len() > 0 {
-			t.Errorf("buffer not consumed")
-		}
-		err = dev.AndroidEndEditObject(handle)
-		if err != nil {
-			t.Errorf("AndroidEndEditObject: %v", err)
-		}
+	}
+	err = dev.AndroidTruncate(handle, int64(magicSize))
+	if err != nil {
+		t.Errorf("AndroidTruncate: %v", err)
+	}
+	buf := bytes.NewBufferString(magicStr)
+	err = dev.AndroidSendPartialObject(handle, int64(magicOff), uint32(buf.Len()), buf)
+	if err != nil {
+		t.Errorf("AndroidSendPartialObject: %v", err)
+	}
+	if buf.Len() > 0 {
+		t.Errorf("buffer not consumed")
+	}
+	err = dev.AndroidEndEditObject(handle)
+	if err != nil {
+		t.Errorf("AndroidEndEditObject: %v", err)
 	}
 
-	buf := &bytes.Buffer{}
+	buf = &bytes.Buffer{}
 	err = dev.GetObject(handle, buf)
 	if err != nil {
 		t.Errorf("GetObject: %v", err)
@@ -150,19 +149,18 @@ func TestAndroid(t *testing.T) {
 	if err != nil {
 		t.Errorf("AndroidBeginEditObject: %v", err)
 		return
-	} else {
-		buf := bytes.NewBufferString(magicStr)
-		err = dev.AndroidSendPartialObject(handle, int64(magicSize), uint32(buf.Len()), buf)
-		if err != nil {
-			t.Errorf("AndroidSendPartialObject: %v", err)
-		}
-		if buf.Len() > 0 {
-			t.Errorf("buffer not consumed")
-		}
-		err = dev.AndroidEndEditObject(handle)
-		if err != nil {
-			t.Errorf("AndroidEndEditObject: %v", err)
-		}
+	}
+	buf = bytes.NewBufferString(magicStr)
+	err = dev.AndroidSendPartialObject(handle, int64(magicSize), uint32(buf.Len()), buf)
+	if err != nil {
+		t.Errorf("AndroidSendPartialObject: %v", err)
+	}
+	if buf.Len() > 0 {
+		t.Errorf("buffer not consumed")
+	}
+	err = dev.AndroidEndEditObject(handle)
+	if err != nil {
+		t.Errorf("AndroidEndEditObject: %v", err)
 	}
 	buf = &bytes.Buffer{}
 	err = dev.GetObject(handle, buf)

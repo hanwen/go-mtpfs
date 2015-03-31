@@ -197,11 +197,11 @@ func encodeTime(w io.Writer, f reflect.Value) error {
 	}
 
 	out := make([]byte, 2*len(s)+3)
-	out, err := encodeStr(out, s)
+	enc, err := encodeStr(out, s)
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(out)
+	_, err = w.Write(enc)
 	return err
 }
 
