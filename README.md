@@ -16,13 +16,18 @@ which is based on libusb.
 
 ###COMPILATION
 
-* Install the Go compiler suite; e.g. on Ubuntu:
+* Install the Go compiler (version 1.3 at least) suite; e.g. on Ubuntu:
 ```
 sudo apt-get install golang-go
+or
+wget -qO- https://godeb.s3.amazonaws.com/godeb-amd64.tar.gz | tar xvz
+./godeb install
 ```
 * Install libmtp header files
 ```
 sudo apt-get install libusb1-devel
+or
+sudo apt-get install libusb-1.0-0-dev
 ```
 * Then run
 ```
