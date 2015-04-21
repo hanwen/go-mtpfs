@@ -43,6 +43,11 @@ type Device struct {
 	// If set, send header in separate write.
 	SeparateHeader bool
 
+	// If set, don't read null packets. This is a workaround for a
+	// problem in the USB3 linux drivers. See also
+	// https://github.com/hanwen/go-mtpfs/issues/75
+	SkipNullRead bool
+
 	session *sessionData
 }
 
@@ -490,7 +495,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 			break
 		}
 	}
-	if lastRead%packetSize == 0 {
+	if !d.SkipNullRead && lastRead%packetSize == 0 {
 		// Null read.
 		d.h.BulkTransfer(d.fetchEp, buf[:0], d.Timeout)
 	}

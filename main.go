@@ -27,6 +27,7 @@ func main() {
 			"which are composed of manufacturer/product/serial.")
 	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
 	android := flag.Bool("android", true, "use android extensions if available")
+	skipNullRead := flag.Bool("skip-null-read", false, "skip null reads. Workaround for Linux xhci bug.")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -47,6 +48,7 @@ func main() {
 	dev.DataDebug = debugs["data"]
 	dev.USBDebug = debugs["usb"]
 	dev.Timeout = *usbTimeout
+	dev.SkipNullRead = *skipNullRead
 	if err = dev.Configure(); err != nil {
 		log.Fatalf("Configure failed: %v", err)
 	}

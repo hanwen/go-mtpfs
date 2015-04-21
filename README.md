@@ -64,6 +64,9 @@ generates I/O errors when it reads from or writes to the device.
 * It does not implement Event handling, ie. it will not notice changes
   that the phone makes to the media database while connected.
 
+* Linux systems with USB3 may require the --skip-null-reads flag to
+  work around a problem in the USB kernel driver. See
+  https://github.com/hanwen/go-mtpfs/issues/75 for more context.
 
 ###FEEDBACK
 
