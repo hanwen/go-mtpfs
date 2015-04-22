@@ -301,6 +301,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 // before and after the call.
 func (d *Device) runTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
+	var finalPacket []byte
 	if d.session != nil {
 		req.SessionID = d.session.sid
 		req.TransactionID = d.session.tid
@@ -354,14 +355,23 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 		if len(rest)+usbHdrLen == packetSize {
 			// If this was a full packet, read until we
 			// have a short read.
-			_, err = d.bulkRead(dest)
+			_, finalPacket, err = d.bulkRead(dest)
 			if err != nil {
 				return err
 			}
 		}
 
 		h = &usbBulkHeader{}
-		rest, err = d.fetchPacket(data[:], h)
+		if len(finalPacket) > 0 {
+			if d.MTPDebug {
+				log.Printf("Reusing final packet")
+			}
+			rest = finalPacket
+			finalBuf := bytes.NewBuffer(finalPacket[:len(finalPacket)])
+			err = binary.Read(finalBuf, binary.LittleEndian, h)
+		} else {
+			rest, err = d.fetchPacket(data[:], h)
+		}
 	}
 
 	err = d.decodeRep(h, rest, rep)
@@ -464,7 +474,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 	return n, err
 }
 
-func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
+func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 	var buf [rwBufSize]byte
 	var lastRead int
 	for {
@@ -491,10 +501,17 @@ func (d *Device) bulkRead(w io.Writer) (n int64, err error) {
 		}
 	}
 	if lastRead%packetSize == 0 {
-		// Null read.
-		d.h.BulkTransfer(d.fetchEp, buf[:0], d.Timeout)
+		// This should be a null packet, but on Linux + XHCI it's actually
+		// CONTAINER_OK instead. To be liberal with the XHCI behavior, return
+		// the final packet and inspect it in the calling function.
+		var nullReadSize int
+		nullReadSize, err = d.h.BulkTransfer(d.fetchEp, buf[:], d.Timeout)
+		if d.MTPDebug {
+			log.Printf("Expected null packet, read %d bytes", nullReadSize)
+		}
+		return n, buf[:nullReadSize], err
 	}
-	return n, err
+	return n, buf[:0], err
 }
 
 // Configure is a robust version of OpenSession. On failure, it resets
