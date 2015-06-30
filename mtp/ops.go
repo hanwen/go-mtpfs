@@ -191,6 +191,12 @@ func (d *Device) SendObjectInfo(wantStorageID, wantParent uint32, info *ObjectIn
 	if err = d.SendData(&req, &rep, info); err != nil {
 		return
 	}
+
+	if len(rep.Param) < 3 {
+		err = fmt.Errorf("SendObjectInfo: got %v, need 3 response parameters", rep.Param)
+		return
+	}
+
 	return rep.Param[0], rep.Param[1], rep.Param[2], nil
 }
 

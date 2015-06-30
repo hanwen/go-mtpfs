@@ -293,6 +293,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 			log.Printf("fatal error %v; closing connection.", err)
 			d.Close()
 		}
+		return err
 	}
 	return nil
 }

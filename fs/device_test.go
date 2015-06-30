@@ -115,6 +115,14 @@ func testDevice(t *testing.T, useAndroid bool) {
 		t.Logf("Music not found: %v", err)
 	}
 
+	dirName := filepath.Join(root, fmt.Sprintf("mtpfs-dir-test.x:y-%x", rand.Int31()))
+	if err := os.Mkdir(dirName, 0755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+
+	if err := os.Remove(dirName); err != nil {
+		t.Fatalf("Rmdir: %v", err)
+	}
 	name := filepath.Join(root, fmt.Sprintf("mtpfs-test-%x", rand.Int31()))
 	golden := "abcpxq134"
 	if err := ioutil.WriteFile(name, []byte("abcpxq134"), 0644); err != nil {
