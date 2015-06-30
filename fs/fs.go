@@ -453,6 +453,9 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*no
 		ParentObject:     n.Handle(),
 		StorageID:        n.StorageID(),
 	}
+	if n.fs.mungeVfat[n.StorageID()] {
+		obj.Filename = SanitizeDosName(obj.Filename)
+	}
 	_, _, newId, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
