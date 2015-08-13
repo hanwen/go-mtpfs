@@ -17,7 +17,7 @@ import (
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
-const blockSize = 1024
+const blockSize = 512
 
 type DeviceFsOptions struct {
 	// Assume removable volumes are VFAT and munge filenames
