@@ -247,7 +247,7 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 	rep.TransactionID = h.TransactionID
 
 	restLen := int(h.Length) - usbHdrLen
-	if restLen != len(rest) {
+	if restLen > len(rest) {
 		return fmt.Errorf("header specified 0x%x bytes, but have 0x%x",
 			restLen, len(rest))
 	}
