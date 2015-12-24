@@ -54,6 +54,8 @@ func main() {
 	sids, err := fs.SelectStorages(dev, *storageFilter)
 	if err != nil {
 		log.Fatalf("selectStorages failed: %v", err)
+	} else if len(sids) == 0 {
+		log.Fatal("No storages on the device")
 	}
 
 	opts := fs.DeviceFsOptions{
