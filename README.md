@@ -1,4 +1,4 @@
-###INTRODUCTION
+### INTRODUCTION
 
 Go-mtpfs is a simple FUSE filesystem for mounting Android devices as a
 MTP device.
@@ -14,7 +14,7 @@ which is based on libusb.
 
 
 
-###COMPILATION
+### COMPILATION
 
 * Install the Go compiler suite; e.g. on Ubuntu:
 ```
@@ -44,7 +44,7 @@ go install github.com/hanwen/go-mtpfs
   http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
 
 
-###USAGE
+### USAGE
 ```
 mkdir xoom
 go-mtpfs xoom &
@@ -56,7 +56,7 @@ the device; the filesystem then will continue to function, but
 generates I/O errors when it reads from or writes to the device.
 
 
-###CAVEATS
+### CAVEATS
 
 * It does not implement rename between directories, because the
   Android stack does not implement it.
@@ -65,12 +65,12 @@ generates I/O errors when it reads from or writes to the device.
   that the phone makes to the media database while connected.
 
 
-###FEEDBACK
+### FEEDBACK
 
 You can send your feedback through the issue tracker at
 https://github.com/hanwen/go-mtpfs
 
 
-###DISCLAIMER
+### DISCLAIMER
 
 This is not an official Google product.
