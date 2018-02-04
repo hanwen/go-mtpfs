@@ -25,11 +25,6 @@ func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
 			return nil, err
 		}
 
-		if !s.IsHierarchical() {
-			log.Printf("skipping non hierarchical storage %q", s.StorageDescription)
-			continue
-		}
-
 		if re.FindStringIndex(s.StorageDescription) == nil {
 			log.Printf("filtering out storage %q", s.StorageDescription)
 			continue
