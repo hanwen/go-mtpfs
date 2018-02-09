@@ -25,8 +25,8 @@ func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {
 			return nil, err
 		}
 
-		if !s.IsHierarchical() {
-			log.Printf("skipping non hierarchical storage %q", s.StorageDescription)
+		if !s.IsHierarchical() && !s.IsDCF() {
+			log.Printf("skipping non hierarchical or DCF storage %q", s.StorageDescription)
 			continue
 		}
 
