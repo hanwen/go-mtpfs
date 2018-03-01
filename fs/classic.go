@@ -1,9 +1,11 @@
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"syscall"
 	"time"
@@ -208,6 +210,27 @@ func (p *pendingFile) rwLoopback() (nodefs.File, fuse.Status) {
 }
 
 func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status) {
+	if p.node.Size < math.MaxUint32 && p.loopback == nil {
+		// This is just a partial read and we do not have a backing file yet, so
+		// we can just use GetPartialObject() and pass-through the buffer to FUSE.
+		if off > p.node.Size {
+			// ENXIO = no such address.
+			return nil, fuse.Status(int(syscall.ENXIO))
+		}
+
+		if off+int64(len(data)) > p.node.Size {
+			data = data[:p.node.Size-off]
+		}
+		b := bytes.NewBuffer(data[:0])
+		err := p.node.fs.dev.GetPartialObject(p.node.Handle(), b, uint32(off), uint32(len(data)))
+		if err != nil {
+			log.Println("GetPartialObject failed:", err)
+			return nil, fuse.EIO
+		}
+
+		return fuse.ReadResultData(data[:b.Len()]), fuse.OK
+	}
+
 	if p.loopback == nil {
 		if err := p.node.fetch(); err != nil {
 			log.Printf("fetch failed: %v", err)
