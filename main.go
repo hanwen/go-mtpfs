@@ -65,12 +65,12 @@ func main() {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
 	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
-	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
 
 	mOpts := &fuse.MountOptions{
-		AllowOther: *other,
+		SingleThreaded: true,
+		AllowOther:     *other,
 	}
-	mount, err := fuse.NewServer(rawFs, mountpoint, mOpts)
+	mount, err := fuse.NewServer(conn.RawFS(), mountpoint, mOpts)
 	if err != nil {
 		log.Fatalf("mount failed: %v", err)
 	}
