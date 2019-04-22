@@ -63,8 +63,8 @@ func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func())
 		t.Fatal("NewDeviceFs failed:", err)
 	}
 	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
-	rawFs := fuse.NewLockingRawFileSystem(conn.RawFS())
-	mount, err := fuse.NewServer(rawFs, tempdir, nil)
+	mount, err := fuse.NewServer(conn.RawFS(), tempdir,
+		&fuse.MountOptions{SingleThreaded: true})
 	if err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
