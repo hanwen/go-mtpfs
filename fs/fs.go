@@ -45,7 +45,7 @@ type deviceFS struct {
 	options *DeviceFsOptions
 }
 
-// DeviceFs is a simple filesystem interface to an MTP device. It
+// NewDeviceFSRoot is a simple filesystem interface to an MTP device. It
 // should be wrapped in a Locking(Raw)FileSystem to make sure it is
 // threadsafe.  The file system assumes the device does not touch the
 // storage.  Arguments are the opened mtp device and a directory for the

@@ -130,7 +130,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	return found[0], nil
 }
 
-// Return opened MTP device that matches given pattern.
+// SelectDevice returns opened MTP device that matches given pattern.
 func SelectDevice(pattern string) (*Device, error) {
 	c := usb.NewContext()
 
