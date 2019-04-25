@@ -64,16 +64,19 @@ func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func())
 	}
 	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
 	mount, err := fuse.NewServer(conn.RawFS(), tempdir,
-		&fuse.MountOptions{SingleThreaded: true})
+		&fuse.MountOptions{
+			SingleThreaded: true,
+			Debug:          VerboseTest(),
+		})
 	if err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
 
-	mount.SetDebug(VerboseTest())
 	dev.MTPDebug = VerboseTest()
 	dev.USBDebug = VerboseTest()
 	dev.DataDebug = VerboseTest()
 	go mount.Serve()
+	mount.WaitMount()
 
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
