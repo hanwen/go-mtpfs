@@ -47,11 +47,10 @@ type deviceFS struct {
 	options *DeviceFsOptions
 }
 
-// DeviceFs is a simple filesystem interface to an MTP device. It
-// should be wrapped in a Locking(Raw)FileSystem to make sure it is
-// threadsafe.  The file system assumes the device does not touch the
-// storage.  Arguments are the opened mtp device and a directory for the
-// backing store.
+// DeviceFs is a simple filesystem interface to an MTP device. It must
+// be mounted as SingleThread to make sure it is threadsafe.  The file
+// system assumes the device does not touch the storage.  Arguments
+// are the opened MTP device and a directory for the backing store.
 func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*rootNode, error) {
 	fs := &deviceFS{
 		root:    &rootNode{},
@@ -111,6 +110,7 @@ func (dfs *deviceFS) OnAdd(ctx context.Context) {
 		name := info.StorageDescription
 		stable := fs.StableAttr{
 			Mode: syscall.S_IFDIR,
+			Ino:  uint64(sid) << 33,
 		}
 
 		dfs.root.Inode.AddChild(name,
@@ -129,21 +129,22 @@ func (fs *deviceFS) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fs.
 		size = int64(obj.CompressedSize)
 	}
 
-	mNode := mtpNodeImpl{
-		obj:    &obj,
-		handle: id,
-		fs:     fs,
-		Size:   size,
-	}
+	var m *mtpNodeImpl
 	if fs.options.Android {
-		node = &androidNode{
-			mtpNodeImpl: mNode,
-		}
+		n := &androidNode{}
+		m = &n.mtpNodeImpl
+		node = n
 	} else {
-		node = &classicNode{
-			mtpNodeImpl: mNode,
-		}
+		n := &classicNode{}
+		m = &n.mtpNodeImpl
+		node = n
 	}
+
+	m.obj = &obj
+	m.handle = id
+	m.fs = fs
+	m.Size = size
+
 	return node
 }
 
@@ -362,7 +363,10 @@ func (n *folderNode) fetch(ctx context.Context) bool {
 		info.ParentObject = n.Handle()
 		isdir := info.ObjectFormat == mtp.OFC_Association
 
-		var stable fs.StableAttr
+		stable := fs.StableAttr{
+			// Avoid ID 1.
+			Ino: uint64(handle) << 1,
+		}
 		if isdir {
 			fNode := n.fs.newFolder(*info, handle)
 			node = fNode
