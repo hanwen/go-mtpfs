@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -8,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -24,7 +25,7 @@ type classicNode struct {
 
 	// If set, there was some error writing to the backing store;
 	// don't flush file to device.
-	error fuse.Status
+	error syscall.Errno
 }
 
 func (n *classicNode) send() error {
@@ -37,11 +38,11 @@ func (n *classicNode) send() error {
 	}
 
 	f := n.obj
-	if !n.error.Ok() {
+	if n.error != 0 {
 		n.dirty = false
 		os.Remove(n.backing)
 		n.backing = ""
-		n.error = fuse.OK
+		n.error = 0
 		n.obj.CompressedSize = 0
 		n.Size = 0
 		log.Printf("not sending file %q due to write errors", f.Filename)
@@ -103,19 +104,15 @@ func (n *classicNode) send() error {
 	n.dirty = false
 	n.handle = handle
 
-	// We could leave the file for future reading, but the
+	// XXX We could leave the file for future reading, but the
 	// management of free space is a hassle when doing large
 	// copies.
-	if len(n.Inode().Files(0)) == 1 {
-		os.Remove(n.backing)
-		n.backing = ""
-	}
 	return err
 }
 
 // Drop backing data if unused. Returns freed up space.
 func (n *classicNode) trim() int64 {
-	if n.dirty || n.backing == "" || n.Inode().AnyFile() != nil {
+	if n.dirty || n.backing == "" { // XXX || n.Inode().AnyFile() != nil {
 		return 0
 	}
 
@@ -166,124 +163,143 @@ func (n *classicNode) fetch() error {
 	return err
 }
 
-func (n *classicNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+var _ = (fs.NodeOpener)((*classicNode)(nil))
+
+func (n *classicNode) Open(ctx context.Context, flags uint32) (file fs.FileHandle, fuseFlags uint32, code syscall.Errno) {
 	return &pendingFile{
-		File: nodefs.NewDefaultFile(),
 		node: n,
-	}, fuse.OK
+	}, 0, 0
 }
 
-func (n *classicNode) Truncate(file nodefs.File, size uint64, context *fuse.Context) (code fuse.Status) {
+var _ = (fs.NodeSetattrer)((*classicNode)(nil))
+
+func (n *classicNode) Setattr(ctx context.Context, file fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) (code syscall.Errno) {
 	if file != nil {
-		return file.Truncate(size)
-	} else if n.backing != "" {
-		return fuse.ToStatus(os.Truncate(n.backing, int64(size)))
+		return file.(fs.FileSetattrer).Setattr(ctx, in, out)
 	}
-	return fuse.OK
+
+	if mt, ok := in.GetMTime(); ok {
+		n.setTime(&mt)
+	}
+
+	return 0
 }
 
 ////////////////
 // writing files.
 
 type pendingFile struct {
-	nodefs.File
+	loopback fs.FileHandle
 	flags    uint32
-	loopback nodefs.File
 	node     *classicNode
 }
 
-func (p *pendingFile) rwLoopback() (nodefs.File, fuse.Status) {
+func (p *pendingFile) rwLoopback() (fs.FileHandle, syscall.Errno) {
 	if p.loopback == nil {
 		if err := p.node.fetch(); err != nil {
-			return nil, fuse.ToStatus(err)
+			return nil, fs.ToErrno(err)
 		}
 		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
-			return nil, fuse.ToStatus(err)
+			return nil, fs.ToErrno(err)
 		}
 
-		p.loopback = nodefs.NewLoopbackFile(f)
+		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
 	}
-	return p.loopback, fuse.OK
+	return p.loopback, 0
 }
 
-func (p *pendingFile) Read(data []byte, off int64) (fuse.ReadResult, fuse.Status) {
+var _ = (fs.FileReader)((*pendingFile)(nil))
+
+func (p *pendingFile) Read(ctx context.Context, data []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	if p.loopback == nil {
 		if err := p.node.fetch(); err != nil {
 			log.Printf("fetch failed: %v", err)
-			return nil, fuse.EIO
+			return nil, syscall.EIO
 		}
 		f, err := os.OpenFile(p.node.backing, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
-			return nil, fuse.ToStatus(err)
+			return nil, fs.ToErrno(err)
 		}
-		p.loopback = nodefs.NewLoopbackFile(f)
+		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
 	}
-	return p.loopback.Read(data, off)
+	return p.loopback.(fs.FileReader).Read(ctx, data, off)
 }
 
-func (p *pendingFile) Write(data []byte, off int64) (uint32, fuse.Status) {
+var _ = (fs.FileWriter)((*pendingFile)(nil))
+
+func (p *pendingFile) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
 	p.node.dirty = true
 	f, code := p.rwLoopback()
-	if !code.Ok() {
+	if code != 0 {
 		return 0, code
 	}
 
-	n, code := f.Write(data, off)
-	if !code.Ok() {
+	n, code := f.(fs.FileWriter).Write(ctx, data, off)
+	if code != 0 {
 		p.node.error = code
 	}
 	return n, code
 }
 
-func (p *pendingFile) Truncate(size uint64) fuse.Status {
-	f, code := p.rwLoopback()
-	if !code.Ok() {
-		return code
-	}
+var _ = (fs.FileSetattrer)((*pendingFile)(nil))
 
-	code = f.Truncate(size)
-	if !code.Ok() {
+func (p *pendingFile) Setattr(ctx context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	if size, ok := in.GetSize(); ok {
+		f, code := p.rwLoopback()
+		if code != 0 {
+			return code
+		}
+
+		code = f.(fs.FileSetattrer).Setattr(ctx, in, out)
+		if code != 0 {
+			return code
+		}
+		p.node.dirty = true
+		if code == 0 && size == 0 {
+			p.node.error = 0
+		}
 		return code
 	}
-	p.node.dirty = true
-	if code.Ok() && size == 0 {
-		p.node.error = fuse.OK
-	}
-	return code
+	return 0
 }
 
-func (p *pendingFile) Flush() fuse.Status {
+var _ = (fs.FileFlusher)((*pendingFile)(nil))
+
+func (p *pendingFile) Flush(ctx context.Context) syscall.Errno {
 	if p.loopback == nil {
-		return fuse.OK
+		return 0
 	}
-	code := p.loopback.Flush()
-	if !code.Ok() {
+	code := p.loopback.(fs.FileFlusher).Flush(ctx)
+	if code != 0 {
 		return code
 	}
 
-	s := fuse.ToStatus(p.node.send())
-	if s == fuse.ENOSYS {
-		return fuse.EIO
+	s := fs.ToErrno(p.node.send())
+	if s == syscall.ENOSYS {
+		return syscall.EIO
 	}
 	return s
 }
 
-func (p *pendingFile) Release() {
+var _ = (fs.FileReleaser)((*pendingFile)(nil))
+
+func (p *pendingFile) Release(ctx context.Context) syscall.Errno {
 	if p.loopback != nil {
-		p.loopback.Release()
+		return p.loopback.(fs.FileReleaser).Release(ctx)
 	}
+	return 0
 }
 
 ////////////////////////////////////////////////////////////////
 
-func (fs *deviceFS) trimUnused(todo int64, node *nodefs.Inode) (done int64) {
+func (fs *deviceFS) trimUnused(todo int64, node *fs.Inode) (done int64) {
 	for _, ch := range node.Children() {
 		if done > todo {
 			break
 		}
 
-		if fn, ok := ch.Node().(*classicNode); ok {
+		if fn, ok := ch.Operations().(*classicNode); ok {
 			done += fn.trim()
 		} else if ch.IsDir() {
 			done += fs.trimUnused(todo-done, ch)
@@ -311,7 +327,7 @@ func (fs *deviceFS) ensureFreeSpace(want int64) error {
 	}
 
 	todo := want - free + 10*1024
-	fs.trimUnused(todo, fs.root.Inode())
+	fs.trimUnused(todo, &fs.root.Inode)
 
 	free, err = fs.freeBacking()
 	if err != nil {
@@ -339,21 +355,19 @@ func (fs *deviceFS) setupClassic() error {
 	return nil
 }
 
-func (fs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file nodefs.File, node nodefs.Node, err error) {
-	backingFile, err := ioutil.TempFile(fs.options.Dir, "")
+func (dfs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file fs.FileHandle, node fs.InodeEmbedder, err error) {
+	backingFile, err := ioutil.TempFile(dfs.options.Dir, "")
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
-			Node: nodefs.NewDefaultNode(),
-			obj:  &obj,
-			fs:   fs,
+			obj: &obj,
+			fs:  dfs,
 		},
 		dirty:   true,
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
-		loopback: nodefs.NewLoopbackFile(backingFile),
+		loopback: fs.NewLoopbackFile(int(backingFile.Fd())),
 		node:     cl,
-		File:     nodefs.NewDefaultFile(),
 	}
 
 	node = cl

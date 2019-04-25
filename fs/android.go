@@ -6,13 +6,14 @@ package fs
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"syscall"
 	"time"
 
+	"github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
 )
 
 type androidNode struct {
@@ -56,43 +57,53 @@ func (n *androidNode) endEdit() bool {
 	return true
 }
 
-func (n *androidNode) Open(flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+var _ = (fs.NodeOpener)((*androidNode)(nil))
+
+func (n *androidNode) Open(ctx context.Context, flags uint32) (file fs.FileHandle, fuseFlags uint32, code syscall.Errno) {
 	return &androidFile{
 		node: n,
-		File: nodefs.NewDefaultFile(),
-	}, fuse.OK
+	}, 0, 0
 }
 
-func (n *androidNode) Truncate(file nodefs.File, size uint64, context *fuse.Context) (code fuse.Status) {
-	w := n.write
-	if !n.startEdit() {
-		return fuse.EIO
-	}
-	if err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size)); err != nil {
-		log.Println("AndroidTruncate failed:", err)
-		return fuse.EIO
-	}
-	n.Size = int64(size)
+var _ = (fs.NodeSetattrer)((*androidNode)(nil))
 
-	if !w {
-		if !n.endEdit() {
-			return fuse.EIO
+func (n *androidNode) Setattr(ctx context.Context, file fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) (code syscall.Errno) {
+	if size, ok := in.GetSize(); ok {
+		w := n.write
+		if !n.startEdit() {
+			return syscall.EIO
 		}
+		if err := n.fs.dev.AndroidTruncate(n.Handle(), int64(size)); err != nil {
+			log.Println("AndroidTruncate failed:", err)
+			return syscall.EIO
+		}
+		n.Size = int64(size)
+
+		if !w {
+			if !n.endEdit() {
+				return syscall.EIO
+			}
+		}
+
+		out.Size = size
+		out.Mode = syscall.S_IFREG | 0644
 	}
-	return fuse.OK
+	return 0
 }
 
 var _ = mtpNode((*androidNode)(nil))
 
 type androidFile struct {
-	nodefs.File
+	fs.FileHandle
 	node *androidNode
 }
 
-func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status) {
+var _ = (fs.FileReader)((*androidFile)(nil))
+
+func (f *androidFile) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
 	if off > f.node.Size {
 		// ENXIO = no such address.
-		return nil, fuse.Status(int(syscall.ENXIO))
+		return nil, syscall.Errno(int(syscall.ENXIO))
 	}
 
 	if off+int64(len(dest)) > f.node.Size {
@@ -102,37 +113,41 @@ func (f *androidFile) Read(dest []byte, off int64) (fuse.ReadResult, fuse.Status
 	err := f.node.fs.dev.AndroidGetPartialObject64(f.node.Handle(), b, off, uint32(len(dest)))
 	if err != nil {
 		log.Println("AndroidGetPartialObject64 failed:", err)
-		return nil, fuse.EIO
+		return nil, syscall.EIO
 	}
 
-	return fuse.ReadResultData(dest[:b.Len()]), fuse.OK
+	return fuse.ReadResultData(dest[:b.Len()]), 0
 }
 
 func (f *androidFile) String() string {
 	return fmt.Sprintf("androidFile h=0x%x", f.node.Handle())
 }
 
-func (f *androidFile) Write(dest []byte, off int64) (written uint32, status fuse.Status) {
+var _ = (fs.FileWriter)((*androidFile)(nil))
+
+func (f *androidFile) Write(ctx context.Context, dest []byte, off int64) (written uint32, status syscall.Errno) {
 	if !f.node.startEdit() {
-		return 0, fuse.EIO
+		return 0, syscall.EIO
 	}
 	f.node.byteCount += int64(len(dest))
 	b := bytes.NewBuffer(dest)
 	err := f.node.fs.dev.AndroidSendPartialObject(f.node.Handle(), off, uint32(len(dest)), b)
 	if err != nil {
 		log.Println("AndroidSendPartialObject failed:", err)
-		return 0, fuse.EIO
+		return 0, syscall.EIO
 	}
 	written = uint32(len(dest) - b.Len())
 	if off+int64(written) > f.node.Size {
 		f.node.Size = off + int64(written)
 	}
-	return written, fuse.OK
+	return written, 0
 }
 
-func (f *androidFile) Flush() fuse.Status {
+var _ = (fs.FileFlusher)((*androidFile)(nil))
+
+func (f *androidFile) Flush(ctx context.Context) syscall.Errno {
 	if !f.node.endEdit() {
-		return fuse.EIO
+		return syscall.EIO
 	}
-	return fuse.OK
+	return 0
 }

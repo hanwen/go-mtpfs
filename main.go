@@ -9,10 +9,9 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 
+	fusefs "github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
@@ -64,27 +63,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
-	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
 
-	mOpts := &fuse.MountOptions{
-		SingleThreaded: true,
-		AllowOther:     *other,
+	mountOpts := &fusefs.Options{
+		MountOptions: fuse.MountOptions{
+			SingleThreaded: true,
+			AllowOther:     *other,
+			Debug:          debugs["fuse"] || debugs["fs"],
+		},
 	}
-	mount, err := fuse.NewServer(conn.RawFS(), mountpoint, mOpts)
+	server, err := fusefs.Mount(mountpoint, root, mountOpts)
 	if err != nil {
 		log.Fatalf("mount failed: %v", err)
 	}
 
-	conn.SetDebug(debugs["fuse"] || debugs["fs"])
-	mount.SetDebug(debugs["fuse"] || debugs["fs"])
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		mount.Serve()
-		wg.Done()
-	}()
-	mount.WaitMount()
+	server.WaitMount()
 	log.Printf("FUSE mounted")
-	wg.Wait()
+	server.Wait()
 	root.OnUnmount()
 }
