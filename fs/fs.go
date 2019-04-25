@@ -6,14 +6,16 @@ package fs
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -50,14 +52,13 @@ type deviceFS struct {
 // threadsafe.  The file system assumes the device does not touch the
 // storage.  Arguments are the opened mtp device and a directory for the
 // backing store.
-func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) (nodefs.Node, error) {
-	root := rootNode{Node: nodefs.NewDefaultNode()}
+func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) (*rootNode, error) {
 	fs := &deviceFS{
-		root:    &root,
+		root:    &rootNode{},
 		dev:     d,
 		options: &options,
 	}
-	root.fs = fs
+	fs.root.fs = fs
 	fs.storages = storages
 	if err := d.GetDeviceInfo(&fs.devInfo); err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func NewDeviceFSRoot(d *mtp.Device, storages []uint32, options DeviceFsOptions) 
 	return fs.Root(), nil
 }
 
-func (fs *deviceFS) Root() nodefs.Node {
+func (fs *deviceFS) Root() *rootNode {
 	return fs.root
 }
 
@@ -93,10 +94,10 @@ func (fs *deviceFS) String() string {
 	return fmt.Sprintf("deviceFS(%s)", fs.devInfo.Model)
 }
 
-func (fs *deviceFS) onMount() {
-	for _, sid := range fs.storages {
+func (dfs *deviceFS) OnAdd(ctx context.Context) {
+	for _, sid := range dfs.storages {
 		var info mtp.StorageInfo
-		if err := fs.dev.GetStorageInfo(sid, &info); err != nil {
+		if err := dfs.dev.GetStorageInfo(sid, &info); err != nil {
 			log.Printf("GetStorageInfo %x: %v", sid, err)
 			continue
 		}
@@ -106,21 +107,29 @@ func (fs *deviceFS) onMount() {
 			StorageID:    sid,
 			Filename:     info.StorageDescription,
 		}
-		folder := fs.newFolder(obj, NOPARENT_ID)
-		fs.root.Inode().NewChild(info.StorageDescription, true, folder)
+		folder := dfs.newFolder(obj, NOPARENT_ID)
+		name := info.StorageDescription
+		stable := fs.StableAttr{
+			Mode: syscall.S_IFDIR,
+		}
+
+		dfs.root.Inode.AddChild(name,
+			dfs.root.Inode.NewPersistentInode(
+				ctx,
+				folder, stable),
+			false)
 	}
 }
 
 // TODO - this should be per storage and return just the free space in
 // the storage.
 
-func (fs *deviceFS) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nodefs.Node) {
+func (fs *deviceFS) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node fs.InodeEmbedder) {
 	if obj.CompressedSize != 0xFFFFFFFF {
 		size = int64(obj.CompressedSize)
 	}
 
 	mNode := mtpNodeImpl{
-		Node:   nodefs.NewDefaultNode(),
 		obj:    &obj,
 		handle: id,
 		fs:     fs,
@@ -139,16 +148,19 @@ func (fs *deviceFS) newFile(obj mtp.ObjectInfo, size int64, id uint32) (node nod
 }
 
 type rootNode struct {
-	nodefs.Node
+	fs.Inode
 	fs *deviceFS
+}
+
+var _ = (fs.NodeOnAdder)((*rootNode)(nil))
+
+func (r *rootNode) OnAdd(ctx context.Context) {
+	r.fs.OnAdd(ctx)
 }
 
 const NOPARENT_ID = 0xFFFFFFFF
 
-func (n *rootNode) OnMount(conn *nodefs.FileSystemConnector) {
-	n.fs.onMount()
-}
-
+// XXX
 func (n *rootNode) OnUnmount() {
 	if n.fs.delBackingDir {
 		os.RemoveAll(n.fs.options.Dir)
@@ -156,22 +168,24 @@ func (n *rootNode) OnUnmount() {
 	}
 }
 
-func (n *rootNode) StatFs() *fuse.StatfsOut {
+func (n *rootNode) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	total := uint64(0)
 	free := uint64(0)
-	for _, ch := range n.Inode().Children() {
-		if s := ch.Node().StatFs(); s != nil {
+	for _, ch := range n.Children() {
+		var s fuse.StatfsOut
+		if errno := ch.Operations().(fs.NodeStatfser).Statfs(ctx, &s); errno == 0 {
 			total += s.Blocks
 			free += s.Bfree
 		}
 	}
 
-	return &fuse.StatfsOut{
+	*out = fuse.StatfsOut{
 		Bsize:  blockSize,
 		Blocks: total,
 		Bavail: free,
 		Bfree:  free,
 	}
+	return 0
 }
 
 const forbidden = ":*?\"<>|"
@@ -195,14 +209,13 @@ func SanitizeDosName(name string) string {
 // mtpNode
 
 type mtpNode interface {
-	nodefs.Node
 	Handle() uint32
 	StorageID() uint32
 	SetName(string)
 }
 
 type mtpNodeImpl struct {
-	nodefs.Node
+	fs.Inode
 
 	// MTP handle.
 	handle uint32
@@ -216,29 +229,34 @@ type mtpNodeImpl struct {
 	Size int64
 }
 
-func (n *mtpNodeImpl) StatFs() *fuse.StatfsOut {
+var _ = (fs.NodeStatfser)((*mtpNodeImpl)(nil))
+
+func (n *mtpNodeImpl) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.Errno {
 	total := uint64(0)
 	free := uint64(0)
 
 	var info mtp.StorageInfo
 	if err := n.fs.dev.GetStorageInfo(n.StorageID(), &info); err != nil {
 		log.Printf("GetStorageInfo %x: %v", n.StorageID(), err)
-		return nil
+		return 0
 	}
 
 	total += uint64(info.MaxCapability)
 	free += uint64(info.FreeSpaceInBytes)
 
-	return &fuse.StatfsOut{
+	*out = fuse.StatfsOut{
 		Bsize:  blockSize,
 		Blocks: total / blockSize,
 		Bavail: free / blockSize,
 		Bfree:  free / blockSize,
 	}
+	return 0
 }
 
-func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Context) (code fuse.Status) {
-	out.Mode = fuse.S_IFREG | 0644
+var _ = (fs.NodeGetattrer)((*mtpNodeImpl)(nil))
+
+func (n *mtpNodeImpl) Getattr(ctx context.Context, file fs.FileHandle, out *fuse.AttrOut) (code syscall.Errno) {
+	out.Mode = 0644
 	f := n.obj
 	if f != nil {
 		out.Size = uint64(n.Size)
@@ -248,27 +266,16 @@ func (n *mtpNodeImpl) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Co
 		out.Blocks = (out.Size + blockSize - 1) / blockSize
 	}
 
-	return fuse.OK
+	return 0
 }
 
-func (n *mtpNodeImpl) Chown(file nodefs.File, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
-	// Get rid of pesky messages from cp -a.
-	return fuse.OK
-}
-
-func (n *mtpNodeImpl) Chmod(file nodefs.File, perms uint32, context *fuse.Context) (code fuse.Status) {
-	// Get rid of pesky messages from cp -a.
-	return fuse.OK
-}
-
-func (n *mtpNodeImpl) Utimens(file nodefs.File, aTime *time.Time, mTime *time.Time, context *fuse.Context) (code fuse.Status) {
+func (n *mtpNodeImpl) setTime(mTime *time.Time) {
 	// Unfortunately, we can't set the modtime; it's READONLY in
 	// the Android MTP implementation. We just change the time in
 	// the mount, but this is not persisted.
 	if mTime != nil {
 		n.obj.ModificationDate = *mTime
 	}
-	return fuse.OK
 }
 
 func (n *mtpNodeImpl) Handle() uint32 {
@@ -300,7 +307,6 @@ func (fs *deviceFS) newFolder(obj mtp.ObjectInfo, h uint32) *folderNode {
 	obj.AssociationType = mtp.OFC_Association
 	return &folderNode{
 		mtpNodeImpl: mtpNodeImpl{
-			Node:   nodefs.NewDefaultNode(),
 			handle: h,
 			obj:    &obj,
 			fs:     fs,
@@ -314,7 +320,7 @@ func (n *folderNode) Deletable() bool {
 }
 
 // Fetches data from device returns false on failure.
-func (n *folderNode) fetch() bool {
+func (n *folderNode) fetch(ctx context.Context) bool {
 	if n.fetched {
 		return true
 	}
@@ -352,39 +358,42 @@ func (n *folderNode) fetch() bool {
 	}
 
 	for handle, info := range infos {
-		var node nodefs.Node
+		var node fs.InodeEmbedder
 		info.ParentObject = n.Handle()
 		isdir := info.ObjectFormat == mtp.OFC_Association
+
+		var stable fs.StableAttr
 		if isdir {
 			fNode := n.fs.newFolder(*info, handle)
 			node = fNode
+			stable.Mode = syscall.S_IFDIR
 		} else {
 			sz := sizes[handle]
 			node = n.fs.newFile(*info, sz, handle)
+			stable.Mode = syscall.S_IFREG
 		}
 
-		n.Inode().NewChild(info.Filename, isdir, node)
+		n.AddChild(info.Filename,
+			n.NewPersistentInode(ctx, node, stable),
+			true)
 	}
 	n.fetched = true
 	return true
 }
 
-func (n *folderNode) OpenDir(context *fuse.Context) (stream []fuse.DirEntry, status fuse.Status) {
-	if !n.fetch() {
-		return nil, fuse.EIO
-	}
-	return n.Node.OpenDir(context)
-}
+var _ = (fs.NodeReaddirer)((*folderNode)(nil))
 
-func (n *folderNode) GetAttr(out *fuse.Attr, file nodefs.File, context *fuse.Context) (code fuse.Status) {
-	out.Mode = fuse.S_IFDIR | 0755
-	return fuse.OK
+func (n *folderNode) Readdir(ctx context.Context) (stream fs.DirStream, status syscall.Errno) {
+	if !n.fetch(ctx) {
+		return nil, syscall.EIO
+	}
+	return n.Operations().(fs.NodeReaddirer).Readdir(ctx)
 }
 
 func (n *folderNode) basenameRename(oldName string, newName string) error {
-	ch := n.Inode().GetChild(oldName)
+	ch := n.GetChild(oldName)
 
-	mFile := ch.Node().(mtpNode)
+	mFile := ch.Operations().(mtpNode)
 
 	if mFile.Handle() != 0 {
 		// Only rename on device if it was sent already.
@@ -393,57 +402,67 @@ func (n *folderNode) basenameRename(oldName string, newName string) error {
 			return err
 		}
 	}
-	n.Inode().RmChild(oldName)
-	n.Inode().AddChild(newName, ch)
 	return nil
 }
 
-func (n *folderNode) Rename(oldName string, newParent nodefs.Node, newName string, context *fuse.Context) (code fuse.Status) {
+var _ = (fs.NodeRenamer)((*folderNode)(nil))
+
+func (n *folderNode) Rename(ctx context.Context, oldName string, newParent fs.InodeEmbedder, newName string, flags uint32) (code syscall.Errno) {
 	fn, ok := newParent.(*folderNode)
 	if !ok {
-		return fuse.ENOSYS
+		return syscall.ENOSYS
 	}
-	fn.fetch()
-	n.fetch()
+	fn.fetch(ctx)
+	n.fetch(ctx)
 
-	if f := n.Inode().GetChild(newName); f != nil {
+	if f := n.GetChild(newName); f != nil {
 		if fn != n {
 			// TODO - delete destination?
 			log.Printf("old folder already has child %q", newName)
-			return fuse.ENOSYS
+			return syscall.ENOSYS
 		}
 		// does mtp overwrite the destination?
 	}
 
 	if fn != n {
-		return fuse.ENOSYS
+		return syscall.ENOSYS
 	}
 
 	if newName != oldName {
 		if err := n.basenameRename(oldName, newName); err != nil {
 			log.Printf("basenameRename failed: %v", err)
-			return fuse.EIO
+			return syscall.EIO
 		}
 	}
 
-	return fuse.OK
+	return 0
 }
 
-func (n *folderNode) Lookup(out *fuse.Attr, name string, context *fuse.Context) (node *nodefs.Inode, code fuse.Status) {
-	if !n.fetch() {
-		return nil, fuse.EIO
+var _ = (fs.NodeLookuper)((*folderNode)(nil))
+
+func (n *folderNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (node *fs.Inode, code syscall.Errno) {
+	if !n.fetch(ctx) {
+		return nil, syscall.EIO
 	}
-	ch := n.Inode().GetChild(name)
+	ch := n.GetChild(name)
 	if ch == nil {
-		return nil, fuse.ENOENT
+		return nil, syscall.ENOENT
 	}
 
-	return ch, ch.Node().GetAttr(out, nil, context)
+	if ga, ok := ch.Operations().(fs.NodeGetattrer); ok {
+		var attr fuse.AttrOut
+		code = ga.Getattr(ctx, nil, &attr)
+		out.Attr = attr.Attr
+	}
+
+	return ch, code
 }
 
-func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*nodefs.Inode, fuse.Status) {
-	if !n.fetch() {
-		return nil, fuse.EIO
+var _ = (fs.NodeMkdirer)((*folderNode)(nil))
+
+func (n *folderNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	if !n.fetch(ctx) {
+		return nil, syscall.EIO
 	}
 
 	obj := mtp.ObjectInfo{
@@ -459,43 +478,54 @@ func (n *folderNode) Mkdir(name string, mode uint32, context *fuse.Context) (*no
 	_, _, newId, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 	if err != nil {
 		log.Printf("CreateFolder failed: %v", err)
-		return nil, fuse.EIO
+		return nil, syscall.EIO
 	}
 
 	f := n.fs.newFolder(obj, newId)
-	return n.Inode().NewChild(name, true, f), fuse.OK
+	stable := fs.StableAttr{Mode: syscall.S_IFDIR}
+	ch := n.NewPersistentInode(ctx, f, stable)
+
+	out.Mode = 0755
+	return ch, 0
 }
 
-func (n *folderNode) Unlink(name string, c *fuse.Context) fuse.Status {
-	if !n.fetch() {
-		return fuse.EIO
+var _ = (fs.NodeUnlinker)((*folderNode)(nil))
+
+func (n *folderNode) Unlink(ctx context.Context, name string) syscall.Errno {
+	if !n.fetch(ctx) {
+		return syscall.EIO
 	}
 
-	ch := n.Inode().GetChild(name)
+	ch := n.GetChild(name)
 	if ch == nil {
-		return fuse.ENOENT
+		return syscall.ENOENT
 	}
 
-	f := ch.Node().(mtpNode)
+	f := ch.Operations().(mtpNode)
 	if f.Handle() != 0 {
 		if err := n.fs.dev.DeleteObject(f.Handle()); err != nil {
 			log.Printf("DeleteObject failed: %v", err)
-			return fuse.EIO
+			return syscall.EIO
 		}
 	} else {
 		f.SetName("")
 	}
-	n.Inode().RmChild(name)
-	return fuse.OK
+	n.RmChild(name)
+	return 0
 }
 
-func (n *folderNode) Rmdir(name string, c *fuse.Context) fuse.Status {
-	return n.Unlink(name, c)
+var _ = (fs.NodeRmdirer)((*folderNode)(nil))
+
+func (n *folderNode) Rmdir(ctx context.Context, name string) syscall.Errno {
+	return n.Unlink(ctx, name)
 }
 
-func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fuse.Context) (nodefs.File, *nodefs.Inode, fuse.Status) {
-	if !n.fetch() {
-		return nil, nil, fuse.EIO
+var _ = (fs.NodeCreater)((*folderNode)(nil))
+
+func (n *folderNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (ch *fs.Inode, file fs.FileHandle, fuseFlags uint32, errno syscall.Errno) {
+	if !n.fetch(ctx) {
+		errno = syscall.EIO
+		return
 	}
 
 	obj := mtp.ObjectInfo{
@@ -507,23 +537,24 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		CompressedSize:   0,
 	}
 
-	var file nodefs.File
-	var fsNode nodefs.Node
+	var fsNode fs.InodeEmbedder
+
 	if n.fs.options.Android {
 		_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 		if err != nil {
 			log.Println("SendObjectInfo failed", err)
-			return nil, nil, fuse.EIO
+			errno = syscall.EIO
+			return
 		}
 
 		if err = n.fs.dev.SendObject(&bytes.Buffer{}, 0); err != nil {
 			log.Println("SendObject failed:", err)
-			return nil, nil, fuse.EIO
+			errno = syscall.EIO
+			return
 		}
 
 		aNode := &androidNode{
 			mtpNodeImpl: mtpNodeImpl{
-				Node:   nodefs.NewDefaultNode(),
 				obj:    &obj,
 				fs:     n.fs,
 				handle: handle,
@@ -531,10 +562,10 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		}
 
 		if !aNode.startEdit() {
-			return nil, nil, fuse.EIO
+			errno = syscall.EIO
+			return
 		}
 		file = &androidFile{
-			File: nodefs.NewDefaultFile(),
 			node: aNode,
 		}
 		fsNode = aNode
@@ -542,8 +573,13 @@ func (n *folderNode) Create(name string, flags uint32, mode uint32, context *fus
 		var err error
 		file, fsNode, err = n.fs.createClassicFile(obj)
 		if err != nil {
-			return nil, nil, fuse.ToStatus(err)
+			errno = fs.ToErrno(err)
+			return
 		}
 	}
-	return file, n.Inode().NewChild(name, false, fsNode), fuse.OK
+	ch = n.NewPersistentInode(ctx, fsNode, fs.StableAttr{})
+
+	var a fuse.AttrOut
+	out.Attr = a.Attr
+	return ch, file, 0, 0
 }

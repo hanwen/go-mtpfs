@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
@@ -62,21 +62,23 @@ func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func())
 	if err != nil {
 		t.Fatal("NewDeviceFs failed:", err)
 	}
-	conn := nodefs.NewFileSystemConnector(root, nodefs.NewOptions())
-	mount, err := fuse.NewServer(conn.RawFS(), tempdir,
-		&fuse.MountOptions{
-			SingleThreaded: true,
-			Debug:          VerboseTest(),
+	server, err := fs.Mount(tempdir, root,
+		&fs.Options{
+			MountOptions: fuse.MountOptions{
+				SingleThreaded: true,
+				Debug:          VerboseTest(),
+			},
 		})
 	if err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
 
 	dev.MTPDebug = VerboseTest()
-	dev.USBDebug = VerboseTest()
-	dev.DataDebug = VerboseTest()
-	go mount.Serve()
-	mount.WaitMount()
+	/*	dev.USBDebug = VerboseTest()
+		dev.DataDebug = VerboseTest()
+	*/
+	go server.Serve()
+	server.WaitMount()
 
 	for i := 0; i < 10; i++ {
 		fis, err := ioutil.ReadDir(tempdir)
@@ -88,14 +90,14 @@ func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func())
 	}
 
 	if storageRoot == "" {
-		mount.Unmount()
+		server.Unmount()
 		t.Fatal("could not find entries in mount point.")
 	}
 
 	d := dev
 	dev = nil
 	return storageRoot, func() {
-		mount.Unmount()
+		server.Unmount()
 		d.Close()
 	}
 }
@@ -207,7 +209,7 @@ func testReadBlockBoundary(t *testing.T, android bool) {
 
 	f, err := os.Open(name)
 	if err != nil {
-		t.Fatalf("Open: %v", name)
+		t.Fatalf("Open(%q): %v", name, err)
 	}
 
 	total := 0
