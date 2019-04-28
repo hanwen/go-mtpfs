@@ -178,11 +178,7 @@ func (n *classicNode) Setattr(ctx context.Context, file fs.FileHandle, in *fuse.
 		return file.(fs.FileSetattrer).Setattr(ctx, in, out)
 	}
 
-	if mt, ok := in.GetMTime(); ok {
-		n.setTime(&mt)
-	}
-
-	return 0
+	return n.mtpNodeImpl.Setattr(ctx, file, in, out)
 }
 
 ////////////////

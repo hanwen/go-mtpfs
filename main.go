@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"strings"
+	"syscall"
+	"time"
 
 	fusefs "github.com/hanwen/go-fuse/fs"
 	"github.com/hanwen/go-fuse/fuse"
@@ -64,12 +66,18 @@ func main() {
 		log.Fatalf("NewDeviceFs failed: %v", err)
 	}
 
+	sec := time.Second
 	mountOpts := &fusefs.Options{
 		MountOptions: fuse.MountOptions{
 			SingleThreaded: true,
 			AllowOther:     *other,
 			Debug:          debugs["fuse"] || debugs["fs"],
 		},
+		DefaultPermissions: true,
+		UID:                uint32(syscall.Getuid()),
+		GID:                uint32(syscall.Getgid()),
+		AttrTimeout:        &sec,
+		EntryTimeout:       &sec,
 	}
 	server, err := fusefs.Mount(mountpoint, root, mountOpts)
 	if err != nil {

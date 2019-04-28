@@ -66,17 +66,18 @@ func startFs(t *testing.T, useAndroid bool) (storageRoot string, cleanup func())
 		&fs.Options{
 			MountOptions: fuse.MountOptions{
 				SingleThreaded: true,
-				Debug:          VerboseTest(),
+				//		Debug:          VerboseTest(),
 			},
 		})
 	if err != nil {
 		t.Fatalf("mount failed: %v", err)
 	}
-
-	dev.MTPDebug = VerboseTest()
-	/*	dev.USBDebug = VerboseTest()
+	if false {
+		dev.MTPDebug = VerboseTest()
+		dev.USBDebug = VerboseTest()
 		dev.DataDebug = VerboseTest()
-	*/
+	}
+
 	go server.Serve()
 	server.WaitMount()
 
@@ -125,6 +126,10 @@ func testDevice(t *testing.T, useAndroid bool) {
 		t.Fatalf("Mkdir: %v", err)
 	}
 
+	if _, err := ioutil.ReadDir(dirName); err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+
 	if err := os.Remove(dirName); err != nil {
 		t.Fatalf("Rmdir: %v", err)
 	}
@@ -133,6 +138,7 @@ func testDevice(t *testing.T, useAndroid bool) {
 	if err := ioutil.WriteFile(name, []byte("abcpxq134"), 0644); err != nil {
 		t.Fatal("WriteFile failed", err)
 	}
+	defer os.Remove(name)
 	got, err := ioutil.ReadFile(name)
 	if err != nil {
 		t.Fatal("ReadFile failed", err)
@@ -177,6 +183,7 @@ func testDevice(t *testing.T, useAndroid bool) {
 	if err != nil {
 		t.Fatal("Rename failed", err)
 	}
+	defer os.Remove(newName)
 
 	if fi, err := os.Lstat(name); err == nil {
 		t.Fatal("should have disappeared after rename", fi)
@@ -188,7 +195,7 @@ func testDevice(t *testing.T, useAndroid bool) {
 
 	err = os.Remove(newName)
 	if err != nil {
-		t.Fatal("Remove failed", err)
+		t.Fatalf("Remove failed: %v", err)
 	}
 	if fi, err := os.Lstat(newName); err == nil {
 		t.Fatal("should have disappeared after Remove", fi)

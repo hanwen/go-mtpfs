@@ -254,10 +254,27 @@ func (n *mtpNodeImpl) Statfs(ctx context.Context, out *fuse.StatfsOut) syscall.E
 	return 0
 }
 
+var _ = (fs.NodeGetxattrer)((*mtpNodeImpl)(nil))
+
+func (n *mtpNodeImpl) Getxattr(ctx context.Context, attr string, dest []byte) (uint32, syscall.Errno) {
+	return 0, syscall.ENOSYS
+}
+
+var _ = (fs.NodeSetxattrer)((*mtpNodeImpl)(nil))
+
+func (n *mtpNodeImpl) Setxattr(ctx context.Context, attr string, dest []byte, flags uint32) syscall.Errno {
+	return syscall.ENOSYS
+}
+
 var _ = (fs.NodeGetattrer)((*mtpNodeImpl)(nil))
 
 func (n *mtpNodeImpl) Getattr(ctx context.Context, file fs.FileHandle, out *fuse.AttrOut) (code syscall.Errno) {
-	out.Mode = 0644
+	if n.IsDir() {
+		out.Mode = 0755
+	} else {
+		out.Mode = 0644
+	}
+
 	f := n.obj
 	if f != nil {
 		out.Size = uint64(n.Size)
@@ -289,6 +306,19 @@ func (n *mtpNodeImpl) SetName(nm string) {
 
 func (n *mtpNodeImpl) StorageID() uint32 {
 	return n.obj.StorageID
+}
+
+func (n *mtpNodeImpl) Setattr(ctx context.Context, file fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) (code syscall.Errno) {
+	if mt, ok := in.GetMTime(); ok {
+		n.setTime(&mt)
+		var atime = mt
+		if a, ok := in.GetATime(); ok {
+			atime = a
+		}
+		out.SetTimes(&atime, &mt, nil)
+	}
+
+	return 0
 }
 
 var _ = mtpNode((*folderNode)(nil))
@@ -391,7 +421,15 @@ func (n *folderNode) Readdir(ctx context.Context) (stream fs.DirStream, status s
 	if !n.fetch(ctx) {
 		return nil, syscall.EIO
 	}
-	return n.Operations().(fs.NodeReaddirer).Readdir(ctx)
+
+	r := []fuse.DirEntry{}
+	for k, ch := range n.Children() {
+		r = append(r, fuse.DirEntry{Mode: ch.Mode(),
+			Name: k,
+			Ino:  ch.StableAttr().Ino})
+	}
+
+	return fs.NewListDirStream(r), 0
 }
 
 func (n *folderNode) basenameRename(oldName string, newName string) error {

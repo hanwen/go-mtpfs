@@ -84,11 +84,8 @@ func (n *androidNode) Setattr(ctx context.Context, file fs.FileHandle, in *fuse.
 				return syscall.EIO
 			}
 		}
-
-		out.Size = size
-		out.Mode = syscall.S_IFREG | 0644
 	}
-	return 0
+	return n.Getattr(ctx, file, out)
 }
 
 var _ = mtpNode((*androidNode)(nil))
