@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	fusefs "github.com/hanwen/go-fuse/fs"
-	"github.com/hanwen/go-fuse/fuse"
+	fusefs "github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/hanwen/go-mtpfs/fs"
 	"github.com/hanwen/go-mtpfs/mtp"
 )
@@ -73,11 +73,10 @@ func main() {
 			AllowOther:     *other,
 			Debug:          debugs["fuse"] || debugs["fs"],
 		},
-		DefaultPermissions: true,
-		UID:                uint32(syscall.Getuid()),
-		GID:                uint32(syscall.Getgid()),
-		AttrTimeout:        &sec,
-		EntryTimeout:       &sec,
+		UID:          uint32(syscall.Getuid()),
+		GID:          uint32(syscall.Getgid()),
+		AttrTimeout:  &sec,
+		EntryTimeout: &sec,
 	}
 	server, err := fusefs.Mount(mountpoint, root, mountOpts)
 	if err != nil {

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hanwen/go-fuse/fs"
-	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
 type androidNode struct {
