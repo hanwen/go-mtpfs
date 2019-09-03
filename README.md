@@ -24,6 +24,10 @@ sudo apt-get install golang-go
 ```
 sudo apt-get install libusb1-devel
 ```
+  If that doesn't work, try this
+```
+sudo apt-get install libusb-1.0-0-dev
+```
 * Then run
 ```
 mkdir /tmp/go
