@@ -24,13 +24,11 @@ sudo apt-get install golang-go
 ```
 sudo apt-get install libusb1-devel
 ```
-* Then run
+* Then check out go-mtpfs, and run
 ```
-mkdir /tmp/go
-export GOPATH=/tmp/go
-go get github.com/hanwen/go-mtpfs
+go build ./ 
 ```
-  /tmp/go/bin/go-mtpfs will then contain the program binary.
+  This will leave a binary `go-mtpfs`
 
 * You may need some tweaking to get libusb to compile.  See the
   comment near the top of usb/usb.go, ie.
@@ -39,7 +37,8 @@ go get github.com/hanwen/go-mtpfs
 vi /tmp/go/src/github.com/hanwen/go-mtpfs/usb/usb.go
 go install github.com/hanwen/go-mtpfs
 ```
-* A 32 and 64-bit linux x86 binaries are at
+
+* 32-bit and 64-bit linux x86 binaries are at
 
   http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
 
