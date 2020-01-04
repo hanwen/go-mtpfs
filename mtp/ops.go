@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-var _ = log.Println
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }

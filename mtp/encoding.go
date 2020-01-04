@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -144,7 +143,6 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 	kind := val.Type().Elem().Kind()
 	ksz := 0
 	if kind == reflect.Interface {
-		log.Println("OK")
 		ksz = int(kindSize(val.Index(0).Elem().Kind()))
 	} else {
 		ksz = int(kindSize(kind))
