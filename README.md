@@ -40,7 +40,7 @@ go install github.com/hanwen/go-mtpfs
 
 * 32-bit and 64-bit linux x86 binaries are at
 
-  http://hanwen.home.xs4all.nl/public/software/go-mtpfs/
+  https://hanwen.home.xs4all.nl/public/software/go-mtpfs/
 
 
 ### USAGE
