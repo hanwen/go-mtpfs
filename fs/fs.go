@@ -558,7 +558,23 @@ func (n *folderNode) Unlink(ctx context.Context, name string) syscall.Errno {
 
 var _ = (fs.NodeRmdirer)((*folderNode)(nil))
 
-func (n *folderNode) Rmdir(ctx context.Context, name string) syscall.Errno {
+func (n *folderNode) Rmdir(ctx context.Context, name string) (errno syscall.Errno) {
+	if !n.fetch(ctx) {
+		errno = syscall.EIO
+		return
+	}
+	if child := n.GetChild(name); child.IsDir() {
+		asFolder := child.Operations().(*folderNode)
+		if !asFolder.fetch(ctx) {
+			errno = syscall.EIO
+			return
+		}
+
+		for k, v := range asFolder.Children() {
+			errno = syscall.ENOTEMPTY
+			return
+		}
+	}
 	return n.Unlink(ctx, name)
 }
 

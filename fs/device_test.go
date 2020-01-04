@@ -130,8 +130,19 @@ func testDevice(t *testing.T, useAndroid bool) {
 		t.Fatalf("ReadDir: %v", err)
 	}
 
+	if err := ioutil.WriteFile(dirName+"/subfile", []byte{42}, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := os.Remove(dirName); err == nil {
+		t.Fatal("Rmdir: succeeded removing non-empty dir")
+	}
+
+	if err := os.Remove(dirName + "/subfile"); err != nil {
+		t.Fatalf("Remove(subfile): %v", err)
+	}
 	if err := os.Remove(dirName); err != nil {
-		t.Fatalf("Rmdir: %v", err)
+		t.Fatalf("Rmdir(%s): %v", dirName, err)
 	}
 	name := filepath.Join(root, fmt.Sprintf("mtpfs-test-%x", rand.Int31()))
 	golden := "abcpxq134"
