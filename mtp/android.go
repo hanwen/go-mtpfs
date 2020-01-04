@@ -29,6 +29,7 @@ func init() {
 	OC_names[0x95C5] = "ANDROID_END_EDIT_OBJECT"
 }
 
+// AndroidGetPartialObject64 reads a section of a file.
 func (d *Device) AndroidGetPartialObject64(handle uint32, w io.Writer, offset int64, size uint32) error {
 	var req, rep Container
 	req.Code = OC_ANDROID_GET_PARTIAL_OBJECT64
@@ -36,6 +37,7 @@ func (d *Device) AndroidGetPartialObject64(handle uint32, w io.Writer, offset in
 	return d.RunTransaction(&req, &rep, w, nil, 0)
 }
 
+// AndroidBeginEditObject opens a file for writing.
 func (d *Device) AndroidBeginEditObject(handle uint32) error {
 	var req, rep Container
 
@@ -44,6 +46,7 @@ func (d *Device) AndroidBeginEditObject(handle uint32) error {
 	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
+// AndroidTruncate truncates at a file at a given length.
 func (d *Device) AndroidTruncate(handle uint32, offset int64) error {
 	var req, rep Container
 
@@ -52,6 +55,7 @@ func (d *Device) AndroidTruncate(handle uint32, offset int64) error {
 	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
+// AndroidSendPartialObject writes a section of a file.
 func (d *Device) AndroidSendPartialObject(handle uint32, offset int64, size uint32, r io.Reader) error {
 	var req, rep Container
 
@@ -67,6 +71,7 @@ func (d *Device) AndroidSendPartialObject(handle uint32, offset int64, size uint
 	return err
 }
 
+// AndroidEndEditObject closes a file opened for write.
 func (d *Device) AndroidEndEditObject(handle uint32) error {
 	var req, rep Container
 

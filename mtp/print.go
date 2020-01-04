@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Print hex on stderr.
+// hexDump prints hex on stderr.
 func hexDump(data []byte) {
 	i := 0
 	for i < len(data) {
@@ -35,7 +35,7 @@ func hexDump(data []byte) {
 	}
 }
 
-// extract single name.
+// getName extracts a single name.
 func getName(m map[int]string, val int) string {
 	n, ok := m[val]
 	if !ok {
@@ -44,7 +44,7 @@ func getName(m map[int]string, val int) string {
 	return n
 }
 
-// Extract names from name map.
+// getNames extracts names from name map.
 func getNames(m map[int]string, vals []uint16) string {
 	r := []string{}
 	for _, v := range vals {

@@ -67,7 +67,7 @@ func FindDevices(c *usb.Context) ([]*Device, error) {
 	return cands, nil
 }
 
-// Finds a device that matches given pattern
+// selectDevice finds a device that matches given pattern
 func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
@@ -130,7 +130,7 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	return found[0], nil
 }
 
-// Return opened MTP device that matches given pattern.
+// SelectDevice returns opened MTP device that matches the given pattern.
 func SelectDevice(pattern string) (*Device, error) {
 	c := usb.NewContext()
 
