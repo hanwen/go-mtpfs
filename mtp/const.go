@@ -1,6 +1,6 @@
 package mtp
 
-// DO NOT EDIT : generated automatically
+// DO NOT EDIT : generated automatically by munge.py
 
 const AC_ReadWrite = 0x0000
 const AC_ReadOnly = 0x0001
