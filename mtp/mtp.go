@@ -62,6 +62,14 @@ func (e RCError) Error() string {
 	return fmt.Sprintf("RetCode %x", uint16(e))
 }
 
+func (d *Device) fetchMaxPacketSize() int {
+	return d.dev.GetMaxPacketSize(d.fetchEp)
+}
+
+func (d *Device) sendMaxPacketSize() int {
+	return d.dev.GetMaxPacketSize(d.sendEp)
+}
+
 // Close releases the interface, and closes the device.
 func (d *Device) Close() error {
 	if d.h == nil {
@@ -217,12 +225,10 @@ func (d *Device) sendReq(req *Container) error {
 	return nil
 }
 
-const packetSize = 512
-
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
 func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
-	n, err := d.h.BulkTransfer(d.fetchEp, dest[:packetSize], d.Timeout)
+	n, err := d.h.BulkTransfer(d.fetchEp, dest[:d.fetchMaxPacketSize()], d.Timeout)
 	if n > 0 {
 		d.dataPrint(d.fetchEp, dest[:n])
 	}
@@ -333,7 +339,8 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 			return err
 		}
 	}
-	var data [packetSize]byte
+	fetchPacketSize := d.fetchMaxPacketSize()
+	data := make([]byte, fetchPacketSize)
 	h := &usbBulkHeader{}
 	rest, err := d.fetchPacket(data[:], h)
 	if err != nil {
@@ -353,7 +360,8 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 		}
 
 		dest.Write(rest)
-		if len(rest)+usbHdrLen == packetSize {
+
+		if len(rest)+usbHdrLen == fetchPacketSize {
 			// If this was a full packet, read until we
 			// have a short read.
 			_, finalPacket, err = d.bulkRead(dest)
@@ -412,6 +420,7 @@ const rwBufSize = 0x4000
 
 // bulkWrite returns the number of non-header bytes written.
 func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
+	packetSize := d.sendMaxPacketSize()
 	if hdr != nil {
 		if size+usbHdrLen > 0xFFFFFFFF {
 			hdr.Length = 0xFFFFFFFF
@@ -419,7 +428,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 			hdr.Length = uint32(size + usbHdrLen)
 		}
 
-		var packetArr [packetSize]byte
+		packetArr := make([]byte, packetSize)
 		var packet []byte
 		if d.SeparateHeader {
 			packet = packetArr[:usbHdrLen]
@@ -501,6 +510,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 			break
 		}
 	}
+	packetSize := d.fetchMaxPacketSize()
 	if lastRead%packetSize == 0 {
 		// This should be a null packet, but on Linux + XHCI it's actually
 		// CONTAINER_OK instead. To be liberal with the XHCI behavior, return
