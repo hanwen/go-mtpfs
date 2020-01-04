@@ -27,14 +27,14 @@ func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 				for _, s := range a.EndPoints {
 					switch {
 					case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_INTERRUPT:
-						m.eventEp = s.EndpointAddress
+						m.eventEP = s.EndpointAddress
 					case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_BULK:
-						m.fetchEp = s.EndpointAddress
+						m.fetchEP = s.EndpointAddress
 					case s.Direction() == usb.ENDPOINT_OUT && s.TransferType() == usb.TRANSFER_TYPE_BULK:
-						m.sendEp = s.EndpointAddress
+						m.sendEP = s.EndpointAddress
 					}
 				}
-				if m.sendEp > 0 && m.fetchEp > 0 && m.eventEp > 0 {
+				if m.sendEP > 0 && m.fetchEP > 0 && m.eventEP > 0 {
 					m.devDescr = *dd
 					m.ifaceDescr = a
 					m.dev = d.Ref()

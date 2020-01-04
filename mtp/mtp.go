@@ -23,9 +23,9 @@ type Device struct {
 	// split off descriptor?
 	devDescr    usb.DeviceDescriptor
 	ifaceDescr  usb.InterfaceDescriptor
-	sendEp      byte
-	fetchEp     byte
-	eventEp     byte
+	sendEP      byte
+	fetchEP     byte
+	eventEP     byte
 	configValue byte
 
 	// In milliseconds. Defaults to 2 seconds.
@@ -63,11 +63,11 @@ func (e RCError) Error() string {
 }
 
 func (d *Device) fetchMaxPacketSize() int {
-	return d.dev.GetMaxPacketSize(d.fetchEp)
+	return d.dev.GetMaxPacketSize(d.fetchEP)
 }
 
 func (d *Device) sendMaxPacketSize() int {
-	return d.dev.GetMaxPacketSize(d.sendEp)
+	return d.dev.GetMaxPacketSize(d.sendEP)
 }
 
 // Close releases the interface, and closes the device.
@@ -217,8 +217,8 @@ func (d *Device) sendReq(req *Container) error {
 		panic(err)
 	}
 
-	d.dataPrint(d.sendEp, buf.Bytes())
-	_, err := d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
+	d.dataPrint(d.sendEP, buf.Bytes())
+	_, err := d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
 	if err != nil {
 		return err
 	}
@@ -228,9 +228,9 @@ func (d *Device) sendReq(req *Container) error {
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
 func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
-	n, err := d.h.BulkTransfer(d.fetchEp, dest[:d.fetchMaxPacketSize()], d.Timeout)
+	n, err := d.h.BulkTransfer(d.fetchEP, dest[:d.fetchMaxPacketSize()], d.Timeout)
 	if n > 0 {
-		d.dataPrint(d.fetchEp, dest[:n])
+		d.dataPrint(d.fetchEP, dest[:n])
 	}
 
 	if err != nil {
@@ -444,8 +444,8 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 		}
 
 		_, err = io.CopyN(buf, r, cpSize)
-		d.dataPrint(d.sendEp, buf.Bytes())
-		_, err = d.h.BulkTransfer(d.sendEp, buf.Bytes(), d.Timeout)
+		d.dataPrint(d.sendEP, buf.Bytes())
+		_, err = d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
 		if err != nil {
 			return cpSize, err
 		}
@@ -468,8 +468,8 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 		}
 		size -= int64(m)
 
-		d.dataPrint(d.sendEp, buf[:m])
-		lastTransfer, err = d.h.BulkTransfer(d.sendEp, buf[:m], d.Timeout)
+		d.dataPrint(d.sendEP, buf[:m])
+		lastTransfer, err = d.h.BulkTransfer(d.sendEP, buf[:m], d.Timeout)
 		n += int64(lastTransfer)
 
 		if err != nil || lastTransfer == 0 {
@@ -478,7 +478,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 	}
 	if lastTransfer%packetSize == 0 {
 		// write a short packet just to be sure.
-		d.h.BulkTransfer(d.sendEp, buf[:0], d.Timeout)
+		d.h.BulkTransfer(d.sendEP, buf[:0], d.Timeout)
 	}
 
 	return n, err
@@ -489,12 +489,12 @@ func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 	var lastRead int
 	for {
 		toread := buf[:]
-		lastRead, err = d.h.BulkTransfer(d.fetchEp, toread, d.Timeout)
+		lastRead, err = d.h.BulkTransfer(d.fetchEP, toread, d.Timeout)
 		if err != nil {
 			break
 		}
 		if lastRead > 0 {
-			d.dataPrint(d.fetchEp, buf[:lastRead])
+			d.dataPrint(d.fetchEP, buf[:lastRead])
 
 			w, err := w.Write(buf[:lastRead])
 			n += int64(w)
@@ -516,7 +516,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 		// CONTAINER_OK instead. To be liberal with the XHCI behavior, return
 		// the final packet and inspect it in the calling function.
 		var nullReadSize int
-		nullReadSize, err = d.h.BulkTransfer(d.fetchEp, buf[:], d.Timeout)
+		nullReadSize, err = d.h.BulkTransfer(d.fetchEP, buf[:], d.Timeout)
 		if d.MTPDebug {
 			log.Printf("Expected null packet, read %d bytes", nullReadSize)
 		}
