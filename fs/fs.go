@@ -424,9 +424,11 @@ func (n *folderNode) Readdir(ctx context.Context) (stream fs.DirStream, status s
 
 	r := []fuse.DirEntry{}
 	for k, ch := range n.Children() {
-		r = append(r, fuse.DirEntry{Mode: ch.Mode(),
+		r = append(r, fuse.DirEntry{
+			Mode: ch.Mode(),
 			Name: k,
-			Ino:  ch.StableAttr().Ino})
+			Ino:  ch.StableAttr().Ino,
+		})
 	}
 
 	return fs.NewListDirStream(r), 0
@@ -524,9 +526,12 @@ func (n *folderNode) Mkdir(ctx context.Context, name string, mode uint32, out *f
 	}
 
 	f := n.fs.newFolder(obj, newId)
-	stable := fs.StableAttr{Mode: syscall.S_IFDIR}
+	stable := fs.StableAttr{
+		Mode: syscall.S_IFDIR,
+		Ino:  uint64(newId) << 1,
+	}
 	ch := n.NewPersistentInode(ctx, f, stable)
-
+	f.fetched = true
 	out.Mode = 0755
 	return ch, 0
 }
@@ -596,7 +601,7 @@ func (n *folderNode) Create(ctx context.Context, name string, flags uint32, mode
 	}
 
 	var fsNode fs.InodeEmbedder
-
+	var stable fs.StableAttr
 	if n.fs.options.Android {
 		_, _, handle, err := n.fs.dev.SendObjectInfo(n.StorageID(), n.Handle(), &obj)
 		if err != nil {
@@ -627,15 +632,17 @@ func (n *folderNode) Create(ctx context.Context, name string, flags uint32, mode
 			node: aNode,
 		}
 		fsNode = aNode
+		stable.Ino = uint64(handle) << 1
 	} else {
 		var err error
+
 		file, fsNode, err = n.fs.createClassicFile(obj)
 		if err != nil {
 			errno = fs.ToErrno(err)
 			return
 		}
 	}
-	ch = n.NewPersistentInode(ctx, fsNode, fs.StableAttr{})
+	ch = n.NewPersistentInode(ctx, fsNode, stable)
 
 	var a fuse.AttrOut
 	out.Attr = a.Attr

@@ -104,6 +104,10 @@ func (n *classicNode) send() error {
 	n.dirty = false
 	n.handle = handle
 
+	// TODO - we should create a new child with the new handle as
+	// the Inode number here, and send a notification so the new
+	// file has the handle we expect.
+
 	// XXX We could leave the file for future reading, but the
 	// management of free space is a hassle when doing large
 	// copies.
