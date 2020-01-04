@@ -26,17 +26,12 @@ sudo apt-get install libusb1-devel
 ```
 * Then check out go-mtpfs, and run
 ```
-go build ./ 
+go build ./
 ```
   This will leave a binary `go-mtpfs`
 
 * You may need some tweaking to get libusb to compile.  See the
-  comment near the top of usb/usb.go, ie.
-```
-# edit to suit libusb installation:
-vi /tmp/go/src/github.com/hanwen/go-mtpfs/usb/usb.go
-go install github.com/hanwen/go-mtpfs
-```
+  comment near the top of https://github.com/hanwen/usb/usb.go.
 
 * 32-bit and 64-bit linux x86 binaries are at
 
@@ -62,6 +57,14 @@ generates I/O errors when it reads from or writes to the device.
 
 * It does not implement Event handling, ie. it will not notice changes
   that the phone makes to the media database while connected.
+
+* Some Sony Xperia devices claim to implement Android extension, but
+  don't. See [issue
+  #104](https://github.com/hanwen/go-mtpfs/issues/104). Symptom:
+
+     AndroidGetPartialObject64 failed: OperationNotSupported
+
+  In this case, disable Android extensions with the flag -android=0
 
 
 ### FEEDBACK
