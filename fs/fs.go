@@ -575,7 +575,7 @@ func (n *folderNode) Rmdir(ctx context.Context, name string) (errno syscall.Errn
 			return
 		}
 
-		for k, v := range asFolder.Children() {
+		for range asFolder.Children() {
 			errno = syscall.ENOTEMPTY
 			return
 		}
