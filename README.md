@@ -20,11 +20,27 @@ which is based on libusb.
 ```
 sudo apt-get install golang-go
 ```
+
+You need a sufficiently recent `go`, 1.13.8 is reported to be working.
+
 * Install libmtp header files
 ```
 sudo apt-get install libusb1-devel
 ```
-* Then check out go-mtpfs, and run
+
+* Then check out go-mtpfs
+```
+git checkout 'https://github.com/hanwen/go-mtpfs'
+```
+
+* Make sure that you have an internet connection that can access Google's servers
+
+  The build process will download additional material from Google, so make sure you are 
+  connected to the Internet when building.
+
+* Build `go-mtpfs`
+
+  Run
 ```
 go build ./
 ```
