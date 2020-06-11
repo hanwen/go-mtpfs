@@ -22,7 +22,7 @@ sudo apt-get install golang-go
 ```
 * Install libmtp header files
 ```
-sudo apt-get install libusb1-devel
+sudo apt-get install libusb-1.0-0-dev
 ```
 * Then check out go-mtpfs, and run
 ```
