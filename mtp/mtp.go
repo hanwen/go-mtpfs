@@ -146,6 +146,7 @@ func (d *Device) Open() error {
 		return err
 	}
 
+	d.claim()
 	if d.ifaceDescr.InterfaceStringIndex == 0 {
 		// Some of the win8phones have no interface field.
 		info := DeviceInfo{}
@@ -168,7 +169,6 @@ func (d *Device) Open() error {
 		}
 	}
 
-	d.claim()
 	return nil
 }
 
