@@ -152,7 +152,7 @@ func (d *Device) Open() error {
 		info := DeviceInfo{}
 		d.GetDeviceInfo(&info)
 
-		if !strings.Contains(info.MTPExtension, "microsoft/WindowsPhone") {
+		if !strings.Contains(info.MTPExtension, "microsoft") {
 			d.Close()
 			return fmt.Errorf("mtp: no MTP extensions in %s", info.MTPExtension)
 		}
