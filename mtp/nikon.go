@@ -159,6 +159,8 @@ func (d *Device) NikonGetLiveViewImg() (LiveView, error) {
 	}, nil
 }
 
+// LVServer captures LV images and serves the images asynchronously.
+
 type LVServer struct {
 	Frame     []byte
 	frameHash [16]byte
@@ -168,47 +170,27 @@ type LVServer struct {
 	clients  map[*websocket.Conn]bool
 	wsLock   sync.Mutex
 
-	dev      *Device
-	commLock sync.Mutex
+	dev     *Device
+	mtpLock sync.Mutex
 
-	ctx    context.Context
-	cancel func()
+	eg  *errgroup.Group
+	ctx context.Context
 }
 
-func NewLVServer(dev *Device) *LVServer {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewLVServer(dev *Device, ctx context.Context) *LVServer {
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	return &LVServer{
 		Frame:   nil,
 		clients: map[*websocket.Conn]bool{},
 		dev:     dev,
-		ctx:     ctx,
-		cancel:  cancel,
+
+		eg:  eg,
+		ctx: egCtx,
 	}
 }
 
-func (lvs *LVServer) Run() error {
-	eg, ctx := errgroup.WithContext(lvs.ctx)
-
-	eg.Go(func() error {
-		return lvs.ensureLV(ctx)
-	})
-
-	eg.Go(func() error {
-		return lvs.ensureAF(ctx)
-	})
-	time.Sleep(500 * time.Millisecond)
-
-	eg.Go(func() error {
-		return lvs.captureFrames(ctx)
-	})
-
-	eg.Go(func() error {
-		return lvs.broadcastFrames(ctx)
-	})
-
-	return eg.Wait()
-}
+// HTTP handler / WebSocket
 
 func (lvs *LVServer) HandleClient(w http.ResponseWriter, r *http.Request) {
 	ws, err := lvs.upgrader.Upgrade(w, r, nil)
@@ -241,14 +223,29 @@ func (lvs *LVServer) unregisterClient(c *websocket.Conn) {
 	delete(lvs.clients, c)
 }
 
-func (lvs *LVServer) ensureLV(ctx context.Context) error {
+// Workers
+
+func (lvs *LVServer) Run() error {
+	defer func() {
+		_ = lvs.endLiveView()
+	}()
+
+	lvs.eg.Go(lvs.workerLV)
+	lvs.eg.Go(lvs.workerAF)
+	time.Sleep(500 * time.Millisecond)
+	lvs.eg.Go(lvs.frameCaptorSakura)
+	lvs.eg.Go(lvs.workerBroadcast)
+	return lvs.eg.Wait()
+}
+
+func (lvs *LVServer) workerLV() error {
 	tick := time.NewTicker(time.Second)
 
 	for {
 		select {
 		case <-tick.C:
 			// let's go!
-		case <-ctx.Done():
+		case <-lvs.ctx.Done():
 			return nil
 		}
 
@@ -266,14 +263,14 @@ func (lvs *LVServer) ensureLV(ctx context.Context) error {
 	}
 }
 
-func (lvs *LVServer) ensureAF(ctx context.Context) error {
+func (lvs *LVServer) workerAF() error {
 	tick := time.NewTicker(5 * time.Second)
 
 	for {
 		select {
 		case <-tick.C:
 			// Let's go!
-		case <-ctx.Done():
+		case <-lvs.ctx.Done():
 			return nil
 		}
 
@@ -284,7 +281,7 @@ func (lvs *LVServer) ensureAF(ctx context.Context) error {
 	}
 }
 
-func (lvs *LVServer) captureFrames(ctx context.Context) error {
+func (lvs *LVServer) frameCaptorSakura() error {
 	set := func(lv LiveView) {
 		lvs.frameLock.Lock()
 		defer lvs.frameLock.Unlock()
@@ -294,7 +291,7 @@ func (lvs *LVServer) captureFrames(ctx context.Context) error {
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-lvs.ctx.Done():
 			return nil
 		default:
 			// Let's go!
@@ -310,7 +307,7 @@ func (lvs *LVServer) captureFrames(ctx context.Context) error {
 	}
 }
 
-func (lvs *LVServer) broadcastFrames(ctx context.Context) error {
+func (lvs *LVServer) workerBroadcast() error {
 	copyFrame := func() ([]byte, [16]byte) {
 		lvs.frameLock.Lock()
 		defer lvs.frameLock.Unlock()
@@ -339,7 +336,7 @@ func (lvs *LVServer) broadcastFrames(ctx context.Context) error {
 	lastHash := [16]byte{}
 	for {
 		select {
-		case <-ctx.Done():
+		case <-lvs.ctx.Done():
 			return nil
 		default:
 			// Let's go!
@@ -359,9 +356,11 @@ func (lvs *LVServer) broadcastFrames(ctx context.Context) error {
 	}
 }
 
+// Thread-safe MTP communication
+
 func (lvs *LVServer) startLiveView() error {
-	lvs.commLock.Lock()
-	defer lvs.commLock.Unlock()
+	lvs.mtpLock.Lock()
+	defer lvs.mtpLock.Unlock()
 
 	err := lvs.dev.RunTransactionWithNoParams(OC_NIKON_StartLiveView)
 	if err != nil {
@@ -371,8 +370,8 @@ func (lvs *LVServer) startLiveView() error {
 }
 
 func (lvs *LVServer) endLiveView() error {
-	lvs.commLock.Lock()
-	defer lvs.commLock.Unlock()
+	lvs.mtpLock.Lock()
+	defer lvs.mtpLock.Unlock()
 
 	err := lvs.dev.RunTransactionWithNoParams(OC_NIKON_EndLiveView)
 	if err != nil {
@@ -382,8 +381,8 @@ func (lvs *LVServer) endLiveView() error {
 }
 
 func (lvs *LVServer) getLiveViewStatus() (bool, error) {
-	lvs.commLock.Lock()
-	defer lvs.commLock.Unlock()
+	lvs.mtpLock.Lock()
+	defer lvs.mtpLock.Unlock()
 
 	err, status := lvs.dev.NikonGetLiveViewStatus()
 	if err != nil {
@@ -393,8 +392,8 @@ func (lvs *LVServer) getLiveViewStatus() (bool, error) {
 }
 
 func (lvs *LVServer) autoFocus() error {
-	lvs.commLock.Lock()
-	defer lvs.commLock.Unlock()
+	lvs.mtpLock.Lock()
+	defer lvs.mtpLock.Unlock()
 
 	err := lvs.dev.RunTransactionWithNoParams(OC_NIKON_AfDrive)
 	if err != nil {
@@ -404,17 +403,12 @@ func (lvs *LVServer) autoFocus() error {
 }
 
 func (lvs *LVServer) getLiveViewImg() (LiveView, error) {
-	lvs.commLock.Lock()
-	defer lvs.commLock.Unlock()
+	lvs.mtpLock.Lock()
+	defer lvs.mtpLock.Unlock()
 
 	lv, err := lvs.dev.NikonGetLiveViewImg()
 	if err != nil {
 		return LiveView{}, fmt.Errorf("failed to get live view iamge: %s", err)
 	}
 	return lv, nil
-}
-
-func (lvs *LVServer) Close() {
-	_ = lvs.endLiveView()
-	lvs.cancel()
 }

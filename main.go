@@ -6,9 +6,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -42,20 +45,32 @@ func main() {
 		log.Fatalf("Configure failed: %v", err)
 	}
 
-	lvs := mtp.NewLVServer(dev)
-
 	eg, ctx := errgroup.WithContext(context.Background())
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case s := <-sigChan:
+				return errors.New(s.String())
+			}
+		}
+	})
+
+	lvs := mtp.NewLVServer(dev, ctx)
 	eg.Go(lvs.Run)
 
 	srv := http.Server{Addr: "localhost:42839"}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "index.html")
-	})
-
-	http.HandleFunc("/view", lvs.HandleClient)
-
 	eg.Go(func() error {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, "index.html")
+		})
+
+		http.HandleFunc("/view", lvs.HandleClient)
+
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			return err
 		}
