@@ -211,10 +211,3 @@ func (d *Device) GetObject(handle uint32, w io.Writer) error {
 
 	return d.RunTransaction(&req, &rep, w, nil, 0)
 }
-
-func (d *Device) GetPartialObject(handle uint32, w io.Writer, offset uint32, size uint32) error {
-	var req, rep Container
-	req.Code = OC_ANDROID_GET_PARTIAL_OBJECT64
-	req.Param = []uint32{handle, offset, size}
-	return d.RunTransaction(&req, &rep, w, nil, 0)
-}
