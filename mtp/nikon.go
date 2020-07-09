@@ -108,9 +108,12 @@ func (d *Device) NikonGetLiveViewImg() (LiveView, error) {
 	req.Param = []uint32{}
 	err := d.RunTransaction(&req, &rep, buf, nil, 0)
 	if err != nil {
-		return LiveView{}, fmt.Errorf("failed to obtain live image: %s", err)
+		if casted, ok := err.(RCError); ok && uint16(casted) == RC_NIKON_NotLiveView {
+			return LiveView{}, fmt.Errorf("failed to obtain an image: live view is not activated")
+		}
+		return LiveView{}, fmt.Errorf("failed to obtain an image: %s", err)
 	} else if buf.Len() <= LVHeaderSize {
-		return LiveView{}, fmt.Errorf("failed to obtain live image: the data has insufficient length")
+		return LiveView{}, fmt.Errorf("failed to obtain an image: the data has insufficient length")
 	}
 
 	raw := buf.Bytes()
@@ -299,10 +302,13 @@ func (s *LVServer) frameCaptorSakura() error {
 
 		lv, err := s.getLiveViewImg()
 		if err != nil {
-			log.Printf("Failed to get image, wait for 1s: %s", err)
-			time.Sleep(time.Second)
+			if err.Error() == "failed to obtain an image: live view is not activated" {
+				time.Sleep(time.Second)
+			} else {
+				log.Printf("Failed to capture, wait for 1s: %s", err)
+				time.Sleep(time.Second)
+			}
 		}
-
 		set(lv)
 	}
 }
@@ -364,6 +370,9 @@ func (s *LVServer) startLiveView() error {
 
 	err := s.dev.RunTransactionWithNoParams(OC_NIKON_StartLiveView)
 	if err != nil {
+		if casted, ok := err.(RCError); ok && uint16(casted) == RC_NIKON_InvalidStatus {
+			return fmt.Errorf("failed to start live view: InvalidStatus (battery level is low?)")
+		}
 		return fmt.Errorf("failed to start live view: %s", err)
 	}
 	return nil
@@ -408,7 +417,7 @@ func (s *LVServer) getLiveViewImg() (LiveView, error) {
 
 	lv, err := s.dev.NikonGetLiveViewImg()
 	if err != nil {
-		return LiveView{}, fmt.Errorf("failed to get live view iamge: %s", err)
+		return LiveView{}, err
 	}
 	return lv, nil
 }
