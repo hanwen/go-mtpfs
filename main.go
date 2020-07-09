@@ -5,35 +5,25 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
-	"os"
+	"net/http"
 	"strings"
-	"syscall"
 	"time"
 
-	fusefs "github.com/hanwen/go-fuse/v2/fs"
-	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/hanwen/go-mtpfs/fs"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/hanwen/go-mtpfs/mtp"
 )
 
 func main() {
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, fuse")
 	usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
-	vfat := flag.Bool("vfat", true, "assume removable RAM media uses VFAT, and rewrite names.")
-	other := flag.Bool("allow-other", false, "allow other users to access mounted fuse. Default: false.")
 	deviceFilter := flag.String("dev", "",
 		"regular expression to filter device IDs, "+
 			"which are composed of manufacturer/product/serial.")
-	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
-	android := flag.Bool("android", true, "use android extensions if available")
 	flag.Parse()
-
-	if len(flag.Args()) != 1 {
-		log.Fatalf("Usage: %s [options] MOUNT-POINT\n", os.Args[0])
-	}
-	mountpoint := flag.Arg(0)
 
 	dev, err := mtp.SelectDevice(*deviceFilter)
 	if err != nil {
@@ -52,39 +42,36 @@ func main() {
 		log.Fatalf("Configure failed: %v", err)
 	}
 
-	sids, err := fs.SelectStorages(dev, *storageFilter)
-	if err != nil {
-		log.Fatalf("selectStorages failed: %v", err)
-	}
+	lvs := mtp.NewLVServer(dev)
 
-	opts := fs.DeviceFsOptions{
-		RemovableVFat: *vfat,
-		Android:       *android,
-	}
-	root, err := fs.NewDeviceFSRoot(dev, sids, opts)
-	if err != nil {
-		log.Fatalf("NewDeviceFs failed: %v", err)
-	}
+	eg, ctx := errgroup.WithContext(context.Background())
+	eg.Go(lvs.Run)
 
-	sec := time.Second
-	mountOpts := &fusefs.Options{
-		MountOptions: fuse.MountOptions{
-			SingleThreaded: true,
-			AllowOther:     *other,
-			Debug:          debugs["fuse"] || debugs["fs"],
-		},
-		UID:          uint32(syscall.Getuid()),
-		GID:          uint32(syscall.Getgid()),
-		AttrTimeout:  &sec,
-		EntryTimeout: &sec,
-	}
-	server, err := fusefs.Mount(mountpoint, root, mountOpts)
-	if err != nil {
-		log.Fatalf("mount failed: %v", err)
-	}
+	srv := http.Server{Addr: "localhost:42839"}
 
-	server.WaitMount()
-	log.Printf("FUSE mounted")
-	server.Wait()
-	root.OnUnmount()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "index.html")
+	})
+
+	http.HandleFunc("/view", lvs.HandleClient)
+
+	eg.Go(func() error {
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		select {
+		case <-ctx.Done():
+		}
+		ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+		return srv.Shutdown(ctx)
+	})
+
+	err = eg.Wait()
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
 }
