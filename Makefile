@@ -1,4 +1,4 @@
 .PHONY:
 assets:
-	go generate ./static
+	go generate ./public
 

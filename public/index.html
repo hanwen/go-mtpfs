@@ -4,7 +4,7 @@
 <img id="lv" src="">
 <script>
   var img = document.getElementById('lv');
-  var socket = new WebSocket("ws://" + window.location.host + "/view");
+  var socket = new WebSocket("ws://" + window.location.host + "/stream");
 
   socket.onopen = function () {
     console.log("Connected");

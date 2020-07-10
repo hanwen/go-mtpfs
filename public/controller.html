@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>DSLR Controller</title>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="stylesheet" href="/assets/bootstrap.min.css">
+  <script src="/assets/jquery-3.5.1.slim.min.js"></script>
+  <script src="/assets/popper.min.js"></script>
+  <script src="/assets/bootstrap.min.js"></script>
+
+  <style>
+    .container.top-container {
+      padding-top: 15px;
+    }
+
+    .card-header.card-header-sm {
+      padding: 0.25rem 0.75rem;
+    }
+
+    .card-body > div {
+      margin-bottom: 0.5rem;
+    }
+
+    .card-body > .btn-block + .btn-block {
+      margin-top: 0;
+    }
+
+    .card-body > :last-child {
+      margin-bottom: 0;
+    }
+
+    table {
+      border-bottom: 1px solid #dee2e6;
+    }
+  </style>
+</head>
+<body>
+<div class="container top-container">
+  <div class="row">
+    <div class="col-md mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Auto Focus
+        </div>
+        <div class="card-body">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="interval-label">Interval [s]</span>
+            </div>
+            <input id="af-interval" type="text" class="form-control" placeholder="more than 0" aria-label="Seconds"
+                   aria-describedby="interval-label" value="5">
+          </div>
+          <div class="btn-group btn-block" role="group" aria-label="af-activation">
+            <button id="af-enable" type="button" class="btn btn-primary">Enable</button>
+            <button id="af-disable" type="button" class="btn btn-secondary">Disable</button>
+          </div>
+          <button id="af-now" class="btn btn-success btn-block">Adjust Now</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Information
+        </div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <tbody>
+            <tr>
+              <th scope="row">Width</th>
+              <td id="width">0px</td>
+            </tr>
+            <tr>
+              <th scope="row">Height</th>
+              <td id="height">0px</td>
+            </tr>
+            <tr>
+              <th scope="row">FPS</th>
+              <td id="fps">0</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-md mb-3">
+      One of three columns
+    </div>
+  </div>
+</div>
+<script>
+  var img = document.getElementById('lv');
+  var socket = new WebSocket("ws://" + window.location.host + "/control");
+
+  socket.onopen = function () {
+    console.log("Connected");
+  };
+
+  socket.onmessage = function (e) {
+    console.log("Got a message");
+    let j = JSON.parse(e.data);
+    $("#width").html(j.width);
+    $("#height").html(j.height);
+    $("#fps").html(j.fps);
+  };
+
+  $("#af-enable").on("click", function(){
+    console.log("Enable");
+    socket.send(JSON.stringify({
+      "af_enable": true,
+      "af_interval": parseInt($("#af-interval").val(), 10),
+    }))
+  });
+
+  $("#af-disable").on("click", function(){
+    console.log("Disable");
+    socket.send(JSON.stringify({
+      "af_enable": false,
+      "af_interval": 0,
+    }))
+  });
+
+  $("#af-now").on("click", function(){
+    console.log("Now");
+    socket.send(JSON.stringify({
+      "af_adjust_now": true,
+    }))
+  })
+</script>
+</body>
+</html>
