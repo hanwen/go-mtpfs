@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hanwen/go-mtpfs/mtp"
+	"github.com/hanwen/go-mtpfs/static"
 )
 
 func main() {
@@ -65,10 +66,7 @@ func main() {
 
 	srv := http.Server{Addr: "localhost:42839"}
 	eg.Go(func() error {
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "index.html")
-		})
-
+		http.Handle("/", http.FileServer(static.Root))
 		http.HandleFunc("/view", lvs.HandleClient)
 
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
