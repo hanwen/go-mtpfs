@@ -34,7 +34,7 @@ type MutableTicker struct {
 	C <-chan bool
 	d *atomic.Int64
 	e *atomic.Bool
-	n *atomicTime
+	i chan bool
 }
 
 func NewMutableTicker(d time.Duration) *MutableTicker {
@@ -43,17 +43,11 @@ func NewMutableTicker(d time.Duration) *MutableTicker {
 		C: c,
 		d: atomic.NewInt64(int64(d)),
 		e: atomic.NewBool(true),
-		n: newAtomicTime(time.Now()),
+		i: make(chan bool, 1),
 	}
 
 	go func() {
-		next := func() time.Time {
-			return mt.n.Load().Add(time.Duration(mt.d.Load()))
-		}
-
 		for {
-			mt.n.Store(time.Now())
-
 			if mt.e.Load() {
 				select {
 				case c <- true:
@@ -61,8 +55,10 @@ func NewMutableTicker(d time.Duration) *MutableTicker {
 				}
 			}
 
-			for time.Now().Before(next()) {
-				time.Sleep(time.Millisecond)
+			t := time.NewTimer(time.Duration(mt.d.Load()))
+			select {
+			case <-t.C:
+			case <-mt.i:
 			}
 		}
 	}()
@@ -71,15 +67,23 @@ func NewMutableTicker(d time.Duration) *MutableTicker {
 }
 
 func (mt *MutableTicker) SetInterval(d time.Duration) {
-	mt.n.Store(time.Now())
 	mt.d.Store(int64(d))
+	mt.interrupt()
 }
 
 func (mt *MutableTicker) Stop() {
 	mt.e.Store(false)
+	mt.interrupt()
 }
 
 func (mt *MutableTicker) Start() {
-	mt.n.Store(time.Now())
 	mt.e.Store(true)
+	mt.interrupt()
+}
+
+func (mt *MutableTicker) interrupt() {
+	select {
+	case mt.i <- true:
+	default:
+	}
 }

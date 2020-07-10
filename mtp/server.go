@@ -2,7 +2,6 @@ package mtp
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"go.uber.org/atomic"
 
 	"github.com/gorilla/websocket"
 	"github.com/paulbellamy/ratecounter"
@@ -19,9 +20,9 @@ import (
 // LVServer captures LV images and serves the images asynchronously.
 
 type LVServer struct {
-	Frame     []byte
-	frameHash [16]byte
-	frameLock sync.Mutex
+	Frame        []byte
+	newFrameChan chan bool
+	frameLock    sync.Mutex
 
 	fpsRate  *ratecounter.RateCounter
 	info     InfoPayload
@@ -41,6 +42,8 @@ type LVServer struct {
 	afTicker   *MutableTicker
 	afNowChan  chan bool
 
+	lrFPS *atomic.Int64
+
 	eg  *errgroup.Group
 	ctx context.Context
 }
@@ -49,7 +52,8 @@ func NewLVServer(dev *Device, ctx context.Context) *LVServer {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	return &LVServer{
-		Frame: nil,
+		Frame:        nil,
+		newFrameChan: make(chan bool, 1),
 
 		fpsRate: ratecounter.NewRateCounter(time.Second),
 
@@ -62,6 +66,8 @@ func NewLVServer(dev *Device, ctx context.Context) *LVServer {
 		afInterval: 5,
 		afTicker:   NewMutableTicker(5 * time.Second),
 		afNowChan:  make(chan bool),
+
+		lrFPS: atomic.NewInt64(0),
 
 		eg:  eg,
 		ctx: egCtx,
@@ -102,9 +108,10 @@ func (s *LVServer) unregisterStreamClient(c *websocket.Conn) {
 }
 
 type ControlPayload struct {
-	AFEnable    *bool `json:"af_enable,omitempty"`
-	AFInterval  *int  `json:"af_interval,omitempty"`
-	AFAdjustNow *bool `json:"af_adjust_now,omitempty"`
+	AFEnable    *bool  `json:"af_enable,omitempty"`
+	AFInterval  *int   `json:"af_interval,omitempty"`
+	AFAdjustNow *bool  `json:"af_adjust_now,omitempty"`
+	LRFPS       *int64 `json:"lr_fps,omitempty"`
 }
 
 type InfoPayload struct {
@@ -155,6 +162,10 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 			case s.afNowChan <- true:
 			default:
 			}
+		}
+
+		if p.LRFPS != nil {
+			s.lrFPS.Store(*p.LRFPS)
 		}
 	}
 }
@@ -238,10 +249,15 @@ func (s *LVServer) frameCaptorSakura() error {
 		defer s.frameLock.Unlock()
 		defer s.infoLock.Unlock()
 		s.Frame = lv.JPEG
-		s.frameHash = md5.Sum(lv.JPEG)
 		s.info.Width = int(lv.LVWidth)
 		s.info.Height = int(lv.LVHeight)
+		select {
+		case s.newFrameChan <- true:
+		default:
+		}
 	}
+
+	last := time.Now()
 
 	for {
 		select {
@@ -252,9 +268,14 @@ func (s *LVServer) frameCaptorSakura() error {
 		}
 
 		if s.dummy {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Second)
 			continue
 		}
+
+		if s.lrFPS.Load() > 0 {
+			time.Sleep(last.Add(time.Second / time.Duration(s.lrFPS.Load())).Sub(time.Now()))
+		}
+		last = time.Now()
 
 		lv, err := s.getLiveViewImg()
 		if err != nil {
@@ -271,15 +292,10 @@ func (s *LVServer) frameCaptorSakura() error {
 }
 
 func (s *LVServer) workerBroadcastFrame() error {
-	copyFrame := func() ([]byte, [16]byte) {
+	copyFrame := func() []byte {
 		s.frameLock.Lock()
 		defer s.frameLock.Unlock()
-
-		newHash := [16]byte{}
-		for i, b := range s.frameHash {
-			newHash[i] = b
-		}
-		return s.Frame[:], newHash
+		return s.Frame[:]
 	}
 
 	broadcast := func(jpeg []byte) {
@@ -296,22 +312,15 @@ func (s *LVServer) workerBroadcastFrame() error {
 		}
 	}
 
-	lastHash := [16]byte{}
 	for {
 		select {
 		case <-s.ctx.Done():
 			return nil
-		default:
-			// Let's go!
-		}
-
-		if s.frameHash == lastHash {
-			time.Sleep(time.Millisecond)
-			continue
+		case <-s.newFrameChan:
 		}
 
 		var jpeg []byte
-		jpeg, lastHash = copyFrame()
+		jpeg = copyFrame()
 		if len(jpeg) == 0 {
 			continue
 		}

@@ -50,7 +50,7 @@
             <div class="input-group-prepend">
               <span class="input-group-text" id="interval-label">Interval [s]</span>
             </div>
-            <input id="af-interval" type="text" class="form-control" placeholder="more than 0" aria-label="Seconds"
+            <input id="af-interval" type="text" class="form-control" placeholder="more than 0" aria-label="seconds"
                    aria-describedby="interval-label" value="5">
           </div>
           <div class="btn-group btn-block" role="group" aria-label="af-activation">
@@ -58,6 +58,26 @@
             <button id="af-disable" type="button" class="btn btn-secondary">Disable</button>
           </div>
           <button id="af-now" class="btn btn-success btn-block">Adjust Now</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Rate Limit
+        </div>
+        <div class="card-body">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="lr-label">Frame rate [fps]</span>
+            </div>
+            <input id="lr-fps" type="text" class="form-control" placeholder="more than 0" aria-label="frames"
+                   aria-describedby="interval-label" value="30">
+          </div>
+          <div class="btn-group btn-block" role="group" aria-label="lr-activation">
+            <button id="lr-limit" type="button" class="btn btn-primary">Limit</button>
+            <button id="lr-unlimit" type="button" class="btn btn-secondary">Unlimit</button>
+          </div>
         </div>
       </div>
     </div>
@@ -86,9 +106,6 @@
         </div>
       </div>
     </div>
-    <div class="col-md mb-3">
-      One of three columns
-    </div>
   </div>
 </div>
 <script>
@@ -108,7 +125,6 @@
   };
 
   $("#af-enable").on("click", function(){
-    console.log("Enable");
     socket.send(JSON.stringify({
       "af_enable": true,
       "af_interval": parseInt($("#af-interval").val(), 10),
@@ -116,7 +132,6 @@
   });
 
   $("#af-disable").on("click", function(){
-    console.log("Disable");
     socket.send(JSON.stringify({
       "af_enable": false,
       "af_interval": 0,
@@ -124,11 +139,22 @@
   });
 
   $("#af-now").on("click", function(){
-    console.log("Now");
     socket.send(JSON.stringify({
       "af_adjust_now": true,
     }))
-  })
+  });
+
+  $("#lr-limit").on("click", function(){
+    socket.send(JSON.stringify({
+      "lr_fps": parseInt($("#lr-fps").val(), 10),
+    }))
+  });
+
+  $("#lr-unlimit").on("click", function(){
+    socket.send(JSON.stringify({
+      "lr_fps": 0,
+    }))
+  });
 </script>
 </body>
 </html>
