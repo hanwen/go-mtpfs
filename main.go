@@ -8,8 +8,8 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,10 +20,13 @@ import (
 
 	"github.com/hanwen/go-mtpfs/mtp"
 	"github.com/hanwen/go-mtpfs/public"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, fuse")
+	host := flag.String("host", "localhost", "hostname: default = localhost, specify 0.0.0.0 for public access")
+	port := flag.Int("port", 42839, "port: default = 42839")
+	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, server")
 	serverOnly := flag.Bool("server-only", false, "serve frontend without opening a DSLR (for devevelopment)")
 	usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
 	deviceFilter := flag.String("dev", "",
@@ -31,29 +34,32 @@ func main() {
 			"which are composed of manufacturer/product/serial.")
 	flag.Parse()
 
-	logger := log.New(os.Stdout, "http: ", log.LstdFlags)
+	debugs := map[string]bool{}
+	for _, s := range strings.Split(*debug, ",") {
+		debugs[s] = true
+	}
+
+	if _, ok := debugs["server"]; ok {
+		log.Level = logrus.DebugLevel
+	}
 
 	var dev *mtp.Device
 	var err error
 
 	if *serverOnly {
-		logger.Println("Server-only mode is activated, skipping USB initialization")
+		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
 	} else {
 		dev, err = mtp.SelectDevice(*deviceFilter)
 		if err != nil {
-			log.Fatalf("detect failed: %v", err)
+			log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
 		}
 		defer dev.Close()
-		debugs := map[string]bool{}
-		for _, s := range strings.Split(*debug, ",") {
-			debugs[s] = true
-		}
 		dev.MTPDebug = debugs["mtp"]
 		dev.DataDebug = debugs["data"]
 		dev.USBDebug = debugs["usb"]
 		dev.Timeout = *usbTimeout
 		if err = dev.Configure(); err != nil {
-			log.Fatalf("Configure failed: %v", err)
+			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
 		}
 	}
 
@@ -67,12 +73,13 @@ func main() {
 			case <-ctx.Done():
 				return nil
 			case s := <-sigChan:
+				log.WithField("prefix", "signal").Info("Caught signal: %s", s)
 				return errors.New(s.String())
 			}
 		}
 	})
 
-	lvs := mtp.NewLVServer(dev, ctx)
+	lvs := mtp.NewLVServer(dev, log, ctx)
 	eg.Go(lvs.Run)
 
 	router := http.NewServeMux()
@@ -89,12 +96,13 @@ func main() {
 	router.Handle("/assets/", http.FileServer(public.Root))
 
 	srv := http.Server{
-		Addr:    "0.0.0.0:42839",
-		Handler: logging2(logger, router),
+		Addr:    fmt.Sprintf("%s:%d", *host, *port),
+		Handler: logging(router),
 	}
 
 	eg.Go(func() error {
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.WithField("prefix", "http").Error(err)
 			return err
 		}
 		return nil
@@ -110,15 +118,6 @@ func main() {
 
 	err = eg.Wait()
 	if err != nil {
-		log.Fatalf(err.Error())
+		os.Exit(1)
 	}
-}
-
-func logging2(logger *log.Logger, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			logger.Println(r.Method, r.URL.Path, r.RemoteAddr)
-		}()
-		next.ServeHTTP(w, r)
-	})
 }
