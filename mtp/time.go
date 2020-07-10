@@ -1,34 +1,10 @@
 package mtp
 
 import (
-	"sync"
 	"time"
 
 	"go.uber.org/atomic"
 )
-
-type atomicTime struct {
-	l sync.Mutex
-	t time.Time
-}
-
-func newAtomicTime(initial time.Time) *atomicTime {
-	return &atomicTime{
-		t: initial,
-	}
-}
-
-func (a *atomicTime) Store(v time.Time) {
-	a.l.Lock()
-	defer a.l.Unlock()
-	a.t = v
-}
-
-func (a *atomicTime) Load() time.Time {
-	a.l.Lock()
-	defer a.l.Unlock()
-	return a.t.Add(0)
-}
 
 type MutableTicker struct {
 	C <-chan bool
