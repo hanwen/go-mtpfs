@@ -3,26 +3,17 @@
 <body>
 <img id="lv" src="">
 <script>
-    var img = document.getElementById('lv');
-    var socket = new WebSocket("ws://" + window.location.host + "/view");
+  var img = document.getElementById('lv');
+  var socket = new WebSocket("ws://" + window.location.host + "/view");
 
-    socket.onopen = function () {
-        console.log("Connected");
-    };
+  socket.onopen = function () {
+    console.log("Connected");
+  };
 
-    socket.onmessage = function (e) {
-        console.log("Got frame");
-        img.src = "data:image/jpeg;base64," + e.data;
-    };
-
-    function send() {
-        socket.send(JSON.stringify(
-            {
-                message: input.value
-            }
-        ));
-        input.value = "";
-    };
+  socket.onmessage = function (e) {
+    console.log("Got frame");
+    img.src = "data:image/jpeg;base64," + e.data;
+  };
 </script>
 </body>
 </html>
