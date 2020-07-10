@@ -78,7 +78,7 @@
               <td id="height">0px</td>
             </tr>
             <tr>
-              <th scope="row">FPS</th>
+              <th scope="row">Frame rate</th>
               <td id="fps">0</td>
             </tr>
             </tbody>
@@ -102,9 +102,9 @@
   socket.onmessage = function (e) {
     console.log("Got a message");
     let j = JSON.parse(e.data);
-    $("#width").html(j.width);
-    $("#height").html(j.height);
-    $("#fps").html(j.fps);
+    $("#width").html(j.width.toString() + " px");
+    $("#height").html(j.height.toString() + " px");
+    $("#fps").html(j.fps.toString() + " fps");
   };
 
   $("#af-enable").on("click", function(){
