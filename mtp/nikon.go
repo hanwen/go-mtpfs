@@ -46,10 +46,6 @@ func (s *LVServer) NikonGetLiveViewStatus() (error, bool) {
 	return nil, err == io.EOF
 }
 
-/*
-
- */
-
 type liveViewRaw struct {
 	LVWidth             int16
 	LVHeight            int16

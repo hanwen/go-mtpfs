@@ -37,12 +37,6 @@ func main() {
 	vendorID := flag.String("vendor-id", "0x0", "VID of the camera to search (in hex), default=0x0 (all)")
 	productID := flag.String("product-id", "0x0", "PID of the camera to search (in hex), default=0x0 (all)")
 
-	/*
-		usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
-		deviceFilter := flag.String("dev", "",
-			"regular expression to filter device IDs, "+
-				"which are composed of manufacturer/product/serial.")
-	*/
 	flag.Parse()
 
 	debugs := map[string]bool{}
