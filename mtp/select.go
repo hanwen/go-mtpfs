@@ -9,8 +9,8 @@ import (
 	"github.com/hanwen/usb"
 )
 
-func FindDevice(ctx *gousb.Context, idv, idp uint16) (*Device2, error) {
-	var mtpDev []*Device2
+func FindDevice(ctx *gousb.Context, idv, idp uint16) (*DeviceGoUSB, error) {
+	var mtpDev []*DeviceGoUSB
 
 	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		v, p := uint16(desc.Vendor), uint16(desc.Product)
@@ -46,7 +46,7 @@ func FindDevice(ctx *gousb.Context, idv, idp uint16) (*Device2, error) {
 					}
 
 					if se.Address > 0 && fe.Address > 0 && ev.Address > 0 {
-						d := &Device2{
+						d := &DeviceGoUSB{
 							devDesc:     desc,
 							ifaceDesc:   iface,
 							sendEPDesc:  se,
@@ -86,7 +86,7 @@ func FindDevice(ctx *gousb.Context, idv, idp uint16) (*Device2, error) {
 	return found, nil
 }
 
-func candidateFromDeviceDescriptor(d *usb.Device) *Device {
+func candidateFromDeviceDescriptor(d *usb.Device) *DeviceDirect {
 	dd, err := d.GetDeviceDescriptor()
 	if err != nil {
 		return nil
@@ -101,7 +101,7 @@ func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 				if len(a.EndPoints) != 3 {
 					continue
 				}
-				m := Device{}
+				m := DeviceDirect{}
 				for _, s := range a.EndPoints {
 					switch {
 					case s.Direction() == usb.ENDPOINT_IN && s.TransferType() == usb.TRANSFER_TYPE_INTERRUPT:
@@ -127,14 +127,20 @@ func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 }
 
 // FindDevices finds likely MTP devices without opening them.
-func FindDevices(c *usb.Context) ([]*Device, error) {
+func FindDevices(c *usb.Context, vid, pid uint16) ([]*DeviceDirect, error) {
 	l, err := c.GetDeviceList()
 	if err != nil {
 		return nil, err
 	}
 
-	var cands []*Device
+	var cands []*DeviceDirect
 	for _, d := range l {
+		v, _ := d.GetDeviceDescriptor()
+		if vid != 0 && v.IdVendor != vid {
+			continue
+		} else if pid != 0 && v.IdProduct != pid {
+			continue
+		}
 		cand := candidateFromDeviceDescriptor(d)
 		if cand != nil {
 			cands = append(cands, cand)
@@ -146,13 +152,13 @@ func FindDevices(c *usb.Context) ([]*Device, error) {
 }
 
 // selectDevice finds a device that matches given pattern
-func selectDevice(cands []*Device, pattern string) (*Device, error) {
+func selectDevice(cands []*DeviceDirect, pattern string) (*DeviceDirect, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
 
-	var found []*Device
+	var found []*DeviceDirect
 	for _, cand := range cands {
 		if err := cand.Open(); err != nil {
 			continue
@@ -209,10 +215,10 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 }
 
 // SelectDevice returns opened MTP device that matches the given pattern.
-func SelectDevice(pattern string) (*Device, error) {
+func SelectDevice(vid, pid uint16) (*DeviceDirect, error) {
 	c := usb.NewContext()
 
-	devs, err := FindDevices(c)
+	devs, err := FindDevices(c, vid, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -220,5 +226,5 @@ func SelectDevice(pattern string) (*Device, error) {
 		return nil, fmt.Errorf("no MTP devices found")
 	}
 
-	return selectDevice(devs, pattern)
+	return selectDevice(devs, "")
 }

@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,8 +30,13 @@ import (
 func main() {
 	host := flag.String("host", "localhost", "hostname: default = localhost, specify 0.0.0.0 for public access")
 	port := flag.Int("port", 42839, "port: default = 42839")
+	backendGo := flag.Bool("backend-go", false, "force gousb as USB backend")
+	backendDirect := flag.Bool("backend-direct", false, "force direct access as USB backend (not available in Windows)")
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, server")
 	serverOnly := flag.Bool("server-only", false, "serve frontend without opening a DSLR (for devevelopment)")
+	vendorID := flag.String("vendor-id", "0x0", "VID of the camera to search (in hex), default=0x0 (all)")
+	productID := flag.String("product-id", "0x0", "PID of the camera to search (in hex), default=0x0 (all)")
+
 	/*
 		usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
 		deviceFilter := flag.String("dev", "",
@@ -47,51 +54,72 @@ func main() {
 		log.Level = logrus.DebugLevel
 	}
 
-	var dev *mtp.Device2
-	var err error
+	if *backendGo && *backendDirect {
+		log.WithField("prefix", "main").Fatal("Invalid flag: use -backend-go OR -backend-direct")
+	} else if *backendDirect && runtime.GOOS == "windows" {
+		log.WithField("prefix", "main").Fatal("Direct access backend is not available in Windows")
+	}
+
+	useGoUSB := false
+	if runtime.GOOS == "windows" {
+		useGoUSB = true
+	}
+
+	if *backendGo {
+		useGoUSB = true
+	} else if *backendDirect {
+		useGoUSB = false
+	}
+
+	vid, err := strconv.ParseInt(strings.ReplaceAll(*vendorID, "0x", ""), 16, 64)
+	if err != nil {
+		log.WithField("prefix", "main").Fatalf("Failed to parse VID: %s", err)
+	}
+	pid, err := strconv.ParseInt(strings.ReplaceAll(*productID, "0x", ""), 16, 64)
+	if err != nil {
+		log.WithField("prefix", "main").Fatalf("Failed to parse PID: %s", err)
+	}
+
+	var dev mtp.Device
 
 	if *serverOnly {
 		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
-	} else {
-		ctx2 := gousb.NewContext()
-		defer ctx2.Close()
+	} else if useGoUSB {
+		ctx, err := initGoUSB(debugs)
+		if err != nil {
+			log.WithField("prefix", "mtp").Fatal(err)
+		}
+		defer ctx.Close()
 
-		ctx2.Debug(999)
-
-		dev, err = mtp.FindDevice(ctx2, 0, 0)
+		devGo, err := mtp.FindDevice(ctx, uint16(vid), uint16(pid))
 		if err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Failed to find MTP device: %s", err)
 		}
-		dev.AttachLogger(log)
-		dev.Debug.MTP = debugs["mtp"]
-		dev.Debug.Data = debugs["data"]
-		dev.Debug.USB = debugs["usb"]
-		if err = dev.Configure(); err != nil {
+		devGo.AttachLogger(log)
+		devGo.Debug.MTP = debugs["mtp"]
+		devGo.Debug.Data = debugs["data"]
+		devGo.Debug.USB = debugs["usb"]
+		if err = devGo.Configure(); err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
 		}
-	}
+		defer devGo.Close()
 
-	/*
-		var dev *mtp.Device
-		var err error
-
-		if *serverOnly {
-			log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
-		} else {
-			dev, err = mtp.SelectDevice(*deviceFilter)
-			if err != nil {
-				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
-			}
-			defer dev.Close()
-			dev.MTPDebug = debugs["mtp"]
-			dev.DataDebug = debugs["data"]
-			dev.USBDebug = debugs["usb"]
-			dev.Timeout = *usbTimeout
-			if err = dev.Configure(); err != nil {
-				log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
-			}
+		dev = devGo
+	} else {
+		devDirect, err := mtp.SelectDevice(uint16(vid), uint16(pid))
+		if err != nil {
+			log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
 		}
-	*/
+		defer devDirect.Close()
+		devDirect.MTPDebug = debugs["mtp"]
+		devDirect.DataDebug = debugs["data"]
+		devDirect.USBDebug = debugs["usb"]
+		devDirect.Timeout = 5000
+		if err = devDirect.Configure(); err != nil {
+			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
+		}
+		dev = devDirect
+	}
 
 	eg, ctx := errgroup.WithContext(context.Background())
 
@@ -150,4 +178,22 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func initGoUSB(debugs map[string]bool) (*gousb.Context, error) {
+	ctx2 := gousb.NewContext()
+
+	dev, err := mtp.FindDevice(ctx2, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find MTP device: %s", err)
+	}
+	dev.AttachLogger(log)
+	dev.Debug.MTP = debugs["mtp"]
+	dev.Debug.Data = debugs["data"]
+	dev.Debug.USB = debugs["usb"]
+	if err = dev.Configure(); err != nil {
+		return nil, fmt.Errorf("configure failed: %v", err)
+	}
+
+	return ctx2, nil
 }

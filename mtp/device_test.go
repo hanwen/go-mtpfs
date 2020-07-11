@@ -19,7 +19,7 @@ func VerboseTest() bool {
 	return flag != nil && flag.Value.String() == "true"
 }
 
-func setDebug(dev *Device) {
+func setDebug(dev *DeviceDirect) {
 	dev.DataDebug = VerboseTest()
 	dev.MTPDebug = VerboseTest()
 	dev.USBDebug = VerboseTest()

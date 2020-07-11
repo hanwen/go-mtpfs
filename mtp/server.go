@@ -35,7 +35,7 @@ type LVServer struct {
 	controlClients map[*websocket.Conn]bool
 	controlLock    sync.Mutex
 
-	dev     *Device2
+	dev     Device
 	mtpLock sync.Mutex
 	dummy   bool
 
@@ -50,7 +50,7 @@ type LVServer struct {
 	log *logrus.Logger
 }
 
-func NewLVServer(dev *Device2, log *logrus.Logger, ctx context.Context) *LVServer {
+func NewLVServer(dev Device, log *logrus.Logger, ctx context.Context) *LVServer {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	return &LVServer{
@@ -409,7 +409,7 @@ func (s *LVServer) getLiveViewStatus() (bool, error) {
 		return true, nil
 	}
 
-	err, status := s.dev.NikonGetLiveViewStatus()
+	err, status := s.NikonGetLiveViewStatus()
 	if err != nil {
 		return false, fmt.Errorf("failed to get live view status: %s", err)
 	}
@@ -439,7 +439,7 @@ func (s *LVServer) getLiveViewImg() (LiveView, error) {
 		return LiveView{}, nil
 	}
 
-	lv, err := s.dev.NikonGetLiveViewImg()
+	lv, err := s.NikonGetLiveViewImg()
 	if err != nil {
 		return LiveView{}, err
 	}

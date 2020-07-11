@@ -35,9 +35,9 @@ const (
 	AFSuccess   AF = 2
 )
 
-func (d *Device2) NikonGetLiveViewStatus() (error, bool) {
+func (s *LVServer) NikonGetLiveViewStatus() (error, bool) {
 	val := StringValue{}
-	err := d.GetDevicePropValue(DPC_NIKON_LiveViewStatus, &val)
+	err := s.dev.GetDevicePropValue(DPC_NIKON_LiveViewStatus, &val)
 
 	if err != nil && err != io.EOF {
 		return err, false
@@ -47,13 +47,8 @@ func (d *Device2) NikonGetLiveViewStatus() (error, bool) {
 }
 
 /*
-func (d *Device) RunTransactionWithNoParams(code uint16) error {
-	var req, rep Container
-	req.Code = code
-	req.Param = []uint32{}
-	return d.RunTransaction(&req, &rep, nil, nil, 0)
-}
-*/
+
+ */
 
 type liveViewRaw struct {
 	LVWidth             int16
@@ -92,13 +87,13 @@ type LiveView struct {
 	JPEG []byte
 }
 
-func (d *Device2) NikonGetLiveViewImg() (LiveView, error) {
+func (s *LVServer) NikonGetLiveViewImg() (LiveView, error) {
 	var req, rep Container
 	buf := bytes.NewBuffer([]byte{})
 
 	req.Code = OC_NIKON_GetLiveViewImg
 	req.Param = []uint32{}
-	err := d.RunTransaction(&req, &rep, buf, nil, 0)
+	err := s.dev.RunTransaction(&req, &rep, buf, nil, 0)
 	if err != nil {
 		if casted, ok := err.(RCError); ok && uint16(casted) == RC_NIKON_NotLiveView {
 			return LiveView{}, fmt.Errorf("failed to obtain an image: live view is not activated")

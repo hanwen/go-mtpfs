@@ -17,8 +17,14 @@ import (
 	"github.com/hanwen/usb"
 )
 
+type Device interface {
+	RunTransactionWithNoParams(code uint16) error
+	RunTransaction(req *Container, rep *Container, dest io.Writer, src io.Reader, writeSize int64) error
+	GetDevicePropValue(propCode uint32, dest interface{}) error
+}
+
 // An MTP device.
-type Device2 struct {
+type DeviceGoUSB struct {
 	dev         *gousb.Device
 	devDesc     *gousb.DeviceDesc
 	configDesc  gousb.ConfigDesc
@@ -48,12 +54,12 @@ type Device2 struct {
 	log *logrus.Logger
 }
 
-func (d *Device2) AttachLogger(log *logrus.Logger) {
+func (d *DeviceGoUSB) AttachLogger(log *logrus.Logger) {
 	d.log = log
 }
 
 // An MTP device.
-type Device struct {
+type DeviceDirect struct {
 	h   *usb.DeviceHandle
 	dev *usb.Device
 
@@ -101,20 +107,20 @@ func (e RCError) Error() string {
 	return fmt.Sprintf("RetCode %x", uint16(e))
 }
 
-func (d *Device) fetchMaxPacketSize() int {
+func (d *DeviceDirect) fetchMaxPacketSize() int {
 	return d.dev.GetMaxPacketSize(d.fetchEP)
 }
 
-func (d *Device) sendMaxPacketSize() int {
+func (d *DeviceDirect) sendMaxPacketSize() int {
 	return d.dev.GetMaxPacketSize(d.sendEP)
 }
 
-func (d *Device2) connected() bool {
+func (d *DeviceGoUSB) connected() bool {
 	return d.sendEP != nil
 }
 
 // Close releases the interface, and closes the device.
-func (d *Device2) Close() error {
+func (d *DeviceGoUSB) Close() error {
 	if !d.connected() {
 		return nil // or error?
 	}
@@ -144,7 +150,7 @@ func (d *Device2) Close() error {
 }
 
 // Close releases the interface, and closes the device.
-func (d *Device) Close() error {
+func (d *DeviceDirect) Close() error {
 	if d.h == nil {
 		return nil // or error?
 	}
@@ -178,13 +184,13 @@ func (d *Device) Close() error {
 }
 
 // Done releases the libusb device reference.
-func (d *Device) Done() {
+func (d *DeviceDirect) Done() {
 	d.dev.Unref()
 	d.dev = nil
 }
 
 // Claims the USB interface of the device.
-func (d *Device) claim() error {
+func (d *DeviceDirect) claim() error {
 	if d.h == nil {
 		return fmt.Errorf("mtp: claim: device not open")
 	}
@@ -201,7 +207,7 @@ func (d *Device) claim() error {
 }
 
 // Open opens an MTP device.
-func (d *Device2) Open() error {
+func (d *DeviceGoUSB) Open() error {
 	// Unusual closing...
 	cfg, err := d.dev.Config(d.iConfiguration)
 	if err != nil {
@@ -267,7 +273,7 @@ func (d *Device2) Open() error {
 }
 
 // Open opens an MTP device.
-func (d *Device) Open() error {
+func (d *DeviceDirect) Open() error {
 	if d.Timeout == 0 {
 		d.Timeout = 2000
 	}
@@ -312,7 +318,7 @@ func (d *Device) Open() error {
 }
 
 // ID is the manufacturer + product + serial
-func (d *Device) ID() (string, error) {
+func (d *DeviceDirect) ID() (string, error) {
 	if d.h == nil {
 		return "", fmt.Errorf("mtp: ID: device not open")
 	}
@@ -335,7 +341,7 @@ func (d *Device) ID() (string, error) {
 	return strings.Join(ids, " "), nil
 }
 
-func (d *Device2) sendReq(req *Container) error {
+func (d *DeviceGoUSB) sendReq(req *Container) error {
 	c := usbBulkContainer{
 		usbBulkHeader: usbBulkHeader{
 			Length:        uint32(usbHdrLen + 4*len(req.Param)),
@@ -364,7 +370,7 @@ func (d *Device2) sendReq(req *Container) error {
 	return nil
 }
 
-func (d *Device) sendReq(req *Container) error {
+func (d *DeviceDirect) sendReq(req *Container) error {
 	c := usbBulkContainer{
 		usbBulkHeader: usbBulkHeader{
 			Length:        uint32(usbHdrLen + 4*len(req.Param)),
@@ -395,7 +401,7 @@ func (d *Device) sendReq(req *Container) error {
 
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
-func (d *Device2) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
+func (d *DeviceGoUSB) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
 	n, err := d.bulkTransferIn(d.fetchEP, dest[:d.fetchEPDesc.MaxPacketSize])
 	if n > 0 {
 		d.dataPrint(d.fetchEPDesc, dest[:n])
@@ -414,7 +420,7 @@ func (d *Device2) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, 
 
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
-func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
+func (d *DeviceDirect) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
 	n, err := d.h.BulkTransfer(d.fetchEP, dest[:d.fetchMaxPacketSize()], d.Timeout)
 	if n > 0 {
 		d.dataPrint(d.fetchEP, dest[:n])
@@ -431,7 +437,7 @@ func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, e
 	return buf.Bytes(), nil
 }
 
-func (d *Device2) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
+func (d *DeviceGoUSB) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
 	if h.Type != USB_CONTAINER_RESPONSE {
 		return SyncError(fmt.Sprintf("got type %d (%s) in response, want CONTAINER_RESPONSE.", h.Type, USB_names[int(h.Type)]))
 	}
@@ -455,7 +461,7 @@ func (d *Device2) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error
 	return nil
 }
 
-func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
+func (d *DeviceDirect) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
 	if h.Type != USB_CONTAINER_RESPONSE {
 		return SyncError(fmt.Sprintf("got type %d (%s) in response, want CONTAINER_RESPONSE.", h.Type, USB_names[int(h.Type)]))
 	}
@@ -493,7 +499,14 @@ func (f Catastrophic) Error() string {
 	return string(f)
 }
 
-func (d *Device2) RunTransactionWithNoParams(code uint16) error {
+func (d *DeviceGoUSB) RunTransactionWithNoParams(code uint16) error {
+	var req, rep Container
+	req.Code = code
+	req.Param = []uint32{}
+	return d.RunTransaction(&req, &rep, nil, nil, 0)
+}
+
+func (d *DeviceDirect) RunTransactionWithNoParams(code uint16) error {
 	var req, rep Container
 	req.Code = code
 	req.Param = []uint32{}
@@ -510,7 +523,7 @@ func (d *Device2) RunTransactionWithNoParams(code uint16) error {
 // closing the connection. Such errors include: invalid transaction
 // IDs, USB errors (BUSY, IO, ACCESS etc.), and receiving data for
 // operations that expect no data.
-func (d *Device2) RunTransaction(req *Container, rep *Container,
+func (d *DeviceGoUSB) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	if err := d.runTransaction(req, rep, dest, src, writeSize); err != nil {
 		_, ok2 := err.(SyncError)
@@ -533,7 +546,7 @@ func (d *Device2) RunTransaction(req *Container, rep *Container,
 // closing the connection. Such errors include: invalid transaction
 // IDs, USB errors (BUSY, IO, ACCESS etc.), and receiving data for
 // operations that expect no data.
-func (d *Device) RunTransaction(req *Container, rep *Container,
+func (d *DeviceDirect) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	if d.h == nil {
 		return fmt.Errorf("mtp: cannot run operation %v, device is not open",
@@ -553,7 +566,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 // runTransaction is like RunTransaction, but without sanity checking
 // before and after the call.
-func (d *Device2) runTransaction(req *Container, rep *Container,
+func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	var finalPacket []byte
 	if d.session != nil {
@@ -651,7 +664,7 @@ func (d *Device2) runTransaction(req *Container, rep *Container,
 
 // runTransaction is like RunTransaction, but without sanity checking
 // before and after the call.
-func (d *Device) runTransaction(req *Container, rep *Container,
+func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	var finalPacket []byte
 	if d.session != nil {
@@ -748,7 +761,7 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 }
 
 // Prints data going over the USB connection.
-func (d *Device2) dataPrint(epDesc gousb.EndpointDesc, data []byte) {
+func (d *DeviceGoUSB) dataPrint(epDesc gousb.EndpointDesc, data []byte) {
 	if !d.Debug.Data {
 		return
 	}
@@ -762,7 +775,7 @@ func (d *Device2) dataPrint(epDesc gousb.EndpointDesc, data []byte) {
 }
 
 // Prints data going over the USB connection.
-func (d *Device) dataPrint(ep byte, data []byte) {
+func (d *DeviceDirect) dataPrint(ep byte, data []byte) {
 	if !d.DataDebug {
 		return
 	}
@@ -778,7 +791,7 @@ func (d *Device) dataPrint(ep byte, data []byte) {
 const rwBufSize = 0x4000
 
 // bulkWrite returns the number of non-header bytes written.
-func (d *Device2) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
+func (d *DeviceGoUSB) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
 	packetSize := d.sendEPDesc.MaxPacketSize
 	if hdr != nil {
 		if size+usbHdrLen > 0xFFFFFFFF {
@@ -840,7 +853,7 @@ func (d *Device2) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int6
 }
 
 // bulkWrite returns the number of non-header bytes written.
-func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
+func (d *DeviceDirect) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
 	packetSize := d.sendMaxPacketSize()
 	if hdr != nil {
 		if size+usbHdrLen > 0xFFFFFFFF {
@@ -905,7 +918,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 	return n, err
 }
 
-func (d *Device2) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
+func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 	var buf [rwBufSize]byte
 	var lastRead int
 	for {
@@ -946,7 +959,7 @@ func (d *Device2) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) 
 	return n, buf[:0], err
 }
 
-func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
+func (d *DeviceDirect) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 	var buf [rwBufSize]byte
 	var lastRead int
 	for {
@@ -989,7 +1002,7 @@ func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 
 // Configure is a robust version of OpenSession. On failure, it resets
 // the device and reopens the device and the session.
-func (d *Device2) Configure() error {
+func (d *DeviceGoUSB) Configure() error {
 	if err := d.Open(); err != nil {
 		return err
 	}
@@ -1020,7 +1033,7 @@ func (d *Device2) Configure() error {
 
 // Configure is a robust version of OpenSession. On failure, it resets
 // the device and reopens the device and the session.
-func (d *Device) Configure() error {
+func (d *DeviceDirect) Configure() error {
 	if d.h == nil {
 		if err := d.Open(); err != nil {
 			return err
