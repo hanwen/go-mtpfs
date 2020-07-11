@@ -111,16 +111,17 @@ func (s *LVServer) unregisterStreamClient(c *websocket.Conn) {
 }
 
 type ControlPayload struct {
-	AFEnable    *bool  `json:"af_enable,omitempty"`
-	AFInterval  *int   `json:"af_interval,omitempty"`
-	AFAdjustNow *bool  `json:"af_adjust_now,omitempty"`
-	LRFPS       *int64 `json:"lr_fps,omitempty"`
+	AFEnable   *bool  `json:"af_enable,omitempty"`
+	AFInterval *int   `json:"af_interval,omitempty"`
+	AFFocusNow *bool  `json:"af_focus_now,omitempty"`
+	LRFPS      *int64 `json:"lr_fps,omitempty"`
 }
 
 type InfoPayload struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
-	FPS    int `json:"fps"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	FPS    int    `json:"fps"`
+	Frame  []byte `json:"frame"`
 }
 
 func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +161,7 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if p.AFAdjustNow != nil && *p.AFAdjustNow {
+		if p.AFFocusNow != nil && *p.AFFocusNow {
 			select {
 			case s.afNowChan <- true:
 			default:
@@ -294,13 +295,13 @@ func (s *LVServer) frameCaptorSakura() error {
 	}
 }
 
-func (s *LVServer) workerBroadcastFrame() error {
-	copyFrame := func() []byte {
-		s.frameLock.Lock()
-		defer s.frameLock.Unlock()
-		return s.Frame[:]
-	}
+func (s *LVServer) copyFrame() []byte {
+	s.frameLock.Lock()
+	defer s.frameLock.Unlock()
+	return s.Frame[:]
+}
 
+func (s *LVServer) workerBroadcastFrame() error {
 	broadcast := func(jpeg []byte) {
 		s.streamLock.Lock()
 		defer s.streamLock.Unlock()
@@ -323,7 +324,7 @@ func (s *LVServer) workerBroadcastFrame() error {
 		}
 
 		var jpeg []byte
-		jpeg = copyFrame()
+		jpeg = s.copyFrame()
 		if len(jpeg) == 0 {
 			continue
 		}
@@ -340,6 +341,7 @@ func (s *LVServer) workerBroadcastInfo() error {
 		defer s.controlLock.Unlock()
 		defer s.infoLock.Unlock()
 
+		s.info.Frame = s.copyFrame()
 		s.info.FPS = int(s.fpsRate.Rate())
 
 		for c := range s.controlClients {

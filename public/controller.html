@@ -35,6 +35,10 @@
     table {
       border-bottom: 1px solid #dee2e6;
     }
+
+    #preview {
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -57,7 +61,7 @@
             <button id="af-enable" type="button" class="btn btn-primary">Enable</button>
             <button id="af-disable" type="button" class="btn btn-secondary">Disable</button>
           </div>
-          <button id="af-now" class="btn btn-success btn-block">Adjust Now</button>
+          <button id="af-now" class="btn btn-success btn-block">Focus Now</button>
         </div>
       </div>
     </div>
@@ -103,6 +107,7 @@
             </tr>
             </tbody>
           </table>
+          <img id="preview" src="" alt="preview">
         </div>
       </div>
     </div>
@@ -122,6 +127,7 @@
     $("#width").html(j.width.toString() + " px");
     $("#height").html(j.height.toString() + " px");
     $("#fps").html(j.fps.toString() + " fps");
+    $("#preview").attr("src", "data:image/jpeg;base64," + j.frame);
   };
 
   $("#af-enable").on("click", function(){
@@ -140,7 +146,7 @@
 
   $("#af-now").on("click", function(){
     socket.send(JSON.stringify({
-      "af_adjust_now": true,
+      "af_focus_now": true,
     }))
   });
 
