@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/gousb"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hanwen/go-mtpfs/mtp"
@@ -28,10 +30,12 @@ func main() {
 	port := flag.Int("port", 42839, "port: default = 42839")
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, server")
 	serverOnly := flag.Bool("server-only", false, "serve frontend without opening a DSLR (for devevelopment)")
-	usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
-	deviceFilter := flag.String("dev", "",
-		"regular expression to filter device IDs, "+
-			"which are composed of manufacturer/product/serial.")
+	/*
+		usbTimeout := flag.Int("usb-timeout", 5000, "timeout in milliseconds")
+		deviceFilter := flag.String("dev", "",
+			"regular expression to filter device IDs, "+
+				"which are composed of manufacturer/product/serial.")
+	*/
 	flag.Parse()
 
 	debugs := map[string]bool{}
@@ -43,25 +47,51 @@ func main() {
 		log.Level = logrus.DebugLevel
 	}
 
-	var dev *mtp.Device
+	var dev *mtp.Device2
 	var err error
 
 	if *serverOnly {
 		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
 	} else {
-		dev, err = mtp.SelectDevice(*deviceFilter)
+		ctx2 := gousb.NewContext()
+		defer ctx2.Close()
+
+		ctx2.Debug(999)
+
+		dev, err = mtp.FindDevice(ctx2, 0, 0)
 		if err != nil {
-			log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
+			log.WithField("prefix", "mtp").Fatalf("Failed to find MTP device: %s", err)
 		}
-		defer dev.Close()
-		dev.MTPDebug = debugs["mtp"]
-		dev.DataDebug = debugs["data"]
-		dev.USBDebug = debugs["usb"]
-		dev.Timeout = *usbTimeout
+		dev.AttachLogger(log)
+		dev.Debug.MTP = debugs["mtp"]
+		dev.Debug.Data = debugs["data"]
+		dev.Debug.USB = debugs["usb"]
 		if err = dev.Configure(); err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
 		}
 	}
+
+	/*
+		var dev *mtp.Device
+		var err error
+
+		if *serverOnly {
+			log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
+		} else {
+			dev, err = mtp.SelectDevice(*deviceFilter)
+			if err != nil {
+				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
+			}
+			defer dev.Close()
+			dev.MTPDebug = debugs["mtp"]
+			dev.DataDebug = debugs["data"]
+			dev.USBDebug = debugs["usb"]
+			dev.Timeout = *usbTimeout
+			if err = dev.Configure(); err != nil {
+				log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
+			}
+		}
+	*/
 
 	eg, ctx := errgroup.WithContext(context.Background())
 

@@ -3,6 +3,7 @@ module github.com/hanwen/go-mtpfs
 go 1.12
 
 require (
+	github.com/google/gousb v2.1.0+incompatible
 	github.com/gorilla/websocket v1.4.2
 	github.com/hanwen/usb v0.0.0-20141217151552-69aee4530ac7
 	github.com/mattn/go-colorable v0.1.7 // indirect

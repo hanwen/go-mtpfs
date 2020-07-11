@@ -35,7 +35,7 @@ const (
 	AFSuccess   AF = 2
 )
 
-func (d *Device) NikonGetLiveViewStatus() (error, bool) {
+func (d *Device2) NikonGetLiveViewStatus() (error, bool) {
 	val := StringValue{}
 	err := d.GetDevicePropValue(DPC_NIKON_LiveViewStatus, &val)
 
@@ -46,12 +46,14 @@ func (d *Device) NikonGetLiveViewStatus() (error, bool) {
 	return nil, err == io.EOF
 }
 
+/*
 func (d *Device) RunTransactionWithNoParams(code uint16) error {
 	var req, rep Container
 	req.Code = code
 	req.Param = []uint32{}
 	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
+*/
 
 type liveViewRaw struct {
 	LVWidth             int16
@@ -90,7 +92,7 @@ type LiveView struct {
 	JPEG []byte
 }
 
-func (d *Device) NikonGetLiveViewImg() (LiveView, error) {
+func (d *Device2) NikonGetLiveViewImg() (LiveView, error) {
 	var req, rep Container
 	buf := bytes.NewBuffer([]byte{})
 

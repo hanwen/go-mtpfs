@@ -35,7 +35,7 @@ type LVServer struct {
 	controlClients map[*websocket.Conn]bool
 	controlLock    sync.Mutex
 
-	dev     *Device
+	dev     *Device2
 	mtpLock sync.Mutex
 	dummy   bool
 
@@ -50,7 +50,7 @@ type LVServer struct {
 	log *logrus.Logger
 }
 
-func NewLVServer(dev *Device, log *logrus.Logger, ctx context.Context) *LVServer {
+func NewLVServer(dev *Device2, log *logrus.Logger, ctx context.Context) *LVServer {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	return &LVServer{
@@ -194,11 +194,11 @@ func (s *LVServer) Run() error {
 	}()
 
 	s.eg.Go(s.workerLV)
-	s.eg.Go(s.workerAF)
+	//s.eg.Go(s.workerAF)
 	time.Sleep(500 * time.Millisecond)
 	s.eg.Go(s.frameCaptorSakura)
 	s.eg.Go(s.workerBroadcastFrame)
-	s.eg.Go(s.workerBroadcastInfo)
+	//s.eg.Go(s.workerBroadcastInfo)
 	return s.eg.Wait()
 }
 
@@ -225,6 +225,7 @@ func (s *LVServer) workerLV() error {
 		if err != nil {
 			s.log.WithField("prefix", "LV.workerLV").Warning(err)
 		}
+		return nil
 	}
 }
 

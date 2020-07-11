@@ -5,8 +5,86 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/gousb"
 	"github.com/hanwen/usb"
 )
+
+func FindDevice(ctx *gousb.Context, idv, idp uint16) (*Device2, error) {
+	var mtpDev []*Device2
+
+	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
+		v, p := uint16(desc.Vendor), uint16(desc.Product)
+		if idv != 0 && idp != 0 && (v != idv || p != idp) {
+			return false
+		}
+
+		for _, conf := range desc.Configs {
+			for _, iface := range conf.Interfaces {
+				hasImageClass := false
+				for _, alt := range iface.AltSettings {
+					hasImageClass = hasImageClass || alt.Class == gousb.ClassPTP
+				}
+				if !hasImageClass {
+					continue
+				}
+
+				for _, alt := range iface.AltSettings {
+					if len(alt.Endpoints) != 3 {
+						continue
+					}
+
+					var ev, fe, se gousb.EndpointDesc
+					for _, ep := range alt.Endpoints {
+						switch {
+						case ep.Direction == gousb.EndpointDirectionIn && ep.TransferType == gousb.TransferTypeInterrupt:
+							ev = ep
+						case ep.Direction == gousb.EndpointDirectionIn && ep.TransferType == gousb.TransferTypeBulk:
+							fe = ep
+						case ep.Direction == gousb.EndpointDirectionOut && ep.TransferType == gousb.TransferTypeBulk:
+							se = ep
+						}
+					}
+
+					if se.Address > 0 && fe.Address > 0 && ev.Address > 0 {
+						d := &Device2{
+							devDesc:     desc,
+							ifaceDesc:   iface,
+							sendEPDesc:  se,
+							fetchEPDesc: fe,
+							eventEPDesc: ev,
+							configDesc:  conf,
+
+							iConfiguration: conf.Number,
+							iInterface:     iface.Number,
+							iAltSetting:    alt.Number,
+						}
+						mtpDev = append(mtpDev, d)
+						return true
+					}
+				}
+			}
+		}
+		return false
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate USB devices: %s", err)
+	}
+
+	if len(mtpDev) == 0 {
+		return nil, fmt.Errorf("found no MTP devices")
+	} else if len(mtpDev) > 1 {
+		var s []string
+		for i, d := range mtpDev {
+			s = append(s, fmt.Sprintf("%d. %04x:%04x", i+1, d.devDesc.Vendor, d.devDesc.Product))
+		}
+		return nil, fmt.Errorf("found multiple MTP devices: %s", strings.Join(s, ", "))
+	}
+
+	found := mtpDev[0]
+	found.dev = devs[0]
+	return found, nil
+}
 
 func candidateFromDeviceDescriptor(d *usb.Device) *Device {
 	dd, err := d.GetDeviceDescriptor()
