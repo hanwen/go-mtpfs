@@ -18,7 +18,7 @@ func NewMutableTicker(d time.Duration) *MutableTicker {
 	mt := &MutableTicker{
 		C: c,
 		d: atomic.NewInt64(int64(d)),
-		e: atomic.NewBool(true),
+		e: atomic.NewBool(false),
 		i: make(chan bool, 1),
 	}
 
