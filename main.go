@@ -46,6 +46,8 @@ func main() {
 
 	if _, ok := debugs["server"]; ok {
 		log.Level = logrus.DebugLevel
+	} else {
+		log.Level = logrus.InfoLevel
 	}
 
 	if *backendGo && *backendDirect {
@@ -85,7 +87,7 @@ func main() {
 		}
 		defer ctx.Close()
 
-		devGo, err := mtp.FindDevice(ctx, uint16(vid), uint16(pid))
+		devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
 		if err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Failed to find MTP device: %s", err)
 		}
@@ -100,7 +102,7 @@ func main() {
 
 		dev = devGo
 	} else {
-		devDirect, err := mtp.SelectDevice(uint16(vid), uint16(pid))
+		devDirect, err := mtp.SelectDeviceDirect(uint16(vid), uint16(pid))
 		if err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
 		}
@@ -177,7 +179,7 @@ func main() {
 func initGoUSB(debugs map[string]bool) (*gousb.Context, error) {
 	ctx2 := gousb.NewContext()
 
-	dev, err := mtp.FindDevice(ctx2, 0, 0)
+	dev, err := mtp.SelectDeviceGoUSB(ctx2, 0, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find MTP device: %s", err)
 	}

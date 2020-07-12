@@ -198,11 +198,11 @@ func (s *LVServer) Run() error {
 	}()
 
 	s.eg.Go(s.workerLV)
-	//s.eg.Go(s.workerAF)
+	s.eg.Go(s.workerAF)
 	time.Sleep(500 * time.Millisecond)
 	s.eg.Go(s.frameCaptorSakura)
 	s.eg.Go(s.workerBroadcastFrame)
-	//s.eg.Go(s.workerBroadcastInfo)
+	s.eg.Go(s.workerBroadcastInfo)
 	return s.eg.Wait()
 }
 
@@ -229,7 +229,6 @@ func (s *LVServer) workerLV() error {
 		if err != nil {
 			s.log.WithField("prefix", "LV.workerLV").Warning(err)
 		}
-		return nil
 	}
 }
 
