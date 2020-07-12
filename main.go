@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -52,19 +51,6 @@ func main() {
 
 	if *backendGo && *backendDirect {
 		log.WithField("prefix", "main").Fatal("Invalid flag: use -backend-go OR -backend-direct")
-	} else if *backendDirect && runtime.GOOS == "windows" {
-		log.WithField("prefix", "main").Fatal("Direct access backend is not available in Windows")
-	}
-
-	useGoUSB := false
-	if runtime.GOOS == "windows" {
-		useGoUSB = true
-	}
-
-	if *backendGo {
-		useGoUSB = true
-	} else if *backendDirect {
-		useGoUSB = false
 	}
 
 	vid, err := strconv.ParseInt(strings.ReplaceAll(*vendorID, "0x", ""), 16, 64)
@@ -80,7 +66,7 @@ func main() {
 
 	if *serverOnly {
 		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
-	} else if useGoUSB {
+	} else if *backendGo {
 		ctx, err := initGoUSB(debugs)
 		if err != nil {
 			log.WithField("prefix", "mtp").Fatal(err)
