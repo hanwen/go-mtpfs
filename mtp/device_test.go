@@ -26,7 +26,7 @@ func setDebug(dev *DeviceDirect) {
 }
 
 func TestAndroid(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestAndroid(t *testing.T) {
 }
 
 func TestDeviceProperties(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestDeviceProperties(t *testing.T) {
 }
 
 func TestDeviceInfo(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestDeviceInfo(t *testing.T) {
 }
 
 func TestDeviceStorage(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect("")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,8 @@ import (
 	"github.com/hanwen/usb"
 )
 
-// An MTP device.
+// DeviceDirect implements mtp.Device.
+// It accesses libusb driver via hanwen/usb.
 type DeviceDirect struct {
 	h   *usb.DeviceHandle
 	dev *usb.Device

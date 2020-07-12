@@ -9,12 +9,12 @@ import (
 	"github.com/hanwen/usb"
 )
 
-func FindDevice(ctx *gousb.Context, idv, idp uint16) (*DeviceGoUSB, error) {
+func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error) {
 	var mtpDev []*DeviceGoUSB
 
 	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		v, p := uint16(desc.Vendor), uint16(desc.Product)
-		if idv != 0 && idp != 0 && (v != idv || p != idp) {
+		if vid != 0 && pid != 0 && (v != vid || p != pid) {
 			return false
 		}
 
@@ -126,8 +126,8 @@ func candidateFromDeviceDescriptor(d *usb.Device) *DeviceDirect {
 	return nil
 }
 
-// FindDevices finds likely MTP devices without opening them.
-func FindDevices(c *usb.Context, vid, pid uint16) ([]*DeviceDirect, error) {
+// findDevices finds likely MTP devices without opening them.
+func findDevices(c *usb.Context, vid, pid uint16) ([]*DeviceDirect, error) {
 	l, err := c.GetDeviceList()
 	if err != nil {
 		return nil, err
@@ -214,11 +214,11 @@ func selectDevice(cands []*DeviceDirect, pattern string) (*DeviceDirect, error) 
 	return found[0], nil
 }
 
-// SelectDevice returns opened MTP device that matches the given pattern.
-func SelectDevice(vid, pid uint16) (*DeviceDirect, error) {
+// SelectDeviceDirect returns opened MTP device that matches the given pattern.
+func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
 	c := usb.NewContext()
 
-	devs, err := FindDevices(c, vid, pid)
+	devs, err := findDevices(c, vid, pid)
 	if err != nil {
 		return nil, err
 	}

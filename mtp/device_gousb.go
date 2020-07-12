@@ -17,7 +17,8 @@ import (
 	"github.com/hanwen/usb"
 )
 
-// An MTP device.
+// DeviceGoUSB implements mtp.Device.
+// It accesses libusb driver via gousb.
 type DeviceGoUSB struct {
 	dev         *gousb.Device
 	devDesc     *gousb.DeviceDesc
@@ -467,6 +468,14 @@ func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err err
 		return n, buf[:nullReadSize], err
 	}
 	return n, buf[:0], err
+}
+
+func (d *DeviceGoUSB) bulkTransferIn(ep *gousb.InEndpoint, buf []byte) (int, error) {
+	return ep.Read(buf)
+}
+
+func (d *DeviceGoUSB) bulkTransferOut(ep *gousb.OutEndpoint, buf []byte) (int, error) {
+	return ep.Write(buf)
 }
 
 // Configure is a robust version of OpenSession. On failure, it resets
