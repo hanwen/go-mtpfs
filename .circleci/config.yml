@@ -5,9 +5,10 @@ orbs:
 
 workflows:
   version: 2
-  build-win:
+  build:
     jobs:
       - build-win
+      - build-linux
 
 
 jobs:
@@ -47,3 +48,18 @@ jobs:
             PATH: <<parameters.msyspath>>
           command: |
             go
+
+  build-linux:
+    docker:
+      - image: circleci/golang:buster
+
+    steps:
+      - checkout
+      - run:
+          name: Install prerequisites
+          command: sudo apt install libusb-1.0.0-dev
+      - run:
+          name: Build
+          environment:
+            CGO_CFLAGS: -Wno-deprecated-declarations
+          command: go build .
