@@ -1,5 +1,6 @@
 *~
 /mtplvcap
+.DS_Store
 *.swp
 
 # Created by https://www.toptal.com/developers/gitignore/api/jetbrains+all,golang
