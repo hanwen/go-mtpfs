@@ -29,7 +29,7 @@ import (
 func main() {
 	host := flag.String("host", "localhost", "hostname: default = localhost, specify 0.0.0.0 for public access")
 	port := flag.Int("port", 42839, "port: default = 42839")
-	backendGo := flag.Bool("backend-go", false, "force gousb as USB backend (not recommended)")
+	backendGo := flag.Bool("backend-go", false, "use gousb as a libusb wrapper (not recommended)")
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, server")
 	serverOnly := flag.Bool("server-only", false, "serve frontend without opening a DSLR (for devevelopment)")
 	vendorID := flag.String("vendor-id", "0x0", "VID of the camera to search (in hex), default=0x0 (all)")
