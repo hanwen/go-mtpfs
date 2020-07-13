@@ -4,7 +4,7 @@
 
 mtplvcap is a multi-platform (Windows/Mac/Linux) relay that broadcasts Live View stream of Nikon DSLRs. 
 
-Combination of mtplvcap and OBS makes it possible to turn Nikon DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
+Combination of mtplvcap and OBS will turn your DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
 
 Proceed to "How to install" and "Usage" to get started.
 
@@ -29,10 +29,10 @@ The snippets described here should run as-is and copy-and-pastable.
 
 Note: **[Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is available! Follow the steps only in `Replace Nikon DSLR driver` and skip `Build in MSYS2` if you use this.**
 
+**Caution! It is required to replace the pre-installed MTP driver with libusb driver. Your Nikon DSLR will not be recognized as an MTP device and will not behave like before. I'm not responsible of any troubles regarding drivers.**
+
 
 #### Replace Nikon DSLR driver
-
-Caution: After this setup, your Nikon DSLR will not be recognized as an ordinary MTP device and will behave like a generic libusb device. I'm not responsible of any troubles regarding drivers.
 
 1. Connect your Nikon DSLR to the PC
 1. Download Zadig from [here](https://zadig.akeo.ie/) and launch it
