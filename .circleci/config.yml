@@ -9,12 +9,41 @@ workflows:
     jobs:
       - build-win
 
+
 jobs:
   build-win:
     executor:
       name: win/default
       size: "medium"
 
+    parameters:
+      msyspath:
+        type: string
+        default: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
+
     steps:
       - checkout
-      - run: Write-Host 'Hello, Windows'
+      - run:
+          name: Install MSYS2
+          shell: powershell.exe
+          command: |
+            choco install -y msys2
+      - run:
+          name: Install prerequisites
+          shell: C:\\tools\\msys64\\usr\\bin\\bash
+          environment:
+            PATH: <<parameters.msyspath>>
+          command: |
+            pacman -Sy --noconfirm \\
+            mingw-w64-x86_64-toolchain \\
+            mingw-w64-x86_64-libusb \\
+            mingw-w64-x86_64-go \\
+            mingw-w64-x86_64-pkg-config \\
+            git
+      - run:
+          name: Run go
+          shell: C:\\tools\\msys64\\usr\\bin\\bash
+          environment:
+            PATH: <<parameters.msyspath>>
+          command: |
+            go
