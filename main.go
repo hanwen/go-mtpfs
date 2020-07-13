@@ -21,8 +21,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/hanwen/go-mtpfs/mtp"
-	"github.com/hanwen/go-mtpfs/public"
+	"github.com/puhitaku/mtplvcap/mtp"
+	"github.com/puhitaku/mtplvcap/public"
 	"github.com/sirupsen/logrus"
 )
 

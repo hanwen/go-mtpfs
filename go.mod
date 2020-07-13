@@ -1,4 +1,4 @@
-module github.com/hanwen/go-mtpfs
+module github.com/puhitaku/mtplvcap
 
 go 1.12
 
