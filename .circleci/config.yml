@@ -33,21 +33,21 @@ jobs:
           name: Install prerequisites
           shell: C:\\tools\\msys64\\usr\\bin\\bash
           environment:
-            PATH: <<parameters.msyspath>>
+            PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
           command: |
-            pacman -Sy --noconfirm \\
+            /c/tools/msys64/usr/bin/pacman -Sy --noconfirm \\
             mingw-w64-x86_64-toolchain \\
             mingw-w64-x86_64-libusb \\
             mingw-w64-x86_64-go \\
             mingw-w64-x86_64-pkg-config \\
             git
       - run:
-          name: Run go
+          name: Build
           shell: C:\\tools\\msys64\\usr\\bin\\bash
           environment:
-            PATH: <<parameters.msyspath>>
+            PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
           command: |
-            go
+            go build .
 
   build-linux:
     docker:
