@@ -29,8 +29,7 @@ import (
 func main() {
 	host := flag.String("host", "localhost", "hostname: default = localhost, specify 0.0.0.0 for public access")
 	port := flag.Int("port", 42839, "port: default = 42839")
-	backendGo := flag.Bool("backend-go", false, "force gousb as USB backend")
-	backendDirect := flag.Bool("backend-direct", false, "force direct access as USB backend (not available in Windows)")
+	backendGo := flag.Bool("backend-go", false, "force gousb as USB backend (not recommended)")
 	debug := flag.String("debug", "", "comma-separated list of debugging options: usb, data, mtp, server")
 	serverOnly := flag.Bool("server-only", false, "serve frontend without opening a DSLR (for devevelopment)")
 	vendorID := flag.String("vendor-id", "0x0", "VID of the camera to search (in hex), default=0x0 (all)")
@@ -47,10 +46,6 @@ func main() {
 		log.Level = logrus.DebugLevel
 	} else {
 		log.Level = logrus.InfoLevel
-	}
-
-	if *backendGo && *backendDirect {
-		log.WithField("prefix", "main").Fatal("Invalid flag: use -backend-go OR -backend-direct")
 	}
 
 	vid, err := strconv.ParseInt(strings.ReplaceAll(*vendorID, "0x", ""), 16, 64)
