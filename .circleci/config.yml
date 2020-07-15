@@ -57,8 +57,11 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Update Homebrew
+          command: brew update
+      - run:
           name: Install prerequisites
-          command: brew install libusb golang git
+          command: brew install libusb golang
       - run:
           name: Build
           environment:
