@@ -16,7 +16,7 @@ jobs:
   build-win:
     executor:
       name: win/default
-      size: "medium"
+      size: medium
 
     parameters:
       msyspath:
@@ -52,7 +52,8 @@ jobs:
 
   build-mac:
     macos:
-      xcode: "10.1.0"
+      xcode: 10.1.0
+    resource_class: medium
     steps:
       - checkout
       - run:
@@ -67,7 +68,7 @@ jobs:
   build-linux:
     docker:
       - image: circleci/golang:buster
-
+    resource_class: small
     steps:
       - checkout
       - run:
