@@ -7,7 +7,8 @@ workflows:
   version: 2
   build:
     jobs:
-      - build-win
+      #- build-win
+      - build-mac
       - build-linux
 
 
@@ -48,6 +49,20 @@ jobs:
             PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
           command: |
             go build .
+
+  build-mac:
+    macos:
+      xcode: "10.1.0"
+    steps:
+      - checkout
+      - run:
+          name: Install prerequisites
+          command: brew install libusb golang git
+      - run:
+          name: Build
+          environment:
+            CGO_CFLAGS: -Wno-deprecated-declarations
+          command: go build .
 
   build-linux:
     docker:
