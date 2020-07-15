@@ -61,7 +61,7 @@ jobs:
           command: brew update
       - run:
           name: Install prerequisites
-          command: brew install libusb golang
+          command: brew install libusb golang pkg-config
       - run:
           name: Build
           environment:
