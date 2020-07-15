@@ -2,6 +2,8 @@
 
 ![Diagram](./img/totemo_wakariyasui_zu.png)
 
+**日本語は[こちら](./README.ja.md)**
+
 mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live View of Nikon DSLRs via WebSocket. 
 
 mtplvcap + OBS turn your DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
@@ -53,7 +55,8 @@ Continue with care.**
 
     <img alt="Device Manager after the installation" src="./img/devmgmt.png" width="400px">
 
-#### 2a. Use a pre-built binary
+
+#### 2a. Use a pre-built executable
 
 1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-windows-amd64.zip).
 1. Extract the ZIP
@@ -115,7 +118,7 @@ Continue with care.**
     ```
 
 
-#### 2a. Use a pre-built binary
+#### 2a. Use a pre-built executable
 
 1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-mac-xxxxxxx-amd64.zip).
 1. Extract the ZIP and launch it
@@ -129,9 +132,6 @@ Continue with care.**
 
 
 #### 2. Built it yourself
-
-**Good news: [Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is available.
-Please follow the build steps if you want a cutting-edge build.**
 
 1. Install dependencies
 
@@ -161,9 +161,9 @@ Please follow the build steps if you want a cutting-edge build.**
 
 #### Linux (e.g. Ubuntu/Debian)
 
-I have no pre-built binary for Linux as environments vary widely.
+I have no pre-built executables for Linux as environments vary widely.
 
-1. Install prerequisites
+1. Install dependencies
     ```sh
     sudo apt install golang-go libusb-1.0.0-dev
     ```
@@ -199,10 +199,10 @@ Usage of ./mtplvcap:
         VID of the camera to search (in hex), default=0x0 (all) (default "0x0")
 ```
 
+
 #### Watch incoming frames
 
  - `http://localhost:42839/view` will show the captured frames
- - Specify `-host 0.0.0.0` to allow access from other hosts
 
 
 #### Control your DSLR on your browser
@@ -232,7 +232,9 @@ Usage of ./mtplvcap:
 1. Add a "Browser" source
 
     <img alt="Add Browser source" src="./img/obs_3.png" width="400px">
-    
+
+1. Set "Width" and "Height" to the same value of "Video" preference
+
 1. Set `http://localhost:42839/view` as the URL
 
     <img alt="Set URL" src="./img/obs_4.png" width="400px">
@@ -255,7 +257,7 @@ Usage of ./mtplvcap:
     - It will result in a fail of the next launch and might require you to re-plug the camera in.
     - It's a known behavior and is not a bug of mtplvcap.
     - Please install winpty with pacman and run via it `winpty ./mtplvcap`
-    - Running mtplvcap directly from Explorer with double-click runs without this problem.
+    - Running mtplvcap directly from Explorer with double-click runs without this problem. Please stop it with Ctrl-C, not by pressing the close button.
 
 
 ### Feedback
