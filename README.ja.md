@@ -1,6 +1,8 @@
-## Introduction
+## イントロダクション
 
 ![Diagram](./img/totemo_wakariyasui_zu.png)
+
+**English version is [here](./README.md)**
 
 mtplvcapは、NikonのカメラのLive ViewをWebSocketでブラウザにリレーするマルチプラットフォーム対応 (Windows, Mac, Linux) のソフトです。
 
