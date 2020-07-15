@@ -37,11 +37,11 @@ Continue with care.**
 1. Download Zadig from [here](https://zadig.akeo.ie/) and launch it
 1. Tick `List All Devices`
 
-    ![Tick List All Devices](./img/zadig_1.png) 
+    <img alt="Tick List All Devices" src="./img/zadig_1.png" width="400px">
 
 1. Make sure that your camera is in the list upper in the window and choose it
 
-    ![Choose the DSLR in the list](./img/zadig_2.png)
+    <img alt="Choose the DSLR in the list" src="./img/zadig_2.png" width="400px">
 
     (This screenshot was taken after the libusb driver is installed and will differ from what you see)
 
@@ -51,7 +51,7 @@ Continue with care.**
 1. Click `Replace Driver` button and wait it finishes the installation
     - Optionally, open the Device Manager and make sure it's installed
 
-    ![Device Manager after the installation](./img/devmgmt.png)
+    <img alt="Device Manager after the installation" src="./img/devmgmt.png" width="400px">
 
 #### 2a. Use a pre-built binary
 
@@ -225,20 +225,24 @@ Usage of ./mtplvcap:
 
 1. Adjust resolutions to fit with LV frame dimension
     - Launch mtplvcap and open `localhost:42839` to get the actual resolution
-    ![Controller view](./img/obs_1.png)
-    ![Adjust resolution](./img/obs_2.png)
+
+    <img alt="Controller view" src="./img/obs_1.png" width="400px">
+    <img alt="Adjust resolution" src="./img/obs_2.png" width="400px">
 
 1. Add a "Browser" source
-    ![Add Browser source](./img/obs_3.png)
+
+    <img alt="Add Browser source" src="./img/obs_3.png" width="400px">
     
 1. Set `http://localhost:42839/view` as the URL
-    ![Add Browser source](./img/obs_4.png)
+
+    <img alt="Set URL" src="./img/obs_4.png" width="400px">
 
 1. Enable the virtual camera and configure chat apps
 
 1. BOOM!
-    ![Hi!](./img/obs_5.png)
-    ![Zoom!](./img/obs_6.png)
+
+    <img alt="Hi!" src="./img/obs_5.png" width="400px">
+    <img alt="Zoom!" src="./img/obs_6.png" width="400px">
 
 
 ### Caveats / Known Issues
