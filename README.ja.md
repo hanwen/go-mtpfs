@@ -28,7 +28,7 @@ OS:
 
 ### Windows
 
-**重要！ Windowsでは、カメラを接続すると自動でインストールされるMTPドライバをlibusbの汎用ドライバと置き換える必要があります。
+**重要！ Windowsでは、カメラを接続して自動でインストールされるドライバをlibusbの汎用ドライバで置き換える必要があります。
 置き換えると、手動でドライバを指定し直さない限りカメラはMTPデバイスとして認識されなくなります。以上を認識の上で続行してください。**
 
 
@@ -101,7 +101,7 @@ OS:
     - カメラのシャッターが開くのを確認してください
 
 1. ゴール！
-    - ビルドされたバイナリは移動したり再配布することが可能です
+    - ビルドされたバイナリは移動したり再配布したりすることが可能です
     - `C:\msys64\mingw64\bin\libusb-1.0.dll` から `libusb-1.0.dll` を `mtplvcap.exe` と同じディレクトリにコピーしてくればどこでも起動できます
 
 
@@ -119,7 +119,7 @@ OS:
 
 #### 2a. ビルド済みの実行ファイルを使う
 
-1. Windows用の実行ファイル (mtplvcap-xxxxxxx-windows-amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
+1. macOS用の実行ファイル (mtplvcap-xxxxxxx-mac-xxxxxxx-amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
 1. ZIPを展開して起動します
 
     ```sh
@@ -127,6 +127,7 @@ OS:
     ./mtplvcap
     ```
 
+    - セキュリティのアラートが出て実行できない場合は[ここ](https://github.com/hashicorp/terraform/issues/23033#issuecomment-542302933)の手順でブロックを解除してください
     - カメラのシャッターが開くのを確認してください
 
 
@@ -163,7 +164,7 @@ OS:
 1. ゴール！
 
 
-#### Linux (e.g. Ubuntu/Debian)
+### Linux (e.g. Ubuntu/Debian)
 
 Linuxはディストリによって環境が大きく異なるためビルド済みバイナリは用意していません。
 
@@ -214,7 +215,7 @@ Usage of ./mtplvcap:
 #### ブラウザでカメラを制御する
 
  - `http://localhost:42839` を開くとカメラを制御するコントローラーが使えます
- - "Auto Focus" セクションは定期的もしくは手動でAFを動作させられます
+ - "Auto Focus" セクションは一定間隔もしくは手動でAFを動作させられます
  - "Rate Limit" セクションはフレームレートの上限を設定でき、CPU消費量の削減に使えます
  - "Information" セクションはキャプチャされているフレームの大きさ、FPS、プレビューが見えます
 

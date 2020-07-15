@@ -154,12 +154,13 @@ Continue with care.**
     ./mtplvcap -debug server
     ```
 
+    - If macOS blocks the downloaded executable and show alerts, please follow [this procedure](https://github.com/hashicorp/terraform/issues/23033#issuecomment-542302933) to proceed
     - Make sure your camera opens up its shutter
 
 1. Done!
 
 
-#### Linux (e.g. Ubuntu/Debian)
+### Linux (e.g. Ubuntu/Debian)
 
 I have no pre-built executables for Linux as environments vary widely.
 
