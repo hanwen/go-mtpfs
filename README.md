@@ -2,17 +2,16 @@
 
 ![Diagram](./img/totemo_wakariyasui_zu.png)
 
-mtplvcap is a multi-platform (Windows/Mac/Linux) relay that broadcasts Live View stream of Nikon DSLRs. 
+mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live View of Nikon DSLRs via WebSocket. 
 
-Combination of mtplvcap and OBS will turn your DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
-
-Proceed to "How to install" and "Usage" to get started.
+mtplvcap + OBS turn your DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
 
 
 ## Verified environments
 
 Cameras:
  - Nikon D5300
+ - I welcome feedback! Please tell me if your camera works or not.
 
 OSes:
  - Windows 10 version 1909, OS build 18363.900, MSYS2 (MinGW x86_64), amd64
@@ -22,17 +21,17 @@ OSes:
 
 ## How to install
 
-The snippets described here should run as-is and copy-and-pastable.
+Notice: Snippets described here should run as-is and copy-and-pastable.
 
 
 ### Windows
 
-Note: **[Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is available! Follow the steps only in `Replace Nikon DSLR driver` and skip `Build in MSYS2` if you use this.**
+**Important: For Windows, you have to replace a pre-installed MTP driver with a libusb driver.
+Your PC will no longer recognize the camera as an MTP device unless you re-install it manually.
+Continue with care.**
 
-**Caution! It is required to replace the pre-installed MTP driver with libusb driver. Your Nikon DSLR will not be recognized as an MTP device and will not behave like before. I'm not responsible of any troubles regarding drivers.**
 
-
-#### Replace Nikon DSLR driver
+#### 1. Replace Nikon DSLR driver
 
 1. Connect your Nikon DSLR to the PC
 1. Download Zadig from [here](https://zadig.akeo.ie/) and launch it
@@ -46,7 +45,7 @@ Note: **[Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is ava
 
     (This screenshot was taken after the libusb driver is installed and will differ from what you see)
 
-1. Choose `libusb-win32 (vX.X.X.X)` in the input box at middle of the window
+1. Choose `libusb-win32 (vX.X.X.X)` in the input box in the middle of the window
     - Please keep in mind that `WinUSB` does NOT work. Be careful not to choose it.
 
 1. Click `Replace Driver` button and wait it finishes the installation
@@ -54,12 +53,19 @@ Note: **[Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is ava
 
     ![Device Manager after the installation](./img/devmgmt.png)
 
+#### 2a. Use a pre-built binary
 
-#### Build mtplvcap in MSYS2
+1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-windows-amd64.zip).
+1. Extract the ZIP
+1. Double-click `mtplvcap.exe`
+    - Make sure your camera opens up its shutter
+
+
+#### 2b. Build it yourself in MSYS2
 
 1. Download and install MSYS2 from [here](https://www.msys2.org/)
 1. Launch "MSYS2 MSYS" in the Start Menu
-1. Install prerequisites
+1. Install dependencies
 
     ```sh
     pacman -Sy mingw-w64-x86_64-toolchain \
@@ -83,32 +89,57 @@ Note: **[Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is ava
     ```
 
 1. `cd`, build, and launch it
-    - Make sure your camera opens up its shutter
-
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
     ./mtplvcap.exe -debug server
     ```
+   
+    - Make sure your camera opens up its shutter
 
 1. Done!
     - The binary can be moved and redistributed easily
     - Copy `libusb-1.0.dll` from `C:\msys64\mingw64\bin\libusb-1.0.dll` and place the copy alongside `mtplvcap.exe` to launch it directly from Explorer
 
 
-#### macOS
+### macOS
 
-Note: I have no redistributed pre-built binaries like Homebrew Formulae at present.
-
-1. Install XCode Command Line Tools with `xcode-select --install`
+#### 1. Install dependencies
 
 1. [Install Homebrew](https://brew.sh/) 
 
-1. Install prerequisites
+1. Install libusb
 
     ```sh
-    brew install golang libusb git
+    brew install libusb
     ```
+
+
+#### 2a. Use a pre-built binary
+
+1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-mac-xxxxxxx-amd64.zip).
+1. Extract the ZIP and launch it
+
+    ```sh
+    unzip mtplvcap-*.zip
+    ./mtplvcap
+    ```
+
+    - Make sure your camera opens up its shutter
+
+
+#### 2. Built it yourself
+
+**Good news: [Pre-built binary](https://github.com/puhitaku/mtplvcap/releases) is available.
+Please follow the build steps if you want a cutting-edge build.**
+
+1. Install dependencies
+
+    ```sh
+    brew install golang git
+    ```
+
+1. Install XCode Command Line Tools with `xcode-select --install`
 
 1. Clone this repo
 
@@ -117,18 +148,20 @@ Note: I have no redistributed pre-built binaries like Homebrew Formulae at prese
     ```
 
 1. `cd`, build, and launch it
-    - Make sure your camera opens up its shutter
-
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
     ./mtplvcap -debug server
     ```
 
+    - Make sure your camera opens up its shutter
+
 1. Done!
 
 
 #### Linux (e.g. Ubuntu/Debian)
+
+I have no pre-built binary for Linux as environments vary widely.
 
 1. Install prerequisites
     ```sh
@@ -136,19 +169,19 @@ Note: I have no redistributed pre-built binaries like Homebrew Formulae at prese
     ```
 
 1. `cd`, build, and launch it
-    - Make sure your camera opens up its shutter
-
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
     ./mtplvcap -debug server
     ```
 
+    - Make sure your camera opens up its shutter
+
 
 ### Usage
 
 ```sh
- mtplvcap $ ./mtplvcap -help
+$ ./mtplvcap -help
 Usage of ./mtplvcap:
   -backend-go
         force gousb as libusb wrapper (not recommended)
@@ -168,61 +201,71 @@ Usage of ./mtplvcap:
 
 #### Watch incoming frames
 
- - Open `localhost:42839/view` with your favorite browser and then captured frames will be displayed
- - Specify `-host {address}` to tell mtplvcap where to listen, e.g. `-host 0.0.0.0` allows public access
- - And also specify `-port {port}` to change the port number
+ - `http://localhost:42839/view` will show the captured frames
+ - Specify `-host 0.0.0.0` to allow access from other hosts
 
 
 #### Control your DSLR on your browser
 
- - Open `localhost:42839` with your favorite browser
- - "Auto Focus" section provides periodic/manual AF control
- - "Rate Limit" section can limit the capture rate to decrease overall CPU usage
- - "Information" section shows the dimension of LV images etc.
+ - `http://localhost:42839` is a controller to control your DSLR
+ - "Auto Focus" section controls periodic/manual AF
+ - "Rate Limit" section limits/un-limits the frame rate to decrease overall CPU usage
+ - "Information" section shows the dimension of captured images etc.
 
 
 #### Connect with Zoom, Google Meet, Google Hangouts, etc.
 
 1. Install mtplvcap and check if it works
+
 1. Install OBS (Open Broadcaster Software) from [here](https://obsproject.com/)
+
+1. Install OBS virtual camera (it varies for each OS)
+
 1. Open OBS preference and "Video" tab
+
 1. Adjust resolutions to fit with LV frame dimension
-    - Launch mtplvcap and open `localhost:42839` to know the actual resolution
+    - Launch mtplvcap and open `localhost:42839` to get the actual resolution
     ![Controller view](./img/obs_1.png)
     ![Adjust resolution](./img/obs_2.png)
+
 1. Add a "Browser" source
     ![Add Browser source](./img/obs_3.png)
+    
 1. Set `http://localhost:42839/view` as the URL
     ![Add Browser source](./img/obs_4.png)
+
+1. Enable the virtual camera and configure chat apps
+
 1. BOOM!
     ![Hi!](./img/obs_5.png)
+    ![Zoom!](./img/obs_6.png)
 
 
 ### Caveats / Known Issues
 
  - This software is in alpha stage.
  - All: shutter goes down and up suddenly.
-    - Currently I have no clue to solve it. Please be patient.
+    - It might be due to timeouts.
     - As a work-around, mtplvcap watches the shutter and opens it if necessary.
- - Windows: on MinTTY, the process gets killed without graceful shutdown when you press Ctrl-C.
-    - It will result a fail of next launch and might require you to re-plug the camera in.
+ - Windows: on MinTTY, the process gets killed without graceful shut-down when you press Ctrl-C.
+    - It will result in a fail of the next launch and might require you to re-plug the camera in.
     - It's a known behavior and is not a bug of mtplvcap.
     - Please install winpty with pacman and run via it `winpty ./mtplvcap`
-    - Running mtplvcap directly from Explorer with double-click runs without this problem
+    - Running mtplvcap directly from Explorer with double-click runs without this problem.
 
 
-### FEEDBACK
+### Feedback
 
  - Posting issues and PRs is welcome. Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution.
- - I verified only with Nikon D5300. No other cameras are verified. Please tell me if mtplvcap works (or not) with your camera.
+ - No cameras other than D5300 are verified. Please tell me if mtplvcap works (or not) with your camera.
 
 
-### CREDIT
+### Credit
 
 This program is based on [github.com/hanwen/go-mtpfs](https://github.com/hanwen/go-mtpfs).
-Special thanks to Han-Wen-san for its robust and mature MTP implementation.
+Special thanks to Han-Wen-san for a robust and mature MTP implementation.
 
 
-### LICENSE
+### License
 
-[LICENSE file](./LICENSE)
+[LICENSE document](./LICENSE)
