@@ -6,7 +6,7 @@
 
 mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live View of Nikon DSLRs via WebSocket. 
 
-mtplvcap + OBS turn your DSLRs into web cameras. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
+mtplvcap + OBS turn your DSLRs into web cameras without HDMI capture device. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
 
 
 ## Verified environments
@@ -248,12 +248,18 @@ Usage of ./mtplvcap:
     <img alt="Zoom!" src="./img/obs_6.png" width="400px">
 
 
-### Caveats / Known Issues
+### Caveats
 
  - This software is in alpha stage.
- - All: shutter goes down and up suddenly.
-    - It might be due to timeouts.
-    - As a work-around, mtplvcap watches the shutter and opens it if necessary.
+
+
+### Known Issues
+
+ - Stops Live View automatically
+    - The timeout can be elongated in camera menu.
+    - Some cameras support disabling auto-off timer, while some does not.
+        - For D5300, "Custom Setting Menu" -> "c Timers/AE lock" -> "Auto off timers" -> "Custom" -> "Live View" -> "30 min"
+    - As a work-around, mtplvcap watches the shutter and opens it automatically when it's closed.
  - Windows: on MinTTY, the process gets killed without graceful shut-down when you press Ctrl-C.
     - It will result in a fail of the next launch and might require you to re-plug the camera in.
     - It's a known behavior and is not a bug of mtplvcap.
