@@ -69,12 +69,16 @@ OS:
 1. スタートメニューから "MSYS2 MSYS" を実行します
 1. 依存するパッケージをインストールします
 
-    ```sh
-    pacman -Sy mingw-w64-x86_64-toolchain \
-               mingw-w64-x86_64-libusb \
-               mingw-w64-x86_64-go \
-               mingw-x64-x86_64-pkg-config \
-               git
+    - パッケージグループ `mingw-w64-x86_64-toolchain` とその他のパッケージを一度にインストールしようとするとエラーになる報告が上がっていて、これらは別々にインストールしたほうが良いかもしれません
+
+	```sh
+    pacman -Sy
+    pacman -S mingw-w64-x86_64-toolchain
+    pacman -S \
+        mingw-w64-x86_64-libusb \
+        mingw-w64-x86_64-go \
+        mingw-w64-x86_64-pkg-config \
+        git
     ```
 
 1. PATHを追加します

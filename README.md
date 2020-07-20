@@ -70,12 +70,16 @@ Continue with care.**
 1. Launch "MSYS2 MSYS" in the Start Menu
 1. Install dependencies
 
+    - Some people reported that pacman fails to install a package group `mingw-w64-x86_64-toolchain` and other packages at once. Installing them separately should succeed.
+
     ```sh
-    pacman -Sy mingw-w64-x86_64-toolchain \
-               mingw-w64-x86_64-libusb \
-               mingw-w64-x86_64-go \
-               mingw-x64-x86_64-pkg-config \
-               git
+    pacman -Sy
+    pacman -S mingw-w64-x86_64-toolchain
+    pacman -S \
+        mingw-w64-x86_64-libusb \
+        mingw-w64-x86_64-go \
+        mingw-w64-x86_64-pkg-config \
+        git
     ```
 
 1. Add PATHs
