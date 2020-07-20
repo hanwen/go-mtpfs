@@ -13,6 +13,7 @@ mtplvcap + OBS turn your DSLRs into web cameras without HDMI capture device. Enj
 
 Cameras:
  - Nikon D5300
+ - Nikon D3300 (thanks @unasuke)
  - I welcome feedback! Please tell me if your camera works or not.
 
 OSes:
@@ -274,7 +275,7 @@ Usage of ./mtplvcap:
 ### Feedback
 
  - Posting issues and PRs is welcome. Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution.
- - No cameras other than D5300 are verified. Please tell me if mtplvcap works (or not) with your camera.
+ - Only few cameras are verified. Please tell me if mtplvcap works (or not) with your camera.
 
 
 ### Credit

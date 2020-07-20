@@ -13,6 +13,7 @@ mtplvcapとOBSを組み合わせることで、NikonのカメラをHDMIキャプ
 
 カメラ:
  - Nikon D5300
+ - Nikon D3300 (thanks @unasuke)
  - フィードバック歓迎！お手持ちのカメラの動作可否を是非Issueにあげてください。
 
 OS:
@@ -279,7 +280,7 @@ Usage of ./mtplvcap:
 ### フィードバック
 
  - IssueもPRも大歓迎です。[CONTRIBUTING.md](./CONTRIBUTING.md)に従って提出してください。
- - D5300以外では動作確認できていません。是非お手持ちのカメラが動作したかどうかレポートしてください。
+ - まだごく一部の機種しか動作確認できていません。是非お手持ちのカメラが動作したかどうか教えてください。何卒！
 
 
 ### Special Thanks
