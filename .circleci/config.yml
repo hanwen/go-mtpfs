@@ -2,26 +2,48 @@ version: 2.1
 
 orbs:
   win: circleci/windows@2.2.0
+  github-release: izumin5210/github-release@0.0.1
+
+aliases:
+  windows-default: &windows-default
+    shell: C:\\tools\\msys64\\usr\\bin\\bash
+    environment:
+      PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
+      CGO_CFLAGS: -Wno-deprecated-declarations
+      GOROOT: "/c/tools/msys64/mingw64/lib/go"
+  filter-dev: &filter-dev
+    filters:
+      tags:
+        only: /^v\d+\.\d+\.\d+$/
+  filter-release: &filter-release
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /^v\d+\.\d+\.\d+$/
 
 workflows:
   version: 2
   build:
     jobs:
-      #- build-win
-      - build-mac
-      - build-linux
-
+      - build-linux:
+          <<: *filter-dev
+      #- build-win:
+      #    <<: *filter-release
+      - build-mac:
+          <<: *filter-release
+      - release:
+          <<: *filter-release
+          requires:
+            - build-linux
+            #- build-win
+            - build-mac
 
 jobs:
   build-win:
     executor:
       name: win/default
       size: medium
-
-    parameters:
-      msyspath:
-        type: string
-        default: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
 
     steps:
       - checkout
@@ -31,10 +53,8 @@ jobs:
           command: |
             choco install -y msys2
       - run:
+          <<: *windows-default
           name: Install prerequisites
-          shell: C:\\tools\\msys64\\usr\\bin\\bash
-          environment:
-            PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
           command: |
             /c/tools/msys64/usr/bin/pacman -Sy --noconfirm \\
             mingw-w64-x86_64-toolchain \\
@@ -43,12 +63,20 @@ jobs:
             mingw-w64-x86_64-pkg-config \\
             git
       - run:
+          <<: *windows-default
           name: Build
-          shell: C:\\tools\\msys64\\usr\\bin\\bash
-          environment:
-            PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
           command: |
-            go build .
+            mkdir windows
+            go build -o ./windows/mtplvcap .
+      - run:
+          <<: *windows-default
+          name: Copy DLL
+          command: |
+            cp /mingw64/bin/libusb-1.0.dll ./windows/
+      - persist_to_workspace:
+          root: .
+          paths:
+            - windows
 
   build-mac:
     macos:
@@ -66,7 +94,13 @@ jobs:
           name: Build
           environment:
             CGO_CFLAGS: -Wno-deprecated-declarations
-          command: go build .
+          command: |
+            mkdir macos
+            go build -o ./macos/mtplvcap .
+      - persist_to_workspace:
+          root: .
+          paths:
+            - macos
 
   build-linux:
     docker:
@@ -81,4 +115,28 @@ jobs:
           name: Build
           environment:
             CGO_CFLAGS: -Wno-deprecated-declarations
-          command: go build .
+          command: |
+            mkdir linux
+            go build -o ./linux/mtplvcap .
+      - persist_to_workspace:
+          root: .
+          paths:
+            - linux
+
+  release:
+    docker:
+      - image: circleci/golang:buster
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Compress
+          command: |
+            mkdir zip
+            #zip -r mtplvcap_windows_amd64 windows
+            zip -r mtplvcap_macos_amd64 macos
+            zip -r mtplvcap_linux_amd64 linux
+            mv *.zip ./zip/
+      - github-release/create:
+          path: ./zip/
