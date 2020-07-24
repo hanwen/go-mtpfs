@@ -39,11 +39,11 @@ OS:
 1. Zadigを[ここ](https://zadig.akeo.ie/)からダウンロードして開きます
 1. `List All Devices` にチェックを入れます
 
-    <img alt="Tick List All Devices" src="./img/zadig_1.png" width="400px">
+    <img alt="List All Devices にチェックを入れる" src="./img/zadig_1.png" width="400px">
 
 1. 画面上のリストにカメラ名があるのを確認し、選択します
 
-    <img alt="Choose the DSLR in the list" src="./img/zadig_2.png" width="400px">
+    <img alt="リストからカメラを選ぶ" src="./img/zadig_2.png" width="400px">
 
     （このスクショは置き換え後に撮ったものなので、ボタンの表記が "Reinstall Driver" となっていますが気にしないでください）
 
@@ -53,12 +53,12 @@ OS:
 1. `Replace Driver` ボタンを押して完了するまで待ちます
     - デバイスマネージャーを起動して確認してみてください
 
-    <img alt="Device Manager after the installation" src="./img/devmgmt.png" width="400px">
+    <img alt="インストール後のデバイスマネージャー" src="./img/devmgmt.png" width="400px">
 
 
 #### 2a. ビルド済みの実行ファイルを使う
 
-1. Windows用の実行ファイル (mtplvcap-xxxxxxx-windows-amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
+1. Windows用の実行ファイル (mtplvcap_windows_amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
 1. ZIPをダブルクリックして展開します
 1. `mtplvcap.exe` をダブルクリックして実行します
     - カメラのシャッターが開くのを確認してください
@@ -124,15 +124,30 @@ OS:
 
 #### 2a. ビルド済みの実行ファイルを使う
 
-1. macOS用の実行ファイル (mtplvcap-xxxxxxx-mac-xxxxxxx-amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
+1. macOS用の実行ファイル (mtplvcap_macos_amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
 1. ZIPを展開して起動します
 
     ```sh
-    unzip mtplvcap-*.zip
-    ./mtplvcap
+    unzip mtplvcap_macos_amd64.zip
+    ./macos/mtplvcap
     ```
 
-    - セキュリティのアラートが出て実行できない場合は[ここ](https://github.com/hashicorp/terraform/issues/23033#issuecomment-542302933)の手順でブロックを解除してください
+    - 初回はセキュリティのアラートが出て実行できないはずです
+
+1. 検証されていないバイナリの実行を許可する
+
+    - 「キャンセル」でダイアログを消します (ゴミ箱には入れないでください！)
+
+    <img alt="警告ダイアログ" src="./img/macos_warning_jp.png" width="400px">
+
+    - 「システム環境設定」 -> 「セキュリティとプライバシー」 と開き、「このまま許可」 をクリック
+
+    <img alt="システム環境設定" src="./img/macos_warning2_jp.png" width="400px">
+
+    - `mtplvcap` ももう一度起動し「開く」をクリック
+
+    <img alt="警告ダイアログ2" src="./img/macos_warning3_jp.png" width="400px">
+
     - カメラのシャッターが開くのを確認してください
 
 
@@ -169,14 +184,52 @@ OS:
 1. ゴール！
 
 
-### Linux (e.g. Ubuntu/Debian)
+### Linux
 
-Linuxはディストリによって環境が大きく異なるためビルド済みバイナリは用意していません。
+ビルド済みバイナリはありますが、Linuxはディストリによって環境が大きく異なるため、手でビルドすることをおすすめします。
+
+
+#### 1. 依存パッケージをインストールします
+
+1. libusbをインストールします
+
+    ```sh
+    # For Debian/Ubuntu:
+    sudo apt install libusb-1.0.0
+    ```
+
+    ```sh
+    # For Arch:
+    pacman --sync libusb
+    ```
+
+
+#### 2a. ビルド済みの実行ファイルを使う
+
+1. Linux用の実行ファイル (mtplvcap_linux_amd64.zip) を[ここ](https://github.com/puhitaku/mtplvcap/releases)からダウンロードします
+
+1. ZIPを展開して起動します
+
+    ```sh
+    unzip mtplvcap_linux_amd64.zip
+    ./linux/mtplvcap
+    ```
+
+    - カメラのシャッターが開くのを確認してください
+
+
+#### 2b. 手でビルドする
 
 1. 依存パッケージをインストールします
 
     ```sh
+    # For Debian/Ubuntu:
     sudo apt install golang-go libusb-1.0.0-dev
+    ```
+
+    ```sh
+    # For Arch:
+    pacman --sync go libusb
     ```
 
 1. `cd`してビルドして起動します
@@ -238,18 +291,18 @@ Usage of ./mtplvcap:
 1. Live Viewの画像サイズとぴったり合うように映像サイズを設定します
     - mtplvcapを起動して `localhost:42839` を開くと「Information」セクションにサイズが載っています
 
-    <img alt="Controller view" src="./img/obs_1.png" width="400px">
-    <img alt="Adjust resolution" src="./img/obs_2.png" width="400px">
+    <img alt="コントローラー" src="./img/obs_1.png" width="400px">
+    <img alt="解像度設定" src="./img/obs_2.png" width="400px">
 
 1. 「ブラウザ」ソースを追加します
 
-    <img alt="Add Browser source" src="./img/obs_3.png" width="400px">
+    <img alt="ブラウザソースを追加" src="./img/obs_3.png" width="400px">
 
 1. 「幅」と「高さ」の値を「映像」タブの設定と同じ値に設定します
 
 1. URLを `http://localhost:42839/view` に設定します
 
-    <img alt="Set URL" src="./img/obs_4.png" width="400px">
+    <img alt="URLを設定" src="./img/obs_4.png" width="400px">
 
 1. バーチャルカメラをONにしてチャットアプリを設定します
 

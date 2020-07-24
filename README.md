@@ -4,9 +4,9 @@
 
 **日本語は[こちら](./README.ja.md)**
 
-mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live View of Nikon DSLRs via WebSocket. 
+mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live View of Nikon cameras via WebSocket. 
 
-mtplvcap + OBS turn your DSLRs into web cameras without HDMI capture device. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
+mtplvcap + OBS turn your cameras into web cameras without HDMI capture device. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
 
 
 ## Verified environments
@@ -34,9 +34,9 @@ Your PC will no longer recognize the camera as an MTP device unless you re-insta
 Continue with care.**
 
 
-#### 1. Replace Nikon DSLR driver
+#### 1. Replace MTP driver
 
-1. Connect your Nikon DSLR to the PC
+1. Connect your Nikon camera to the PC
 1. Download Zadig from [here](https://zadig.akeo.ie/) and launch it
 1. Tick `List All Devices`
 
@@ -44,7 +44,7 @@ Continue with care.**
 
 1. Make sure that your camera is in the list upper in the window and choose it
 
-    <img alt="Choose the DSLR in the list" src="./img/zadig_2.png" width="400px">
+    <img alt="Choose the camera in the list" src="./img/zadig_2.png" width="400px">
 
     (This screenshot was taken after the libusb driver is installed and will differ from what you see)
 
@@ -59,7 +59,7 @@ Continue with care.**
 
 #### 2a. Use a pre-built executable
 
-1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-windows-amd64.zip).
+1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap_windows_amd64.zip).
 1. Extract the ZIP
 1. Double-click `mtplvcap.exe`
     - Make sure your camera opens up its shutter
@@ -97,6 +97,7 @@ Continue with care.**
     ```
 
 1. `cd`, build, and launch it
+
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
@@ -125,18 +126,33 @@ Continue with care.**
 
 #### 2a. Use a pre-built executable
 
-1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap-xxxxxxx-mac-xxxxxxx-amd64.zip).
+1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap_macos_amd64.zip).
 1. Extract the ZIP and launch it
 
     ```sh
-    unzip mtplvcap-*.zip
-    ./mtplvcap
+    unzip mtplvcap_macos_amd64.zip
+    ./macos/mtplvcap
     ```
+    - macOS will warn you that the binary is not verified
+
+1. Allow non-verified binary to launch
+
+    - Dismiss the dialog (Do not move it to the trash!)
+
+    <img alt="macOS warning dialog" src="./img/macos_warning.png" width="400px">
+
+    - Open "System Preferences" -> "Security & Privacy" -> Click "Allow Anyway"
+
+    <img alt="System Preference" src="./img/macos_warning2.png" width="400px">
+
+    - Launch `mtplvcap` once more and click "Open"
+
+    <img alt="macOS warning dialog 2" src="./img/macos_warning3.png" width="400px">
 
     - Make sure your camera opens up its shutter
 
 
-#### 2. Built it yourself
+#### 2b. Build it yourself
 
 1. Install dependencies
 
@@ -153,6 +169,7 @@ Continue with care.**
     ```
 
 1. `cd`, build, and launch it
+
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
@@ -165,16 +182,56 @@ Continue with care.**
 1. Done!
 
 
-### Linux (e.g. Ubuntu/Debian)
+### Linux
 
-I have no pre-built executables for Linux as environments vary widely.
+I strongly recommend you to compile by yourself for Linux distributions as Linux environments vary widely.
+
+
+#### 1. Install dependencies
+
+1. Install libusb
+
+    ```sh
+    # For Debian/Ubuntu:
+    sudo apt install libusb-1.0.0
+    ```
+
+    ```sh
+    # For Arch:
+    pacman --sync libusb
+    ```
+
+
+#### 2a. Use a pre-built executable
+
+1. Download the release from [here](https://github.com/puhitaku/mtplvcap/releases) (mtplvcap_linux_amd64.zip).
+
+1. Extract the ZIP and launch it
+
+    ```sh
+    unzip mtplvcap_linux_amd64.zip
+    ./linux/mtplvcap
+    ```
+
+    - Make sure your camera opens up its shutter
+
+
+#### 2b. Build it yourself
 
 1. Install dependencies
+
     ```sh
+    # For Debian/Ubuntu:
     sudo apt install golang-go libusb-1.0.0-dev
     ```
 
+    ```sh
+    # For Arch:
+    pacman --sync go libusb
+    ```
+
 1. `cd`, build, and launch it
+
     ```sh
     cd mtplvcap
     CGO_CFLAGS='-Wno-deprecated-declarations' go build .
@@ -211,9 +268,9 @@ Usage of ./mtplvcap:
  - `http://localhost:42839/view` will show the captured frames
 
 
-#### Control your DSLR on your browser
+#### Control your camera on your browser
 
- - `http://localhost:42839` is a controller to control your DSLR
+ - `http://localhost:42839` is a controller to control your camera
  - "Auto Focus" section controls periodic/manual AF
  - "Rate Limit" section limits/un-limits the frame rate to decrease overall CPU usage
  - "Information" section shows the dimension of captured images etc.
