@@ -5,12 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/google/gousb"
 
@@ -45,12 +42,6 @@ type DeviceGoUSB struct {
 		USB  bool
 		Data bool
 	}
-
-	log *logrus.Logger
-}
-
-func (d *DeviceGoUSB) AttachLogger(log *logrus.Logger) {
-	d.log = log
 }
 
 func (d *DeviceGoUSB) connected() bool {
@@ -70,14 +61,14 @@ func (d *DeviceGoUSB) Close() error {
 
 		err := d.runTransaction(&req, &rep, nil, nil, 0)
 		if err != nil && d.Debug.USB {
-			d.log.WithField("prefix", "usb").Errorf("failed to close session")
+			log.WithField("prefix", "usb").Errorf("failed to close session")
 		}
 		d.session = nil
 	}
 
 	err := d.config.Close()
 	if err != nil && d.Debug.USB {
-		d.log.WithField("prefix", "usb").Errorf("failed to close configuration: %s", err)
+		log.WithField("prefix", "usb").Errorf("failed to close configuration: %s", err)
 	}
 	d.iface.Close()
 
@@ -130,13 +121,13 @@ func (d *DeviceGoUSB) Open() error {
 		info := DeviceInfo{}
 		err = d.GetDeviceInfo(&info)
 		if err != nil && d.Debug.USB {
-			d.log.WithField("prefix", "usb").Errorf("failed to get device info: %s", err)
+			log.WithField("prefix", "usb").Errorf("failed to get device info: %s", err)
 		}
 
 		if !strings.Contains(info.MTPExtension, "microsoft") {
 			err = d.Close()
 			if err != nil && d.Debug.USB {
-				d.log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
+				log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
 			}
 			return fmt.Errorf("no MTP extensions in %s", info.MTPExtension)
 		}
@@ -144,7 +135,7 @@ func (d *DeviceGoUSB) Open() error {
 		if iface.Setting.Class != gousb.ClassPTP {
 			err = d.Close()
 			if err != nil && d.Debug.USB {
-				d.log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
+				log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
 			}
 			return fmt.Errorf("interface has no MTP/PTP/Image class")
 		}

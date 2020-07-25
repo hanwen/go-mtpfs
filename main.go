@@ -57,22 +57,19 @@ func main() {
 		log.WithField("prefix", "main").Fatalf("Failed to parse PID: %s", err)
 	}
 
+	mtp.SetLogger(log)
 	var dev mtp.Device
 
 	if *serverOnly {
 		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
 	} else if *backendGo {
-		ctx, err := initGoUSB(debugs)
-		if err != nil {
-			log.WithField("prefix", "mtp").Fatal(err)
-		}
+		ctx := gousb.NewContext()
 		defer ctx.Close()
 
 		devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
 		if err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Failed to find MTP device: %s", err)
 		}
-		devGo.AttachLogger(log)
 		devGo.Debug.MTP = debugs["mtp"]
 		devGo.Debug.Data = debugs["data"]
 		devGo.Debug.USB = debugs["usb"]
@@ -155,22 +152,4 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func initGoUSB(debugs map[string]bool) (*gousb.Context, error) {
-	ctx2 := gousb.NewContext()
-
-	dev, err := mtp.SelectDeviceGoUSB(ctx2, 0, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find MTP device: %s", err)
-	}
-	dev.AttachLogger(log)
-	dev.Debug.MTP = debugs["mtp"]
-	dev.Debug.Data = debugs["data"]
-	dev.Debug.USB = debugs["usb"]
-	if err = dev.Configure(); err != nil {
-		return nil, fmt.Errorf("configure failed: %v", err)
-	}
-
-	return ctx2, nil
 }

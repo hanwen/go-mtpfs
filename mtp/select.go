@@ -12,6 +12,10 @@ import (
 func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error) {
 	var mtpDev []*DeviceGoUSB
 
+	if vid != 0 && pid != 0 {
+		log.WithField("prefix", "usb").Infof("Searching %04d:%04d", vid, pid)
+	}
+
 	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
 		v, p := uint16(desc.Vendor), uint16(desc.Product)
 		if vid != 0 && pid != 0 && (v != vid || p != pid) {
@@ -59,6 +63,8 @@ func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error
 							iAltSetting:    alt.Number,
 						}
 						mtpDev = append(mtpDev, d)
+
+						log.WithField("prefix", "usb").Infof("Found a MTP device: %04x:%04x", v, p)
 						return true
 					}
 				}
