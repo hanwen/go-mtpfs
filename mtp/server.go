@@ -86,7 +86,7 @@ func NewLVServer(dev Device, log *logrus.Logger, ctx context.Context) *LVServer 
 func (s *LVServer) HandleStream(w http.ResponseWriter, r *http.Request) {
 	ws, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.log.WithField("prefix", "LV.HandleStream").Errorf("Failed to upgrade: %s", err)
+		s.log.WithField("prefix", "lv.HandleStream").Errorf("Failed to upgrade: %s", err)
 	}
 	defer ws.Close()
 
@@ -95,7 +95,7 @@ func (s *LVServer) HandleStream(w http.ResponseWriter, r *http.Request) {
 		var mes struct{}
 		err := ws.ReadJSON(&mes)
 		if err != nil {
-			s.log.WithField("prefix", "LV.HandleStream").Errorf("Failed to read a message: %s", err)
+			s.log.WithField("prefix", "lv.HandleStream").Errorf("Failed to read a message: %s", err)
 			s.unregisterStreamClient(ws)
 			return
 		}
@@ -131,7 +131,7 @@ type InfoPayload struct {
 func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 	ws, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.log.WithField("prefix", "LV.HandleControl").Errorf("Failed to upgrade: %s", err)
+		s.log.WithField("prefix", "lv.HandleControl").Errorf("Failed to upgrade: %s", err)
 	}
 	defer ws.Close()
 
@@ -140,7 +140,7 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 		var p ControlPayload
 		err := ws.ReadJSON(&p)
 		if err != nil {
-			s.log.WithField("prefix", "LV.HandleControl").Errorf("Failed to read a message: %s", err)
+			s.log.WithField("prefix", "lv.HandleControl").Errorf("Failed to read a message: %s", err)
 			s.unregisterControlClient(ws)
 			return
 		}
@@ -154,14 +154,14 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if *p.AFInterval < 1 {
-				s.log.WithField("prefix", "LV.HandleControl").Errorf("Invalid AF interval: %d", *p.AFInterval)
+				s.log.WithField("prefix", "lv.HandleControl").Errorf("Invalid AF interval: %d", *p.AFInterval)
 				continue
 			}
 
 			s.afInterval = *p.AFInterval
 			s.afTicker.SetInterval(time.Duration(*p.AFInterval) * time.Second)
 			if err != nil {
-				s.log.WithField("prefix", "LV.HandleControl").Errorf("Failed to set interval: %d", *p.AFInterval)
+				s.log.WithField("prefix", "lv.HandleControl").Errorf("Failed to set interval: %d", *p.AFInterval)
 			}
 		}
 
@@ -219,7 +219,7 @@ func (s *LVServer) workerLV() error {
 
 		status, err := s.getLiveViewStatus()
 		if err != nil {
-			s.log.WithField("prefix", "LV.workerLV").Warning(err)
+			s.log.WithField("prefix", "lv.workerLV").Warning(err)
 			continue
 		} else if status {
 			continue
@@ -227,7 +227,7 @@ func (s *LVServer) workerLV() error {
 
 		err = s.startLiveView()
 		if err != nil {
-			s.log.WithField("prefix", "LV.workerLV").Warning(err)
+			s.log.WithField("prefix", "lv.workerLV").Warning(err)
 		}
 	}
 }
@@ -245,7 +245,7 @@ func (s *LVServer) workerAF() error {
 
 		err := s.autoFocus()
 		if err != nil {
-			s.log.WithField("prefix", "LV.workerAF").Warning(err)
+			s.log.WithField("prefix", "lv.workerAF").Warning(err)
 		}
 	}
 }
@@ -290,7 +290,7 @@ func (s *LVServer) frameCaptorSakura() error {
 			if err.Error() == "failed to obtain an image: live view is not activated" {
 				time.Sleep(time.Second)
 			} else {
-				s.log.WithField("prefix", "LV.captor").Warning(err)
+				s.log.WithField("prefix", "lv.frameCaptor").Warning(err)
 				time.Sleep(time.Second)
 			}
 		}
@@ -315,7 +315,7 @@ func (s *LVServer) workerBroadcastFrame() error {
 		for c := range s.streamClients {
 			err := c.WriteMessage(websocket.TextMessage, []byte(b64))
 			if err != nil {
-				s.log.WithField("prefix", "LV.workerBroadcastFrame").Errorf("Failed to send a frame: %s", err)
+				s.log.WithField("prefix", "lv.workerBroadcastFrame").Errorf("Failed to send a frame: %s", err)
 			}
 		}
 	}
@@ -351,12 +351,12 @@ func (s *LVServer) workerBroadcastInfo() error {
 		for c := range s.controlClients {
 			j, err := json.Marshal(s.info)
 			if err != nil {
-				s.log.WithField("prefix", "LV.workerBroadcastInfo").Errorf("Failed to marshal payload: %s", err)
+				s.log.WithField("prefix", "lv.workerBroadcastInfo").Errorf("Failed to marshal payload: %s", err)
 				continue
 			}
 			err = c.WriteMessage(websocket.TextMessage, j)
 			if err != nil {
-				s.log.WithField("prefix", "LV.workerBroadcastInfo").Errorf("Failed to send a frame: %s", err)
+				s.log.WithField("prefix", "lv.workerBroadcastInfo").Errorf("Failed to send a frame: %s", err)
 			}
 		}
 	}

@@ -102,7 +102,7 @@ func main() {
 			case <-ctx.Done():
 				return nil
 			case s := <-sigChan:
-				log.WithField("prefix", "signal").Info("Caught signal: %s", s)
+				log.WithField("prefix", "signal").Infof("Caught signal: %s", s)
 				return errors.New(s.String())
 			}
 		}

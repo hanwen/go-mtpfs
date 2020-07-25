@@ -258,12 +258,12 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 	}
 
 	if d.Debug.MTP {
-		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
+		log.WithField("prefix", "mtp").Debugf("Request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
 	if err := d.sendReq(req); err != nil {
 		if d.Debug.MTP {
-			log.Printf("MTP sendreq failed: %v\n", err)
+			log.WithField("prefix", "mtp").Debugf("Sendreq failed: %v\n", err)
 		}
 		return err
 	}
@@ -294,11 +294,11 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 			dest = &NullWriter{}
 			unexpectedData = true
 			if d.Debug.MTP {
-				log.Printf("MTP discarding unexpected data 0x%x bytes", h.Length)
+				log.WithField("prefix", "mtp").Debugf("Discarding unexpected data 0x%x bytes", h.Length)
 			}
 		}
 		if d.Debug.MTP {
-			log.Printf("MTP data 0x%x bytes", h.Length)
+			log.WithField("prefix", "mtp").Debugf("Data 0x%x bytes", h.Length)
 		}
 
 		dest.Write(rest)
@@ -315,7 +315,7 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 		h = &usbBulkHeader{}
 		if len(finalPacket) > 0 {
 			if d.Debug.MTP {
-				log.Printf("Reusing final packet")
+				log.WithField("prefix", "mtp").Debugf("Reusing final packet")
 			}
 			rest = finalPacket
 			finalBuf := bytes.NewBuffer(finalPacket[:len(finalPacket)])
@@ -327,7 +327,7 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 
 	err = d.decodeRep(h, rest, rep)
 	if d.Debug.MTP {
-		log.Printf("MTP response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
+		log.WithField("prefix", "mtp").Debugf("Response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	}
 	if unexpectedData {
 		return SyncError(fmt.Sprintf("unexpected data for code %s", getName(RC_names, int(req.Code))))
@@ -439,7 +439,7 @@ func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err err
 			}
 		}
 		if d.Debug.MTP {
-			log.Printf("MTP bulk read 0x%x bytes.", lastRead)
+			log.WithField("prefix", "mtp").Debugf("Bulk read 0x%x bytes.", lastRead)
 		}
 		if lastRead < len(toread) {
 			// short read.
@@ -454,7 +454,7 @@ func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err err
 		var nullReadSize int
 		nullReadSize, err = d.bulkTransferIn(d.fetchEP, buf[:])
 		if d.Debug.MTP {
-			log.Printf("Expected null packet, read %d bytes", nullReadSize)
+			log.WithField("prefix", "mtp").Debugf("Expected null packet, read %d bytes", nullReadSize)
 		}
 		return n, buf[:nullReadSize], err
 	}
@@ -485,7 +485,7 @@ func (d *DeviceGoUSB) Configure() error {
 	}
 
 	if err != nil {
-		log.Printf("OpenSession failed: %v; attempting reset", err)
+		log.WithField("prefix", "mtp").Warningf("Failed to open session: %v, attempting reset", err)
 		d.Close()
 
 		// Give the device some rest.
