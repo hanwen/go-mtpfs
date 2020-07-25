@@ -6,6 +6,8 @@ import (
 )
 
 type Device interface {
+	Configure() error
+	SetDebug(flags DebugFlags)
 	RunTransactionWithNoParams(code uint16) error
 	RunTransaction(req *Container, rep *Container, dest io.Writer, src io.Reader, writeSize int64) error
 	GetDevicePropValue(propCode uint32, dest interface{}) error
@@ -43,3 +45,9 @@ func (f Catastrophic) Error() string {
 
 // The linux usb stack can send 16kb per call, according to libusb.
 const rwBufSize = 0x4000
+
+type DebugFlags struct {
+	MTP  bool
+	USB  bool
+	Data bool
+}

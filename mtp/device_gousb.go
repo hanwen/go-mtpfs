@@ -37,15 +37,15 @@ type DeviceGoUSB struct {
 
 	session *sessionData
 
-	Debug struct {
-		MTP  bool
-		USB  bool
-		Data bool
-	}
+	Debug DebugFlags
 }
 
 func (d *DeviceGoUSB) connected() bool {
 	return d.sendEP != nil
+}
+
+func (d *DeviceGoUSB) SetDebug(flags DebugFlags) {
+	d.Debug = flags
 }
 
 // Close releases the interface, and closes the device.

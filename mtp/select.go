@@ -232,5 +232,11 @@ func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
 		return nil, fmt.Errorf("no MTP devices found")
 	}
 
-	return selectDevice(devs, "")
+	dev, err := selectDevice(devs, "")
+	if err != nil {
+		return nil, err
+	}
+
+	dev.Timeout = 5000
+	return dev, nil
 }

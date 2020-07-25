@@ -31,14 +31,7 @@ type DeviceDirect struct {
 	// In milliseconds. Defaults to 2 seconds.
 	Timeout int
 
-	// Print request/response codes.
-	MTPDebug bool
-
-	// Print USB calls.
-	USBDebug bool
-
-	// Print data as it passes over the USB connection.
-	DataDebug bool
+	Debug DebugFlags
 
 	// If set, send header in separate write.
 	SeparateHeader bool
@@ -54,6 +47,10 @@ func (d *DeviceDirect) sendMaxPacketSize() int {
 	return d.dev.GetMaxPacketSize(d.sendEP)
 }
 
+func (d *DeviceDirect) SetDebug(flags DebugFlags) {
+	d.Debug = flags
+}
+
 // Close releases the interface, and closes the device.
 func (d *DeviceDirect) Close() error {
 	if d.h == nil {
@@ -67,7 +64,7 @@ func (d *DeviceDirect) Close() error {
 
 		if err := d.runTransaction(&req, &rep, nil, nil, 0); err != nil {
 			err := d.h.Reset()
-			if d.USBDebug {
+			if d.Debug.USB {
 				log.Printf("USB: Reset, err: %v", err)
 			}
 		}
@@ -75,14 +72,14 @@ func (d *DeviceDirect) Close() error {
 
 	if d.claimed {
 		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
-		if d.USBDebug {
+		if d.Debug.USB {
 			log.Printf("USB: ReleaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 		}
 	}
 	err := d.h.Close()
 	d.h = nil
 
-	if d.USBDebug {
+	if d.Debug.USB {
 		log.Printf("USB: Close, err: %v", err)
 	}
 	return err
@@ -101,7 +98,7 @@ func (d *DeviceDirect) claim() error {
 	}
 
 	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
-	if d.USBDebug {
+	if d.Debug.USB {
 		log.Printf("USB: ClaimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 	}
 	if err == nil {
@@ -123,7 +120,7 @@ func (d *DeviceDirect) Open() error {
 
 	var err error
 	d.h, err = d.dev.Open()
-	if d.USBDebug {
+	if d.Debug.USB {
 		log.Printf("USB: Open, err: %v", err)
 	}
 	if err != nil {
@@ -169,7 +166,7 @@ func (d *DeviceDirect) ID() (string, error) {
 		d.devDescr.SerialNumber} {
 		s, err := d.h.GetStringDescriptorASCII(b)
 		if err != nil {
-			if d.USBDebug {
+			if d.Debug.USB {
 				log.Printf("USB: GetStringDescriptorASCII, err: %v", err)
 			}
 			return "", err
@@ -298,12 +295,12 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 		d.session.tid++
 	}
 
-	if d.MTPDebug {
+	if d.Debug.MTP {
 		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
 	if err := d.sendReq(req); err != nil {
-		if d.MTPDebug {
+		if d.Debug.MTP {
 			log.Printf("MTP sendreq failed: %v\n", err)
 		}
 		return err
@@ -334,11 +331,11 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 		if dest == nil {
 			dest = &NullWriter{}
 			unexpectedData = true
-			if d.MTPDebug {
+			if d.Debug.MTP {
 				log.Printf("MTP discarding unexpected data 0x%x bytes", h.Length)
 			}
 		}
-		if d.MTPDebug {
+		if d.Debug.MTP {
 			log.Printf("MTP data 0x%x bytes", h.Length)
 		}
 
@@ -355,7 +352,7 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 
 		h = &usbBulkHeader{}
 		if len(finalPacket) > 0 {
-			if d.MTPDebug {
+			if d.Debug.MTP {
 				log.Printf("Reusing final packet")
 			}
 			rest = finalPacket
@@ -367,7 +364,7 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 	}
 
 	err = d.decodeRep(h, rest, rep)
-	if d.MTPDebug {
+	if d.Debug.MTP {
 		log.Printf("MTP response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	}
 	if unexpectedData {
@@ -387,7 +384,7 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 
 // Prints data going over the USB connection.
 func (d *DeviceDirect) dataPrint(ep byte, data []byte) {
-	if !d.DataDebug {
+	if !d.Debug.Data {
 		return
 	}
 	dir := "send"
@@ -482,7 +479,7 @@ func (d *DeviceDirect) bulkRead(w io.Writer) (n int64, lastPacket []byte, err er
 				break
 			}
 		}
-		if d.MTPDebug {
+		if d.Debug.MTP {
 			log.Printf("MTP bulk read 0x%x bytes.", lastRead)
 		}
 		if lastRead < len(toread) {
@@ -497,7 +494,7 @@ func (d *DeviceDirect) bulkRead(w io.Writer) (n int64, lastPacket []byte, err er
 		// the final packet and inspect it in the calling function.
 		var nullReadSize int
 		nullReadSize, err = d.h.BulkTransfer(d.fetchEP, buf[:], d.Timeout)
-		if d.MTPDebug {
+		if d.Debug.MTP {
 			log.Printf("Expected null packet, read %d bytes", nullReadSize)
 		}
 		return n, buf[:nullReadSize], err

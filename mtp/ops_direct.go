@@ -50,7 +50,7 @@ func (d *DeviceDirect) GetData(req *Container, info interface{}) error {
 		return err
 	}
 	err := Decode(&buf, info)
-	if d.MTPDebug && err == nil {
+	if d.Debug.MTP && err == nil {
 		log.Printf("MTP decoded %#v", info)
 	}
 	return err
@@ -94,7 +94,7 @@ func (d *DeviceDirect) SendData(req *Container, rep *Container, value interface{
 	if err := Encode(&buf, value); err != nil {
 		return err
 	}
-	if d.MTPDebug {
+	if d.Debug.MTP {
 		log.Printf("MTP encoded %#v", value)
 	}
 	return d.RunTransaction(req, rep, nil, &buf, int64(buf.Len()))

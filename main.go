@@ -62,37 +62,34 @@ func main() {
 
 	if *serverOnly {
 		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
-	} else if *backendGo {
-		ctx := gousb.NewContext()
-		defer ctx.Close()
-
-		devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
-		if err != nil {
-			log.WithField("prefix", "mtp").Fatalf("Failed to find MTP device: %s", err)
-		}
-		devGo.Debug.MTP = debugs["mtp"]
-		devGo.Debug.Data = debugs["data"]
-		devGo.Debug.USB = debugs["usb"]
-		if err = devGo.Configure(); err != nil {
-			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
-		}
-		defer devGo.Close()
-
-		dev = devGo
 	} else {
-		devDirect, err := mtp.SelectDeviceDirect(uint16(vid), uint16(pid))
-		if err != nil {
-			log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
+		if *backendGo {
+			ctx := gousb.NewContext()
+			defer ctx.Close()
+
+			devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
+			if err != nil {
+				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP device: %s", err)
+			}
+			defer devGo.Close()
+			dev = devGo
+		} else {
+			devDirect, err := mtp.SelectDeviceDirect(uint16(vid), uint16(pid))
+			if err != nil {
+				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
+			}
+			defer devDirect.Close()
+			dev = devDirect
 		}
-		defer devDirect.Close()
-		devDirect.MTPDebug = debugs["mtp"]
-		devDirect.DataDebug = debugs["data"]
-		devDirect.USBDebug = debugs["usb"]
-		devDirect.Timeout = 5000
-		if err = devDirect.Configure(); err != nil {
+
+		dev.SetDebug(mtp.DebugFlags{
+			MTP:  debugs["mtp"],
+			USB:  debugs["data"],
+			Data: debugs["usb"],
+		})
+		if err = dev.Configure(); err != nil {
 			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
 		}
-		dev = devDirect
 	}
 
 	eg, ctx := errgroup.WithContext(context.Background())

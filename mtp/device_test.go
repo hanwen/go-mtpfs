@@ -20,9 +20,9 @@ func VerboseTest() bool {
 }
 
 func setDebug(dev *DeviceDirect) {
-	dev.DataDebug = VerboseTest()
-	dev.MTPDebug = VerboseTest()
-	dev.USBDebug = VerboseTest()
+	dev.Debug.Data = VerboseTest()
+	dev.Debug.MTP = VerboseTest()
+	dev.Debug.USB = VerboseTest()
 }
 
 func TestAndroid(t *testing.T) {
