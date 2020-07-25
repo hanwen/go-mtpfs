@@ -50,18 +50,18 @@ func main() {
 
 	vid, err := strconv.ParseInt(strings.ReplaceAll(*vendorID, "0x", ""), 16, 64)
 	if err != nil {
-		log.WithField("prefix", "main").Fatalf("Failed to parse VID: %s", err)
+		log.WithField("prefix", "main").Fatalf("failed to parse VID: %s", err)
 	}
 	pid, err := strconv.ParseInt(strings.ReplaceAll(*productID, "0x", ""), 16, 64)
 	if err != nil {
-		log.WithField("prefix", "main").Fatalf("Failed to parse PID: %s", err)
+		log.WithField("prefix", "main").Fatalf("failed to parse PID: %s", err)
 	}
 
 	mtp.SetLogger(log)
 	var dev mtp.Device
 
 	if *serverOnly {
-		log.WithField("prefix", "mtp").Info("Server-only mode is activated, skipping USB initialization")
+		log.WithField("prefix", "mtp").Info("server-only mode is activated, skipping USB initialization")
 	} else {
 		if *backendGo {
 			ctx := gousb.NewContext()
@@ -69,14 +69,14 @@ func main() {
 
 			devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
 			if err != nil {
-				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP device: %s", err)
+				log.WithField("prefix", "mtp").Fatalf("failed to detect MTP device: %s", err)
 			}
 			defer devGo.Close()
 			dev = devGo
 		} else {
 			devDirect, err := mtp.SelectDeviceDirect(uint16(vid), uint16(pid))
 			if err != nil {
-				log.WithField("prefix", "mtp").Fatalf("Failed to detect MTP devices: %v", err)
+				log.WithField("prefix", "mtp").Fatalf("failed to detect MTP devices: %v", err)
 			}
 			defer devDirect.Close()
 			dev = devDirect
@@ -88,7 +88,7 @@ func main() {
 			Data: debugs["usb"],
 		})
 		if err = dev.Configure(); err != nil {
-			log.WithField("prefix", "mtp").Fatalf("Configure failed: %v", err)
+			log.WithField("prefix", "mtp").Fatalf("configure failed: %v", err)
 		}
 	}
 
@@ -102,7 +102,7 @@ func main() {
 			case <-ctx.Done():
 				return nil
 			case s := <-sigChan:
-				log.WithField("prefix", "signal").Infof("Caught signal: %s", s)
+				log.WithField("prefix", "signal").Infof("caught signal: %s", s)
 				return errors.New(s.String())
 			}
 		}
@@ -144,6 +144,8 @@ func main() {
 		ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		return srv.Shutdown(ctx)
 	})
+
+	log.WithField("prefix", "main").Info("started")
 
 	err = eg.Wait()
 	if err != nil {

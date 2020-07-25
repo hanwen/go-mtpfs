@@ -51,7 +51,7 @@ func (d *DeviceDirect) GetData(req *Container, info interface{}) error {
 	}
 	err := Decode(&buf, info)
 	if d.Debug.MTP && err == nil {
-		log.WithField("prefix", "mtp").Debugf("Decoded %#v", info)
+		log.WithField("prefix", "mtp").Debugf("decoded %#v", info)
 	}
 	return err
 }
@@ -95,7 +95,7 @@ func (d *DeviceDirect) SendData(req *Container, rep *Container, value interface{
 		return err
 	}
 	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("Encoded %#v", value)
+		log.WithField("prefix", "mtp").Debugf("encoded %#v", value)
 	}
 	return d.RunTransaction(req, rep, nil, &buf, int64(buf.Len()))
 }
@@ -185,7 +185,7 @@ func (d *DeviceDirect) SendObjectInfo(wantStorageID, wantParent uint32, info *Ob
 	}
 
 	if len(rep.Param) < 3 {
-		err = fmt.Errorf("SendObjectInfo: got %v, need 3 response parameters", rep.Param)
+		err = fmt.Errorf("sendObjectInfo: got %v, need 3 response parameters", rep.Param)
 		return
 	}
 

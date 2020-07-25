@@ -12,7 +12,7 @@ func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error
 	var mtpDev []*DeviceGoUSB
 
 	if vid != 0 && pid != 0 {
-		log.WithField("prefix", "usb").Infof("Searching %04d:%04d", vid, pid)
+		log.WithField("prefix", "usb").Infof("searching %04d:%04d", vid, pid)
 	}
 
 	devs, err := ctx.OpenDevices(func(desc *gousb.DeviceDesc) bool {
@@ -63,7 +63,7 @@ func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error
 						}
 						mtpDev = append(mtpDev, d)
 
-						log.WithField("prefix", "usb").Infof("Found: %04x:%04x", v, p)
+						log.WithField("prefix", "usb").Infof("found: %04x:%04x", v, p)
 						return true
 					}
 				}
@@ -151,7 +151,7 @@ func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
 		}
 		cand := candidateFromDeviceDescriptor(d)
 		if cand != nil {
-			log.WithField("prefix", "usb").Infof("Found: %04x:%04x", v.IdVendor, v.IdProduct)
+			log.WithField("prefix", "usb").Infof("found: %04x:%04x", v.IdVendor, v.IdProduct)
 			devs = append(devs, cand)
 		}
 	}

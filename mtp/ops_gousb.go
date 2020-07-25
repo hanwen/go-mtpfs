@@ -48,7 +48,7 @@ func (d *DeviceGoUSB) GetData(req *Container, info interface{}) error {
 	}
 	err := Decode(&buf, info)
 	if d.Debug.MTP && err == nil {
-		log.WithField("prefix", "mtp").Debugf("MTP decoded %#v", info)
+		log.WithField("prefix", "mtp").Debugf("mTP decoded %#v", info)
 	}
 	return err
 }
