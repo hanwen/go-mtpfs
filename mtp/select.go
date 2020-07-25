@@ -2,7 +2,6 @@ package mtp
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/google/gousb"
@@ -132,14 +131,17 @@ func candidateFromDeviceDescriptor(d *usb.Device) *DeviceDirect {
 	return nil
 }
 
-// findDevices finds likely MTP devices without opening them.
-func findDevices(c *usb.Context, vid, pid uint16) ([]*DeviceDirect, error) {
+// SelectDeviceDirect returns opened MTP device that matches the given pattern.
+func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
+	c := usb.NewContext()
+
 	l, err := c.GetDeviceList()
 	if err != nil {
 		return nil, err
 	}
+	defer l.Done()
 
-	var cands []*DeviceDirect
+	var devs []*DeviceDirect
 	for _, d := range l {
 		v, _ := d.GetDeviceDescriptor()
 		if vid != 0 && v.IdVendor != vid {
@@ -149,92 +151,35 @@ func findDevices(c *usb.Context, vid, pid uint16) ([]*DeviceDirect, error) {
 		}
 		cand := candidateFromDeviceDescriptor(d)
 		if cand != nil {
-			cands = append(cands, cand)
-		}
-	}
-	l.Done()
-
-	return cands, nil
-}
-
-// selectDevice finds a device that matches given pattern
-func selectDevice(cands []*DeviceDirect, pattern string) (*DeviceDirect, error) {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
-
-	var found []*DeviceDirect
-	for _, cand := range cands {
-		if err := cand.Open(); err != nil {
-			continue
-		}
-
-		found = append(found, cand)
-	}
-
-	if len(found) == 0 {
-		return nil, fmt.Errorf("no MTP devices found")
-	}
-
-	cands = found
-	found = nil
-	var ids []string
-	for i, cand := range cands {
-		id, err := cand.ID()
-		if err != nil {
-			// TODO - close cands
-			return nil, fmt.Errorf("Id dev %d: %v", i, err)
-		}
-
-		if pattern == "" || re.FindString(id) != "" {
-			found = append(found, cand)
-			ids = append(ids, id)
-		} else {
-			cand.Close()
-			cand.Done()
+			log.WithField("prefix", "usb").Infof("Found: %04x:%04x", v.IdVendor, v.IdProduct)
+			devs = append(devs, cand)
 		}
 	}
 
-	if len(found) == 0 {
-		return nil, fmt.Errorf("no device matched")
-	}
-
-	if len(found) > 1 {
-		return nil, fmt.Errorf("mtp: more than 1 device: %s", strings.Join(ids, ","))
-	}
-
-	cand := found[0]
-	config, err := cand.h.GetConfiguration()
-	if err != nil {
-		return nil, fmt.Errorf("could not get configuration of %v: %v",
-			ids[0], err)
-	}
-	if config != cand.configValue {
-
-		if err := cand.h.SetConfiguration(cand.configValue); err != nil {
-			return nil, fmt.Errorf("could not set configuration of %v: %v",
-				ids[0], err)
-		}
-	}
-	return found[0], nil
-}
-
-// SelectDeviceDirect returns opened MTP device that matches the given pattern.
-func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
-	c := usb.NewContext()
-
-	devs, err := findDevices(c, vid, pid)
-	if err != nil {
-		return nil, err
-	}
 	if len(devs) == 0 {
 		return nil, fmt.Errorf("no MTP devices found")
 	}
 
-	dev, err := selectDevice(devs, "")
+	dev := devs[0]
+	vendor, product := dev.devDescr.IdVendor, dev.devDescr.IdProduct
+
+	if len(devs) > 1 {
+		log.WithField("prefix", "mtp").Warningf("detected more than 1 device, opening the first device: %04x:%04x", vendor, product)
+	}
+
+	if err := dev.Open(); err != nil {
+		return nil, fmt.Errorf("could not open %04x:%04x", dev.devDescr.IdVendor, dev.devDescr.IdProduct)
+	}
+
+	config, err := dev.h.GetConfiguration()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not get configuration of %04x:%04x: %v", vendor, product, err)
+	}
+
+	if config != dev.configValue {
+		if err := dev.h.SetConfiguration(dev.configValue); err != nil {
+			return nil, fmt.Errorf("could not set configuration of %04x:%04x: %v", vendor, product, err)
+		}
 	}
 
 	dev.Timeout = 5000
