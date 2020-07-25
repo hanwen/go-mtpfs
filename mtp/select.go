@@ -64,7 +64,7 @@ func SelectDeviceGoUSB(ctx *gousb.Context, vid, pid uint16) (*DeviceGoUSB, error
 						}
 						mtpDev = append(mtpDev, d)
 
-						log.WithField("prefix", "usb").Infof("Found a MTP device: %04x:%04x", v, p)
+						log.WithField("prefix", "usb").Infof("Found: %04x:%04x", v, p)
 						return true
 					}
 				}
