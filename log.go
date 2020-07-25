@@ -11,9 +11,15 @@ import (
 var log = &logrus.Logger{
 	Out: os.Stdout,
 	Formatter: &prefixed.TextFormatter{
+		DisableColors:   disableColors(),
 		ForceFormatting: true,
 		TimestampFormat: "2006-01-02 15:04:05",
 	},
+}
+
+func disableColors() bool {
+	term, ok := os.LookupEnv("TERM")
+	return term == "" || !ok
 }
 
 func logging(next http.Handler) http.Handler {
