@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 )
@@ -25,162 +24,8 @@ func setDebug(dev *DeviceDirect) {
 	dev.Debug.USB = VerboseTest()
 }
 
-func TestAndroid(t *testing.T) {
-	dev, err := SelectDeviceDirect("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dev.Close()
-	setDebug(dev)
-
-	info := DeviceInfo{}
-	err = dev.GetDeviceInfo(&info)
-	if err != nil {
-		t.Fatal("getDeviceInfo failed:", err)
-	}
-
-	if !strings.Contains(info.MTPExtension, "android.com:") {
-		t.Log("no android extensions", info.MTPExtension)
-		return
-	}
-
-	if err = dev.Configure(); err != nil {
-		t.Fatal("configure failed:", err)
-	}
-
-	sids := Uint32Array{}
-	err = dev.GetStorageIDs(&sids)
-	if err != nil {
-		t.Fatalf("getStorageIDs failed: %v", err)
-	}
-
-	if len(sids.Values) == 0 {
-		t.Fatalf("no storages")
-	}
-
-	id := sids.Values[0]
-
-	// 500 + 512 triggers the null read case on both sides.
-	const testSize = 500 + 512
-	name := fmt.Sprintf("mtp-doodle-test%x", rand.Int31())
-
-	send := ObjectInfo{
-		StorageID:        id,
-		ObjectFormat:     OFC_Undefined,
-		ParentObject:     0xFFFFFFFF,
-		Filename:         name,
-		CompressedSize:   uint32(testSize),
-		ModificationDate: time.Now(),
-		Keywords:         "bla",
-	}
-	data := make([]byte, testSize)
-	for i := range data {
-		data[i] = byte('0' + i%10)
-	}
-
-	_, _, handle, err := dev.SendObjectInfo(id, 0xFFFFFFFF, &send)
-	if err != nil {
-		t.Fatal("sendObjectInfo failed:", err)
-	} else {
-		buf := bytes.NewBuffer(data)
-		t.Logf("Sent objectinfo handle: 0x%x\n", handle)
-		err = dev.SendObject(buf, int64(len(data)))
-		if err != nil {
-			t.Log("SendObject failed:", err)
-		}
-	}
-
-	magicStr := "life universe"
-	magicOff := 21
-	magicSize := 42
-
-	err = dev.AndroidBeginEditObject(handle)
-	if err != nil {
-		t.Errorf("androidBeginEditObject: %v", err)
-		return
-	}
-	err = dev.AndroidTruncate(handle, int64(magicSize))
-	if err != nil {
-		t.Errorf("androidTruncate: %v", err)
-	}
-	buf := bytes.NewBufferString(magicStr)
-	err = dev.AndroidSendPartialObject(handle, int64(magicOff), uint32(buf.Len()), buf)
-	if err != nil {
-		t.Errorf("androidSendPartialObject: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("buffer not consumed")
-	}
-	err = dev.AndroidEndEditObject(handle)
-	if err != nil {
-		t.Errorf("androidEndEditObject: %v", err)
-	}
-
-	buf = &bytes.Buffer{}
-	err = dev.GetObject(handle, buf)
-	if err != nil {
-		t.Errorf("getObject: %v", err)
-	}
-
-	if buf.Len() != magicSize {
-		t.Errorf("truncate failed:: %v", err)
-	}
-	for i := 0; i < len(magicStr); i++ {
-		data[i+magicOff] = magicStr[i]
-	}
-	want := string(data[:magicSize])
-	if buf.String() != want {
-		t.Errorf("read result was %q, want %q", buf.String(), want)
-	}
-
-	buf = &bytes.Buffer{}
-	err = dev.AndroidGetPartialObject64(handle, buf, int64(magicOff), 5)
-	if err != nil {
-		t.Errorf("androidGetPartialObject64: %v", err)
-	}
-	want = magicStr[:5]
-	got := buf.String()
-	if got != want {
-		t.Errorf("androidGetPartialObject64: got %q want %q", got, want)
-	}
-
-	// Try write at end of file.
-	err = dev.AndroidBeginEditObject(handle)
-	if err != nil {
-		t.Errorf("androidBeginEditObject: %v", err)
-		return
-	}
-	buf = bytes.NewBufferString(magicStr)
-	err = dev.AndroidSendPartialObject(handle, int64(magicSize), uint32(buf.Len()), buf)
-	if err != nil {
-		t.Errorf("androidSendPartialObject: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("buffer not consumed")
-	}
-	err = dev.AndroidEndEditObject(handle)
-	if err != nil {
-		t.Errorf("androidEndEditObject: %v", err)
-	}
-	buf = &bytes.Buffer{}
-	err = dev.GetObject(handle, buf)
-	if err != nil {
-		t.Errorf("getObject: %v", err)
-	}
-	want = string(data[:magicSize]) + magicStr
-	got = buf.String()
-	if got != want {
-		t.Errorf("getObject: got %q want %q", got, want)
-	}
-
-	err = dev.DeleteObject(handle)
-	if err != nil {
-		t.Fatalf("deleteObject failed: %v", err)
-	}
-}
-
 func TestDeviceProperties(t *testing.T) {
-	dev, err := SelectDeviceDirect("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +114,7 @@ func TestDeviceProperties(t *testing.T) {
 }
 
 func TestDeviceInfo(t *testing.T) {
-	dev, err := SelectDeviceDirect("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +133,7 @@ func TestDeviceInfo(t *testing.T) {
 }
 
 func TestDeviceStorage(t *testing.T) {
-	dev, err := SelectDeviceDirect("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
