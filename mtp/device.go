@@ -10,6 +10,7 @@ type Device interface {
 	SetDebug(flags DebugFlags)
 	RunTransactionWithNoParams(code uint16) error
 	RunTransaction(req *Container, rep *Container, dest io.Writer, src io.Reader, writeSize int64) error
+	GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error
 	GetDevicePropValue(propCode uint32, dest interface{}) error
 }
 

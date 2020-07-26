@@ -12,6 +12,11 @@ import (
 
 var byteOrder = binary.LittleEndian
 
+type DecodeHints struct {
+	Selector DataTypeSelector
+	PropDesc bool // PropDesc is set when decode props
+}
+
 func decodeStr(r io.Reader) (string, error) {
 	var szSlice [1]byte
 	_, err := r.Read(szSlice[:])
@@ -101,21 +106,45 @@ func kindSize(k reflect.Kind) int {
 
 var nullValue reflect.Value
 
-func decodeArray(r io.Reader, t reflect.Type) (reflect.Value, error) {
-	var sz uint32
-	if err := binary.Read(r, byteOrder, &sz); err != nil {
-		return nullValue, err
+func decodeArray(r io.Reader, t reflect.Type, hint DecodeHints) (reflect.Value, error) {
+	var sz int
+	if hint.PropDesc {
+		var s uint16
+		if err := binary.Read(r, byteOrder, &s); err != nil {
+			return nullValue, err
+		}
+		sz = int(s)
+	} else {
+		var s uint32
+		if err := binary.Read(r, byteOrder, &s); err != nil {
+			return nullValue, err
+		}
+		sz = int(s)
 	}
 
-	ksz := int(kindSize(t.Elem().Kind()))
+	kind := t.Elem().Kind()
+	ksz := 0
+	if kind == reflect.Interface {
+		val := InstantiateType(hint)
+		ksz = kindSize(val.Kind())
+	} else {
+		ksz = kindSize(kind)
+	}
 
-	data := make([]byte, int(sz)*ksz)
-	_, err := r.Read(data)
+	expectedSize := sz * ksz
+	data := make([]byte, expectedSize)
+	n, err := r.Read(data)
 	if err != nil {
 		return nullValue, err
 	}
-	slice := reflect.MakeSlice(t, int(sz), int(sz))
-	for i := 0; i < int(sz); i++ {
+
+	if n < expectedSize {
+		data = data[:n]
+		sz = n / ksz
+	}
+
+	slice := reflect.MakeSlice(t, sz, sz)
+	for i := 0; i < sz; i++ {
 		from := data[i*ksz:]
 		var val uint64
 		switch ksz {
@@ -129,7 +158,11 @@ func decodeArray(r io.Reader, t reflect.Type) (reflect.Value, error) {
 			panic("unimp")
 		}
 
-		slice.Index(i).SetUint(val)
+		if kind == reflect.Interface {
+			slice.Index(i).Set(reflect.ValueOf(val))
+		} else {
+			slice.Index(i).SetUint(val)
+		}
 	}
 	return slice, nil
 }
@@ -227,7 +260,7 @@ func decodeTime(r io.Reader, f reflect.Value) error {
 	return nil
 }
 
-func decodeField(r io.Reader, f reflect.Value, typeSelector DataTypeSelector) error {
+func decodeField(r io.Reader, f reflect.Value, hint DecodeHints) error {
 	if !f.CanAddr() {
 		return fmt.Errorf("canaddr false")
 	}
@@ -260,14 +293,14 @@ func decodeField(r io.Reader, f reflect.Value, typeSelector DataTypeSelector) er
 		}
 		f.SetString(s)
 	case reflect.Slice:
-		sl, err := decodeArray(r, f.Type())
+		sl, err := decodeArray(r, f.Type(), hint)
 		if err != nil {
 			return err
 		}
 		f.Set(sl)
 	case reflect.Interface:
-		val := InstantiateType(typeSelector)
-		decodeField(r, val, typeSelector)
+		val := InstantiateType(hint)
+		decodeField(r, val, hint)
 		f.Set(val)
 	default:
 		panic(fmt.Sprintf("unimplemented kind %v", f))
@@ -314,12 +347,10 @@ func Decode(r io.Reader, iface interface{}) error {
 	if ok {
 		return decoder.Decode(r)
 	}
-
-	typeSel := DataTypeSelector(0xfe)
-	return decodeWithSelector(r, iface, typeSel)
+	return decodeWithSelector(r, iface, DecodeHints{Selector: DataTypeSelector(0xfe)})
 }
 
-func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector) error {
+func decodeWithSelector(r io.Reader, iface interface{}, hint DecodeHints) error {
 	val := reflect.ValueOf(iface)
 	if val.Kind() != reflect.Ptr {
 		return fmt.Errorf("need ptr argument: %T", iface)
@@ -328,13 +359,12 @@ func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector
 	t := val.Type()
 
 	for i := 0; i < t.NumField(); i++ {
-		if err := decodeField(r, val.Field(i), typeSel); err != nil {
+		if err := decodeField(r, val.Field(i), hint); err != nil {
 			return err
 		}
 		if val.Field(i).Type().Name() == "DataTypeSelector" {
-			typeSel = val.Field(i).Interface().(DataTypeSelector)
+			hint.Selector = val.Field(i).Interface().(DataTypeSelector)
 		}
-
 	}
 	return nil
 }
@@ -365,9 +395,9 @@ func Encode(w io.Writer, iface interface{}) error {
 }
 
 // Instantiates an object of wanted type as addressable value.
-func InstantiateType(t DataTypeSelector) reflect.Value {
+func InstantiateType(hint DecodeHints) reflect.Value {
 	var val interface{}
-	switch t {
+	switch hint.Selector {
 	case DTC_INT8:
 		v := int8(0)
 		val = &v
@@ -402,22 +432,20 @@ func InstantiateType(t DataTypeSelector) reflect.Value {
 		s := ""
 		val = &s
 	default:
-		panic(fmt.Sprintf("type not known 0x%x", t))
+		panic(fmt.Sprintf("type not known %#x", hint.Selector))
 	}
 
 	return reflect.ValueOf(val).Elem()
 }
 
-func decodePropDescForm(r io.Reader, selector DataTypeSelector, formFlag uint8) (DataDependentType, error) {
+func decodePropDescForm(r io.Reader, hint DecodeHints, formFlag uint8) (DataDependentType, error) {
 	if formFlag == DPFF_Range {
 		f := PropDescRangeForm{}
-		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(),
-			selector)
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(), hint)
 		return &f, err
 	} else if formFlag == DPFF_Enumeration {
 		f := PropDescEnumForm{}
-		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(),
-			selector)
+		err := decodeWithSelector(r, reflect.ValueOf(&f).Interface(), hint)
 		return &f, err
 	}
 	return nil, nil
@@ -427,7 +455,7 @@ func (pd *ObjectPropDesc) Decode(r io.Reader) error {
 	if err := Decode(r, &pd.ObjectPropDescFixed); err != nil {
 		return err
 	}
-	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
+	form, err := decodePropDescForm(r, DecodeHints{Selector: pd.DataType, PropDesc: true}, pd.FormFlag)
 	pd.Form = form
 	return err
 }
@@ -436,7 +464,7 @@ func (pd *DevicePropDesc) Decode(r io.Reader) error {
 	if err := Decode(r, &pd.DevicePropDescFixed); err != nil {
 		return err
 	}
-	form, err := decodePropDescForm(r, pd.DataType, pd.FormFlag)
+	form, err := decodePropDescForm(r, DecodeHints{Selector: pd.DataType, PropDesc: true}, pd.FormFlag)
 	pd.Form = form
 	return err
 }

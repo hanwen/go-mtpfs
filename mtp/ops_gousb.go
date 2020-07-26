@@ -59,6 +59,13 @@ func (d *DeviceGoUSB) GetDeviceInfo(info *DeviceInfo) error {
 	return d.GetData(&req, info)
 }
 
+func (d *DeviceGoUSB) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error {
+	var req Container
+	req.Code = OC_GetDevicePropDesc
+	req.Param = append(req.Param, uint32(propCode))
+	return d.GetData(&req, info)
+}
+
 func (d *DeviceGoUSB) GetDevicePropValue(propCode uint32, dest interface{}) error {
 	var req Container
 	req.Code = OC_GetDevicePropValue
