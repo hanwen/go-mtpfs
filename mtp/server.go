@@ -637,9 +637,9 @@ func (s *LVServer) setISO(iso int) error {
 	}
 
 	err := s.dev.SetDevicePropValue(DPC_ExposureIndex, &struct {
-		ISO uint64
+		ISO uint16
 	}{
-		ISO: uint64(iso),
+		ISO: uint16(iso),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set ISO: %s", err)
@@ -699,9 +699,9 @@ func (s *LVServer) setFN(fn string) error {
 	}
 
 	err = s.dev.SetDevicePropValue(DPC_FNumber, &struct {
-		FN uint64
+		FN uint16
 	}{
-		FN: uint64(fnf * 100),
+		FN: uint16(fnf * 100),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set f-number: %s", err)
