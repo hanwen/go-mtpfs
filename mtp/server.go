@@ -124,7 +124,9 @@ type ControlPayload struct {
 }
 
 type InfoPayload struct {
+	ISO    int      `json:"iso"`
 	ISOs   []int    `json:"isos"`
+	FN     string   `json:"fn"`
 	FNs    []string `json:"fns"`
 	Width  int      `json:"width"`
 	Height int      `json:"height"`
@@ -221,13 +223,13 @@ func (s *LVServer) Run() error {
 		_ = s.endLiveView()
 	}()
 
-	isos, err := s.getISOs()
+	isos, _, err := s.getISOs()
 	if err != nil {
 		return fmt.Errorf("failed to obtain ISO list: %s", err)
 	}
 	s.info.ISOs = isos
 
-	fns, err := s.getFNs()
+	fns, _, err := s.getFNs()
 	if err != nil {
 		return fmt.Errorf("failed to obtain F-values: %s", err)
 	}
@@ -287,7 +289,7 @@ func (s *LVServer) workerAF() error {
 }
 
 func (s *LVServer) frameCaptorSakura() error {
-	set := func(lv LiveView) {
+	set := func(lv LiveView, iso int, fn string) {
 		s.frameLock.Lock()
 		s.infoLock.Lock()
 		defer s.frameLock.Unlock()
@@ -295,6 +297,8 @@ func (s *LVServer) frameCaptorSakura() error {
 		s.Frame = lv.JPEG
 		s.info.Width = int(lv.LVWidth)
 		s.info.Height = int(lv.LVHeight)
+		s.info.ISO = iso
+		s.info.FN = fn
 		select {
 		case s.newFrameChan <- true:
 		default:
@@ -325,12 +329,26 @@ func (s *LVServer) frameCaptorSakura() error {
 		if err != nil {
 			if err.Error() == "failed to obtain an image: live view is not activated" {
 				time.Sleep(time.Second)
+				continue
 			} else {
 				s.log.WithField("prefix", "lv.frameCaptor").Warning(err)
 				time.Sleep(time.Second)
+				continue
 			}
 		}
-		set(lv)
+		_, currentISO, err := s.getISOs()
+		if err != nil {
+			s.log.WithField("prefix", "lv.frameCaptor").Errorf("failed to get current ISO: %s", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		_, currentFN, err := s.getFNs()
+		if err != nil {
+			s.log.WithField("prefix", "lv.frameCaptor").Errorf("failed to get current f-number: %s", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		set(lv, currentISO, currentFN)
 		s.fpsRate.Incr(1)
 	}
 }
@@ -595,12 +613,12 @@ func (s *LVServer) getLiveViewImgInner() (LiveView, error) {
 	}, nil
 }
 
-func (s *LVServer) getISOs() ([]int, error) {
+func (s *LVServer) getISOs() ([]int, int, error) {
 	s.mtpLock.Lock()
 	defer s.mtpLock.Unlock()
 
 	if s.dummy {
-		return []int{100, 1000, 10000}, nil
+		return []int{100, 1000, 10000}, 100, nil
 	}
 
 	isoi := make([]int, 0)
@@ -609,23 +627,28 @@ func (s *LVServer) getISOs() ([]int, error) {
 	err := s.dev.GetDevicePropDesc(DPC_ExposureIndex, &val)
 
 	if err != nil && err != io.EOF {
-		return isoi, err
+		return isoi, 0, err
 	}
 
 	asserted, ok := val.Form.(*PropDescEnumForm)
 	if !ok {
-		return isoi, fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
+		return isoi, 0, fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
 	}
 
 	for _, raw := range asserted.Values {
 		iso, ok := raw.(uint64)
 		if !ok {
-			return isoi, fmt.Errorf("unexpedted type: could not assert that form value is uint64")
+			return isoi, 0, fmt.Errorf("unexpedted type: could not assert that form value is uint64")
 		}
 		isoi = append(isoi, int(iso))
 	}
 
-	return isoi, nil
+	currentISO, ok := val.CurrentValue.(uint16)
+	if !ok {
+		return isoi, 0, fmt.Errorf("unexpedted type: could not assert that current value is uint16")
+	}
+
+	return isoi, int(currentISO), nil
 }
 
 func (s *LVServer) setISO(iso int) error {
@@ -647,12 +670,12 @@ func (s *LVServer) setISO(iso int) error {
 	return nil
 }
 
-func (s *LVServer) getFNs() ([]string, error) {
+func (s *LVServer) getFNs() ([]string, string, error) {
 	s.mtpLock.Lock()
 	defer s.mtpLock.Unlock()
 
 	if s.dummy {
-		return []string{"3.5", "10", "22"}, nil
+		return []string{"3.5", "10", "22"}, "3.5", nil
 	}
 
 	fns := make([]string, 0)
@@ -661,23 +684,28 @@ func (s *LVServer) getFNs() ([]string, error) {
 	err := s.dev.GetDevicePropDesc(DPC_FNumber, &val)
 
 	if err != nil && err != io.EOF {
-		return fns, err
+		return fns, "", err
 	}
 
 	asserted, ok := val.Form.(*PropDescEnumForm)
 	if !ok {
-		return fns, fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
+		return fns, "", fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
 	}
 
 	for _, raw := range asserted.Values {
 		fn, ok := raw.(uint64)
 		if !ok {
-			return fns, fmt.Errorf("unexpedted type: could not assert that form value is uint64")
+			return fns, "", fmt.Errorf("unexpedted type: could not assert that form value is uint64")
 		}
 		fns = append(fns, strconv.FormatFloat(float64(fn)/100, 'f', -1, 64))
 	}
 
-	return fns, nil
+	current, ok := val.CurrentValue.(uint16)
+	if !ok {
+		return fns, "", fmt.Errorf("unexpedted type: could not assert that current value is uint16")
+	}
+
+	return fns, strconv.FormatFloat(float64(current)/100, 'f', -1, 64), nil
 }
 
 func (s *LVServer) setFN(fn string) error {
