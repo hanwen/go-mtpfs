@@ -115,19 +115,21 @@ func (s *LVServer) unregisterStreamClient(c *websocket.Conn) {
 }
 
 type ControlPayload struct {
-	AFEnable   *bool  `json:"af_enable,omitempty"`
-	AFInterval *int   `json:"af_interval,omitempty"`
-	AFFocusNow *bool  `json:"af_focus_now,omitempty"`
-	LRFPS      *int64 `json:"lr_fps,omitempty"`
-	ISO        *int   `json:"iso,omitempty"`
+	AFEnable   *bool   `json:"af_enable,omitempty"`
+	AFInterval *int    `json:"af_interval,omitempty"`
+	AFFocusNow *bool   `json:"af_focus_now,omitempty"`
+	LRFPS      *int64  `json:"lr_fps,omitempty"`
+	ISO        *int    `json:"iso,omitempty"`
+	FN         *string `json:"fn,omitempty"`
 }
 
 type InfoPayload struct {
-	ISOs   []int  `json:"isos"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
-	FPS    int    `json:"fps"`
-	Frame  []byte `json:"frame"`
+	ISOs   []int    `json:"isos"`
+	FNs    []string `json:"fns"`
+	Width  int      `json:"width"`
+	Height int      `json:"height"`
+	FPS    int      `json:"fps"`
+	Frame  []byte   `json:"frame"`
 }
 
 func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +191,14 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 				s.log.WithField("prefix", "lv.HandleControl").Errorf("failed to set ISO: %s", err)
 			}
 		}
+
+		if p.FN != nil {
+			s.log.WithField("prefix", "lv.HandleControl").Debugf("set f-number: %s", *p.FN)
+			err = s.setFN(*p.FN)
+			if err != nil {
+				s.log.WithField("prefix", "lv.HandleControl").Errorf("failed to set f-number: %s", err)
+			}
+		}
 	}
 }
 
@@ -216,6 +226,12 @@ func (s *LVServer) Run() error {
 		return fmt.Errorf("failed to obtain ISO list: %s", err)
 	}
 	s.info.ISOs = isos
+
+	fns, err := s.getFNs()
+	if err != nil {
+		return fmt.Errorf("failed to obtain F-values: %s", err)
+	}
+	s.info.FNs = fns
 
 	s.eg.Go(s.workerLV)
 	s.eg.Go(s.workerAF)
@@ -627,6 +643,76 @@ func (s *LVServer) setISO(iso int) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set ISO: %s", err)
+	}
+	return nil
+}
+
+func (s *LVServer) getFNs() ([]string, error) {
+	s.mtpLock.Lock()
+	defer s.mtpLock.Unlock()
+
+	if s.dummy {
+		return []string{"3.5", "10", "22"}, nil
+	}
+
+	fns := make([]string, 0)
+
+	val := DevicePropDesc{}
+	err := s.dev.GetDevicePropDesc(DPC_FNumber, &val)
+
+	if err != nil && err != io.EOF {
+		return fns, err
+	}
+
+	asserted, ok := val.Form.(*PropDescEnumForm)
+	if !ok {
+		return fns, fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
+	}
+
+	for _, raw := range asserted.Values {
+		fn, ok := raw.(uint64)
+		if !ok {
+			return fns, fmt.Errorf("unexpedted type: could not assert that form value is uint64")
+		}
+		fns = append(fns, strconv.FormatFloat(float64(fn)/100, 'f', -1, 64))
+	}
+
+	return fns, nil
+}
+
+func (s *LVServer) setFN(fn string) error {
+	s.mtpLock.Lock()
+	defer s.mtpLock.Unlock()
+
+	if s.dummy {
+		return nil
+	}
+
+	fnf, err := strconv.ParseFloat(fn, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse f-number: %s", err)
+	}
+
+	err = s.dev.RunTransactionWithNoParams(OC_NIKON_EndLiveView)
+	if err != nil {
+		return fmt.Errorf("failed to set f-number: failed to stop live view: %s", err)
+	}
+
+	err = s.dev.SetDevicePropValue(DPC_FNumber, &struct {
+		FN uint64
+	}{
+		FN: uint64(fnf * 100),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set f-number: %s", err)
+	}
+
+	err = s.dev.RunTransactionWithNoParams(OC_NIKON_StartLiveView)
+	if err != nil {
+		if casted, ok := err.(RCError); ok && uint16(casted) == RC_NIKON_InvalidStatus {
+			return fmt.Errorf("failed to set f-number: failed to start live view: InvalidStatus (battery level is low?)")
+		}
+		return fmt.Errorf("failed to set f-number: start live view: %s", err)
 	}
 	return nil
 }

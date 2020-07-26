@@ -119,6 +119,8 @@
         <div class="card-body">
           <label class=input-group-text" for="iso" id="iso-label">ISO ?</label>
           <input type="range" class="custom-range" min="0" max="10" step="1" id="iso">
+          <label class=input-group-text" for="fn" id="fn-label">F ?</label>
+          <input type="range" class="custom-range" min="0" max="10" step="1" id="fn">
         </div>
       </div>
     </div>
@@ -128,6 +130,7 @@
   var img = document.getElementById('lv');
   var socket = new WebSocket("ws://" + window.location.host + "/control");
   var isos = new Array(0);
+  var fns = new Array(0);
 
   socket.onopen = function () {
     console.log("Connected");
@@ -142,7 +145,10 @@
     $("#preview").attr("src", "data:image/jpeg;base64," + j.frame);
 
     isos = j.isos;
-    $("#iso").attr("max", `${isos.length-1}`);
+    $("#iso").attr("max", isos.length-1);
+
+    fns = j.fns;
+    $("#fn").attr("max", fns.length-1)
   };
 
   $("#af-enable").on("click", function(){
@@ -183,6 +189,15 @@
     $("#iso-label").html(`ISO ${chose}`);
     socket.send(JSON.stringify({
       "iso": chose,
+    }))
+  });
+
+  let $fn = $("#fn");
+  $fn.on("input keyup", function(){
+    let chose = fns[$fn.val()];
+    $("#fn-label").html(`F ${chose}`);
+    socket.send(JSON.stringify({
+      "fn": chose,
     }))
   });
 </script>
