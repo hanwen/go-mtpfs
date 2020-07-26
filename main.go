@@ -149,6 +149,7 @@ func main() {
 
 	err = eg.Wait()
 	if err != nil {
+		log.WithField("prefix", "main").Error(err)
 		os.Exit(1)
 	}
 }
