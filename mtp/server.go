@@ -149,8 +149,10 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 
 		if p.AFEnable != nil && p.AFInterval != nil {
 			if *p.AFEnable {
+				s.log.WithField("prefix", "lv.HandleControl").Debug("enable AF")
 				s.afTicker.Start()
 			} else {
+				s.log.WithField("prefix", "lv.HandleControl").Debug("disable AF")
 				s.afTicker.Stop()
 				continue
 			}
@@ -165,9 +167,11 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				s.log.WithField("prefix", "lv.HandleControl").Errorf("failed to set interval: %d", *p.AFInterval)
 			}
+			s.log.WithField("prefix", "lv.HandleControl").Debugf("set AF interval: %d", *p.AFInterval)
 		}
 
 		if p.AFFocusNow != nil && *p.AFFocusNow {
+			s.log.WithField("prefix", "lv.HandleControl").Debug("focus now")
 			select {
 			case s.afNowChan <- true:
 			default:
