@@ -439,6 +439,17 @@ func (s *LVServer) getLiveViewStatus() (bool, error) {
 	return status, nil
 }
 
+func (s *LVServer) getLiveViewStatusInner() (error, bool) {
+	val := StringValue{}
+	err := s.dev.GetDevicePropValue(DPC_NIKON_LiveViewStatus, &val)
+
+	if err != nil && err != io.EOF {
+		return err, false
+	}
+
+	return nil, err == io.EOF
+}
+
 func (s *LVServer) autoFocus() error {
 	s.mtpLock.Lock()
 	defer s.mtpLock.Unlock()
@@ -467,19 +478,6 @@ func (s *LVServer) getLiveViewImg() (LiveView, error) {
 		return LiveView{}, err
 	}
 	return lv, nil
-}
-
-// Plain MTP communication
-
-func (s *LVServer) getLiveViewStatusInner() (error, bool) {
-	val := StringValue{}
-	err := s.dev.GetDevicePropValue(DPC_NIKON_LiveViewStatus, &val)
-
-	if err != nil && err != io.EOF {
-		return err, false
-	}
-
-	return nil, err == io.EOF
 }
 
 type liveViewRaw struct {
