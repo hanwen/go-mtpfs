@@ -119,9 +119,11 @@ type ControlPayload struct {
 	AFInterval *int   `json:"af_interval,omitempty"`
 	AFFocusNow *bool  `json:"af_focus_now,omitempty"`
 	LRFPS      *int64 `json:"lr_fps,omitempty"`
+	ISO        *int   `json:"iso,omitempty"`
 }
 
 type InfoPayload struct {
+	ISOs   []int  `json:"isos"`
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
 	FPS    int    `json:"fps"`
@@ -175,6 +177,14 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 		if p.LRFPS != nil {
 			s.lrFPS.Store(*p.LRFPS)
 		}
+
+		if p.ISO != nil {
+			s.log.WithField("prefix", "lv.HandleControl").Debugf("set ISO: %d", *p.ISO)
+			err = s.setISO(*p.ISO)
+			if err != nil {
+				s.log.WithField("prefix", "lv.HandleControl").Errorf("failed to set ISO: %s", err)
+			}
+		}
 	}
 }
 
@@ -196,6 +206,12 @@ func (s *LVServer) Run() error {
 	defer func() {
 		_ = s.endLiveView()
 	}()
+
+	isos, err := s.getISOs()
+	if err != nil {
+		return fmt.Errorf("failed to obtain ISO list: %s", err)
+	}
+	s.info.ISOs = isos
 
 	s.eg.Go(s.workerLV)
 	s.eg.Go(s.workerAF)
@@ -559,4 +575,56 @@ func (s *LVServer) getLiveViewImgInner() (LiveView, error) {
 		Recording:        lvr.Recording == 1,
 		JPEG:             raw[LVHeaderSize:],
 	}, nil
+}
+
+func (s *LVServer) getISOs() ([]int, error) {
+	s.mtpLock.Lock()
+	defer s.mtpLock.Unlock()
+
+	if s.dummy {
+		return []int{100, 1000, 10000}, nil
+	}
+
+	isoi := make([]int, 0)
+
+	val := DevicePropDesc{}
+	err := s.dev.GetDevicePropDesc(DPC_ExposureIndex, &val)
+
+	if err != nil && err != io.EOF {
+		return isoi, err
+	}
+
+	asserted, ok := val.Form.(*PropDescEnumForm)
+	if !ok {
+		return isoi, fmt.Errorf("unexpedted type: could not assert that returned prop is enum form")
+	}
+
+	for _, raw := range asserted.Values {
+		iso, ok := raw.(uint64)
+		if !ok {
+			return isoi, fmt.Errorf("unexpedted type: could not assert that form value is uint64")
+		}
+		isoi = append(isoi, int(iso))
+	}
+
+	return isoi, nil
+}
+
+func (s *LVServer) setISO(iso int) error {
+	s.mtpLock.Lock()
+	defer s.mtpLock.Unlock()
+
+	if s.dummy {
+		return nil
+	}
+
+	err := s.dev.SetDevicePropValue(DPC_ExposureIndex, &struct {
+		ISO uint64
+	}{
+		ISO: uint64(iso),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set ISO: %s", err)
+	}
+	return nil
 }

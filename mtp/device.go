@@ -12,6 +12,7 @@ type Device interface {
 	RunTransaction(req *Container, rep *Container, dest io.Writer, src io.Reader, writeSize int64) error
 	GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error
 	GetDevicePropValue(propCode uint32, dest interface{}) error
+	SetDevicePropValue(propCode uint32, src interface{}) error
 }
 
 type sessionData struct {

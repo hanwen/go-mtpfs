@@ -44,7 +44,7 @@
 <body>
 <div class="container top-container">
   <div class="row">
-    <div class="col-md mb-3">
+    <div class="col-md-4 mb-3">
       <div class="card">
         <div class="card-header card-header-sm">
           Auto Focus
@@ -65,7 +65,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md mb-3">
+    <div class="col-md-4 mb-3">
       <div class="card">
         <div class="card-header card-header-sm">
           Rate Limit
@@ -73,7 +73,7 @@
         <div class="card-body">
           <div class="input-group">
             <div class="input-group-prepend">
-              <span class="input-group-text" id="lr-label">Frame rate [fps]</span>
+              <span class="input-group-text" id="lr-label">FPS</span>
             </div>
             <input id="lr-fps" type="text" class="form-control" placeholder="more than 0" aria-label="frames"
                    aria-describedby="interval-label" value="30">
@@ -85,7 +85,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md mb-3">
+    <div class="col-md-4 mb-3">
       <div class="card">
         <div class="card-header card-header-sm">
           Information
@@ -111,11 +111,23 @@
         </div>
       </div>
     </div>
+    <div class="col-md-4 mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Capture
+        </div>
+        <div class="card-body">
+          <label class=input-group-text" for="iso" id="iso-label">ISO ?</label>
+          <input type="range" class="custom-range" min="0" max="10" step="1" id="iso">
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <script>
   var img = document.getElementById('lv');
   var socket = new WebSocket("ws://" + window.location.host + "/control");
+  var isos = new Array(0);
 
   socket.onopen = function () {
     console.log("Connected");
@@ -128,37 +140,49 @@
     $("#height").html(j.height.toString() + " px");
     $("#fps").html(j.fps.toString() + " fps");
     $("#preview").attr("src", "data:image/jpeg;base64," + j.frame);
+
+    isos = j.isos;
+    $("#iso").attr("max", `${isos.length-1}`);
   };
 
   $("#af-enable").on("click", function(){
     socket.send(JSON.stringify({
       "af_enable": true,
       "af_interval": parseInt($("#af-interval").val(), 10),
-    }))
+    }));
   });
 
   $("#af-disable").on("click", function(){
     socket.send(JSON.stringify({
       "af_enable": false,
       "af_interval": 0,
-    }))
+    }));
   });
 
   $("#af-now").on("click", function(){
     socket.send(JSON.stringify({
       "af_focus_now": true,
-    }))
+    }));
   });
 
   $("#lr-limit").on("click", function(){
     socket.send(JSON.stringify({
       "lr_fps": parseInt($("#lr-fps").val(), 10),
-    }))
+    }));
   });
 
   $("#lr-unlimit").on("click", function(){
     socket.send(JSON.stringify({
       "lr_fps": 0,
+    }));
+  });
+
+  let $iso = $("#iso");
+  $iso.on("input change", function(){
+    let chose = isos[parseInt($iso.val())];
+    $("#iso-label").html(`ISO ${chose}`);
+    socket.send(JSON.stringify({
+      "iso": chose,
     }))
   });
 </script>

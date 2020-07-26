@@ -53,6 +53,17 @@ func (d *DeviceGoUSB) GetData(req *Container, info interface{}) error {
 	return err
 }
 
+func (d *DeviceGoUSB) SendData(req *Container, rep *Container, value interface{}) error {
+	var buf bytes.Buffer
+	if err := Encode(&buf, value); err != nil {
+		return err
+	}
+	if d.Debug.MTP {
+		log.WithField("prefix", "mtp").Debugf("encoded %#v", value)
+	}
+	return d.RunTransaction(req, rep, nil, &buf, int64(buf.Len()))
+}
+
 func (d *DeviceGoUSB) GetDeviceInfo(info *DeviceInfo) error {
 	var req Container
 	req.Code = OC_GetDeviceInfo
@@ -71,4 +82,11 @@ func (d *DeviceGoUSB) GetDevicePropValue(propCode uint32, dest interface{}) erro
 	req.Code = OC_GetDevicePropValue
 	req.Param = []uint32{propCode}
 	return d.GetData(&req, dest)
+}
+
+func (d *DeviceGoUSB) SetDevicePropValue(propCode uint32, src interface{}) error {
+	var req, rep Container
+	req.Code = OC_SetDevicePropValue
+	req.Param = []uint32{propCode}
+	return d.SendData(&req, &rep, src)
 }
