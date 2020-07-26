@@ -7,9 +7,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
   <link rel="stylesheet" href="/assets/bootstrap.min.css">
+  <link rel="stylesheet" href="/assets/bootstrap4-toggle.min.css">
   <script src="/assets/jquery-3.5.1.slim.min.js"></script>
   <script src="/assets/popper.min.js"></script>
   <script src="/assets/bootstrap.min.js"></script>
+  <script src="/assets/bootstrap4-toggle.min.js"></script>
 
   <style>
     .container.top-container {
@@ -71,8 +73,7 @@
                    aria-describedby="interval-label" value="5">
           </div>
           <div class="btn-group btn-block" role="group" aria-label="af-activation">
-            <button id="af-enable" type="button" class="btn btn-primary">Enable</button>
-            <button id="af-disable" type="button" class="btn btn-secondary">Disable</button>
+            <input type="checkbox" data-toggle="toggle" data-on="Enabled" data-off="Disabled" data-onstyle="primary" data-offstyle="secondary" id="af">
           </div>
           <button id="af-now" class="btn btn-success btn-block">Focus Now</button>
         </div>
@@ -92,8 +93,7 @@
                    aria-describedby="interval-label" value="30">
           </div>
           <div class="btn-group btn-block" role="group" aria-label="lr-activation">
-            <button id="lr-limit" type="button" class="btn btn-primary">Limit</button>
-            <button id="lr-unlimit" type="button" class="btn btn-secondary">Unlimit</button>
+            <input type="checkbox" data-toggle="toggle" data-on="Limited" data-off="Unlimited" data-onstyle="primary" data-offstyle="secondary" id="lr">
           </div>
         </div>
       </div>
@@ -153,8 +153,12 @@
     $fn = $("#fn");
     $fn.attr("max", fns.length-1);
 
-
     if (first) {
+      $("#af-interval").val(j.af === 0 ? 5 : j.af);
+      $("#af").bootstrapToggle(j.af ? "on" : "off");
+      $("#lr-fps").val(j.lr === 0 ? 30 : j.lr);
+      $("#lr").bootstrapToggle(j.lr ? "on" : "off");
+
       $iso[0].value = isos.indexOf(j.iso);
       $("#iso-label").html(`ISO ${j.iso}`);
       $fn[0].value = fns.indexOf(j.fn);
@@ -163,35 +167,29 @@
     }
   };
 
-  $("#af-enable").on("click", function(){
+  $('#af').change(function(){
+    if (first) {
+      return;
+    }
+    let interval = $(this).prop('checked') ? parseInt($("#af-interval").val(), 10) : 0;
     socket.send(JSON.stringify({
-      "af_enable": true,
-      "af_interval": parseInt($("#af-interval").val(), 10),
+      "af_interval": interval,
     }));
   });
 
-  $("#af-disable").on("click", function(){
+  $('#lr').change(function(){
+    if (first) {
+      return;
+    }
+    let fps = $(this).prop('checked') ? parseInt($("#lr-fps").val(), 10) : 0;
     socket.send(JSON.stringify({
-      "af_enable": false,
-      "af_interval": 0,
+      "lr_fps": fps,
     }));
   });
 
   $("#af-now").on("click", function(){
     socket.send(JSON.stringify({
       "af_focus_now": true,
-    }));
-  });
-
-  $("#lr-limit").on("click", function(){
-    socket.send(JSON.stringify({
-      "lr_fps": parseInt($("#lr-fps").val(), 10),
-    }));
-  });
-
-  $("#lr-unlimit").on("click", function(){
-    socket.send(JSON.stringify({
-      "lr_fps": 0,
     }));
   });
 

@@ -43,7 +43,7 @@ type LVServer struct {
 	mtpLock sync.Mutex
 	dummy   bool
 
-	afInterval int
+	afInterval *atomic.Int64
 	afTicker   *MutableTicker
 	afNowChan  chan bool
 
@@ -69,7 +69,7 @@ func NewLVServer(dev Device, log *logrus.Logger, ctx context.Context) *LVServer 
 		dev:   dev,
 		dummy: dev == nil,
 
-		afInterval: 5,
+		afInterval: atomic.NewInt64(5),
 		afTicker:   NewMutableTicker(5 * time.Second),
 		afNowChan:  make(chan bool),
 
@@ -115,8 +115,7 @@ func (s *LVServer) unregisterStreamClient(c *websocket.Conn) {
 }
 
 type ControlPayload struct {
-	AFEnable   *bool   `json:"af_enable,omitempty"`
-	AFInterval *int    `json:"af_interval,omitempty"`
+	AFInterval *int64  `json:"af_interval,omitempty"`
 	AFFocusNow *bool   `json:"af_focus_now,omitempty"`
 	LRFPS      *int64  `json:"lr_fps,omitempty"`
 	ISO        *int    `json:"iso,omitempty"`
@@ -128,6 +127,8 @@ type InfoPayload struct {
 	ISOs   []int    `json:"isos"`
 	FN     string   `json:"fn"`
 	FNs    []string `json:"fns"`
+	AF     int64    `json:"af"`
+	LR     int64    `json:"lr"`
 	Width  int      `json:"width"`
 	Height int      `json:"height"`
 	FPS    int      `json:"fps"`
@@ -141,6 +142,17 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	setInfo := func(af *int64, lr *int64) {
+		s.infoLock.Lock()
+		defer s.infoLock.Unlock()
+		if af != nil {
+			s.info.AF = *af
+		}
+		if lr != nil {
+			s.info.LR = *lr
+		}
+	}
+
 	s.registerControlClient(ws)
 	for {
 		var p ControlPayload
@@ -151,8 +163,10 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if p.AFEnable != nil && p.AFInterval != nil {
-			if *p.AFEnable {
+		if p.AFInterval != nil {
+			setInfo(p.AFInterval, nil)
+
+			if *p.AFInterval > 0 {
 				s.log.WithField("prefix", "lv.HandleControl").Debug("enable AF")
 				s.afTicker.Start()
 			} else {
@@ -161,12 +175,7 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if *p.AFInterval < 1 {
-				s.log.WithField("prefix", "lv.HandleControl").Errorf("invalid AF interval: %d", *p.AFInterval)
-				continue
-			}
-
-			s.afInterval = *p.AFInterval
+			s.afInterval.Store(*p.AFInterval)
 			s.afTicker.SetInterval(time.Duration(*p.AFInterval) * time.Second)
 			if err != nil {
 				s.log.WithField("prefix", "lv.HandleControl").Errorf("failed to set interval: %d", *p.AFInterval)
@@ -183,6 +192,12 @@ func (s *LVServer) HandleControl(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if p.LRFPS != nil {
+			setInfo(nil, p.LRFPS)
+			if *p.LRFPS > 0 {
+				s.log.WithField("prefix", "lv.HandleControl").Debugf("set rate limit: %d", *p.LRFPS)
+			} else {
+				s.log.WithField("prefix", "lv.HandleControl").Debug("disable rate limit")
+			}
 			s.lrFPS.Store(*p.LRFPS)
 		}
 
