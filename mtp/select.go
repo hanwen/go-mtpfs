@@ -182,6 +182,6 @@ func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
 		}
 	}
 
-	dev.Timeout = 5000
+	dev.Timeout = 1000
 	return dev, nil
 }
