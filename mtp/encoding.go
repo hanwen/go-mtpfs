@@ -37,7 +37,7 @@ func decodeStr(r io.Reader) (string, error) {
 		return "", fmt.Errorf("underflow")
 	}
 	w := 0
-	for i := 0; i < int(2*sz); i += 2 {
+	for i := 0; i < 2*sz; i += 2 {
 		cp := byteOrder.Uint16(data[i:])
 		w += utf8.EncodeRune(utfStr[w:], rune(cp))
 	}
@@ -57,10 +57,10 @@ func encodeStr(buf []byte, s string) ([]byte, error) {
 	codepoints := 0
 	buf = append(buf[:0], 0)
 
-	var rune [2]byte
+	var char [2]byte
 	for _, r := range s {
-		byteOrder.PutUint16(rune[:], uint16(r))
-		buf = append(buf, rune[0], rune[1])
+		byteOrder.PutUint16(char[:], uint16(r))
+		buf = append(buf, char[0], char[1])
 		codepoints++
 	}
 	buf = append(buf, 0, 0)
@@ -176,9 +176,9 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 	kind := val.Type().Elem().Kind()
 	ksz := 0
 	if kind == reflect.Interface {
-		ksz = int(kindSize(val.Index(0).Elem().Kind()))
+		ksz = kindSize(val.Index(0).Elem().Kind())
 	} else {
-		ksz = int(kindSize(kind))
+		ksz = kindSize(kind)
 	}
 	data := make([]byte, int(sz)*ksz)
 	for i := 0; i < int(sz); i++ {
@@ -193,7 +193,7 @@ func encodeArray(w io.Writer, val reflect.Value) error {
 		case reflect.Uint32:
 			byteOrder.PutUint32(to, uint32(elt.Uint()))
 		case reflect.Uint64:
-			byteOrder.PutUint64(to, uint64(elt.Uint()))
+			byteOrder.PutUint64(to, elt.Uint())
 
 		case reflect.Int8:
 			to[0] = byte(elt.Int())
