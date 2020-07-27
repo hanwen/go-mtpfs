@@ -339,8 +339,10 @@ Usage of ./mtplvcap:
 ### Special Thanks
 
 このプログラムは[github.com/hanwen/go-mtpfs](https://github.com/hanwen/go-mtpfs)からForkして大改造したものです。
-go-mtpfsの堅牢で安定したMTP実装がなければ、mtplvcapは実現まではるかに遠かったはずです。Han-Wenさん本当にありがとうございます！
+go-mtpfsの成熟したMTP実装のおかげで実装のスタートを切れました。Han-Wenさん本当にありがとうございます。
 
+[github.com/dukus/digiCamControl](https://github.com/dukus/digiCamControl)もMTPのペイロードをパースするために大いに参考にしました。
+もしこのコードがなかったらmtplvcapは実装できていなかったと思います。
 
 ### ライセンス
 

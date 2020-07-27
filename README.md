@@ -340,6 +340,8 @@ Usage of ./mtplvcap:
 This program is based on [github.com/hanwen/go-mtpfs](https://github.com/hanwen/go-mtpfs).
 Special thanks to Han-Wen-san for a robust and mature MTP implementation.
 
+And also I referenced [github.com/dukus/digiCamControl](https://github.com/dukus/digiCamControl) for parsing MTP payloads.
+If not for this, I couldn't have implemented mtplvcap.
 
 ### License
 
