@@ -1,6 +1,6 @@
 ## イントロダクション
 
-![Diagram](./img/totemo_wakariyasui_zu.png)
+![Diagram](./img/totemo_wakariyasui_zu.jpg)
 
 **English version is [here](./README.md)**
 

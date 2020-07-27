@@ -1,6 +1,6 @@
 ## Introduction
 
-![Diagram](./img/totemo_wakariyasui_zu.png)
+![Diagram](./img/very_simple_diagram.jpg)
 
 **日本語は[こちら](./README.ja.md)**
 
