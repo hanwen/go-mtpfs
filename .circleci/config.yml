@@ -28,8 +28,8 @@ workflows:
     jobs:
       - build-linux:
           <<: *filter-dev
-      #- build-win:
-      #    <<: *filter-release
+      - build-win:
+          <<: *filter-release
       - build-mac:
           <<: *filter-release
       - release:
@@ -66,17 +66,17 @@ jobs:
           <<: *windows-default
           name: Build
           command: |
-            mkdir windows
-            go build -o ./windows/mtplvcap .
+            mkdir mtplvcap_windows_amd64
+            go build -o ./mtplvcap_windows_amd64/mtplvcap .
       - run:
           <<: *windows-default
           name: Copy DLL
           command: |
-            cp /mingw64/bin/libusb-1.0.dll ./windows/
+            cp /mingw64/bin/libusb-1.0.dll ./mtplvcap_windows_amd64/
       - persist_to_workspace:
           root: .
           paths:
-            - windows
+            - mtplvcap_windows_amd64
 
   build-mac:
     macos:
@@ -95,12 +95,12 @@ jobs:
           environment:
             CGO_CFLAGS: -Wno-deprecated-declarations
           command: |
-            mkdir macos
-            go build -o ./macos/mtplvcap .
+            mkdir mtplvcap_macos_amd64
+            go build -o ./mtplvcap_macos_amd64/mtplvcap .
       - persist_to_workspace:
           root: .
           paths:
-            - macos
+            - mtplvcap_macos_amd64
 
   build-linux:
     docker:
@@ -116,12 +116,12 @@ jobs:
           environment:
             CGO_CFLAGS: -Wno-deprecated-declarations
           command: |
-            mkdir linux
-            go build -o ./linux/mtplvcap .
+            mkdir mtplvcap_linux_amd64
+            go build -o ./mtplvcap_linux_amd64/mtplvcap .
       - persist_to_workspace:
           root: .
           paths:
-            - linux
+            - mtplvcap_linux_amd64
 
   release:
     docker:
@@ -134,9 +134,9 @@ jobs:
           name: Compress
           command: |
             mkdir zip
-            #zip -r mtplvcap_windows_amd64 windows
-            zip -r mtplvcap_macos_amd64 macos
-            zip -r mtplvcap_linux_amd64 linux
+            zip -r mtplvcap_windows_amd64 mtplvcap_windows_amd64
+            zip -r mtplvcap_macos_amd64 mtplvcap_macos_amd64
+            zip -r mtplvcap_linux_amd64 mtplvcap_linux_amd64
             mv *.zip ./zip/
       - github-release/create:
           path: ./zip/
