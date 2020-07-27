@@ -47,10 +47,6 @@ func (d *DeviceDirect) sendMaxPacketSize() int {
 	return d.dev.GetMaxPacketSize(d.sendEP)
 }
 
-func (d *DeviceDirect) SetDebug(flags DebugFlags) {
-	d.Debug = flags
-}
-
 // Close releases the interface, and closes the device.
 func (d *DeviceDirect) Close() error {
 	if d.h == nil {
@@ -65,7 +61,7 @@ func (d *DeviceDirect) Close() error {
 		if err := d.runTransaction(&req, &rep, nil, nil, 0); err != nil {
 			err := d.h.Reset()
 			if d.Debug.USB {
-				log.WithField("prefix", "usb").Debugf("reset, err: %v", err)
+				log.USB.Debugf("reset, err: %v", err)
 			}
 		}
 	}
@@ -73,14 +69,14 @@ func (d *DeviceDirect) Close() error {
 	if d.claimed {
 		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
 		if d.Debug.USB {
-			log.WithField("prefix", "usb").Debugf("releaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
+			log.USB.Debugf("releaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 		}
 	}
 	err := d.h.Close()
 	d.h = nil
 
 	if d.Debug.USB {
-		log.WithField("prefix", "usb").Debugf("close, err: %v", err)
+		log.USB.Debugf("close, err: %v", err)
 	}
 	return err
 }
@@ -99,7 +95,7 @@ func (d *DeviceDirect) claim() error {
 
 	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
 	if d.Debug.USB {
-		log.WithField("prefix", "usb").Debugf("claimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
+		log.USB.Debugf("claimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
 	}
 	if err == nil {
 		d.claimed = true
@@ -121,7 +117,7 @@ func (d *DeviceDirect) Open() error {
 	var err error
 	d.h, err = d.dev.Open()
 	if d.Debug.USB {
-		log.WithField("prefix", "usb").Debugf("open, err: %v", err)
+		log.USB.Debugf("open, err: %v", err)
 	}
 	if err != nil {
 		return err
@@ -167,7 +163,7 @@ func (d *DeviceDirect) ID() (string, error) {
 		s, err := d.h.GetStringDescriptorASCII(b)
 		if err != nil {
 			if d.Debug.USB {
-				log.WithField("prefix", "usb").Debugf("getStringDescriptorASCII, err: %v", err)
+				log.USB.Debugf("getStringDescriptorASCII, err: %v", err)
 			}
 			return "", err
 		}
@@ -276,7 +272,7 @@ func (d *DeviceDirect) RunTransaction(req *Container, rep *Container,
 		_, ok2 := err.(SyncError)
 		_, ok1 := err.(usb.Error)
 		if ok1 || ok2 {
-			log.WithField("prefix", "mtp").Errorf("fatal error %v; closing connection.", err)
+			log.MTP.Errorf("fatal error %v; closing connection.", err)
 			d.Close()
 		}
 		return err
@@ -296,12 +292,12 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 	}
 
 	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("request %s %v\n", OC_names[int(req.Code)], req.Param)
+		log.MTP.Debugf("request %s %v\n", OC_names[int(req.Code)], req.Param)
 	}
 
 	if err := d.sendReq(req); err != nil {
 		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("sendreq failed: %v\n", err)
+			log.MTP.Debugf("sendreq failed: %v\n", err)
 		}
 		return err
 	}
@@ -332,11 +328,11 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 			dest = &NullWriter{}
 			unexpectedData = true
 			if d.Debug.MTP {
-				log.WithField("prefix", "mtp").Debugf("discarding unexpected data 0x%x bytes", h.Length)
+				log.MTP.Debugf("discarding unexpected data 0x%x bytes", h.Length)
 			}
 		}
 		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("data 0x%x bytes", h.Length)
+			log.MTP.Debugf("data 0x%x bytes", h.Length)
 		}
 
 		dest.Write(rest)
@@ -353,7 +349,7 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 		h = &usbBulkHeader{}
 		if len(finalPacket) > 0 {
 			if d.Debug.MTP {
-				log.WithField("prefix", "mtp").Errorf("reusing final packet")
+				log.MTP.Errorf("reusing final packet")
 			}
 			rest = finalPacket
 			finalBuf := bytes.NewBuffer(finalPacket[:len(finalPacket)])
@@ -365,7 +361,7 @@ func (d *DeviceDirect) runTransaction(req *Container, rep *Container,
 
 	err = d.decodeRep(h, rest, rep)
 	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
+		log.MTP.Debugf("response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	}
 	if unexpectedData {
 		return SyncError(fmt.Sprintf("unexpected data for code %s", getName(RC_names, int(req.Code))))
@@ -480,7 +476,7 @@ func (d *DeviceDirect) bulkRead(w io.Writer) (n int64, lastPacket []byte, err er
 			}
 		}
 		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("bulk read 0x%x bytes.", lastRead)
+			log.MTP.Debugf("bulk read 0x%x bytes.", lastRead)
 		}
 		if lastRead < len(toread) {
 			// short read.
@@ -495,7 +491,7 @@ func (d *DeviceDirect) bulkRead(w io.Writer) (n int64, lastPacket []byte, err er
 		var nullReadSize int
 		nullReadSize, err = d.h.BulkTransfer(d.fetchEP, buf[:], d.Timeout)
 		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("expected null packet, read %d bytes", nullReadSize)
+			log.MTP.Debugf("expected null packet, read %d bytes", nullReadSize)
 		}
 		return n, buf[:nullReadSize], err
 	}
@@ -520,7 +516,7 @@ func (d *DeviceDirect) Configure() error {
 	}
 
 	if err != nil {
-		log.WithField("prefix", "mtp").Warningf("failed to open session: %v, attempting reset", err)
+		log.MTP.Warningf("failed to open session: %v, attempting reset", err)
 		if d.h != nil {
 			d.h.Reset()
 		}

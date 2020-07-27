@@ -17,13 +17,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/puhitaku/mtplvcap/log"
+
 	"github.com/google/gousb"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/puhitaku/mtplvcap/mtp"
 	"github.com/puhitaku/mtplvcap/public"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -42,26 +43,23 @@ func main() {
 		debugs[s] = true
 	}
 
-	if _, ok := debugs["server"]; ok {
-		log.Level = logrus.DebugLevel
-	} else {
-		log.Level = logrus.InfoLevel
-	}
+	logChildren := log.PrepareChildren(log.Root, debugs["usb"], debugs["mtp"], debugs["data"], debugs["server"])
 
 	vid, err := strconv.ParseInt(strings.ReplaceAll(*vendorID, "0x", ""), 16, 64)
 	if err != nil {
-		log.WithField("prefix", "main").Fatalf("failed to parse VID: %s", err)
-	}
-	pid, err := strconv.ParseInt(strings.ReplaceAll(*productID, "0x", ""), 16, 64)
-	if err != nil {
-		log.WithField("prefix", "main").Fatalf("failed to parse PID: %s", err)
+		log.Root.WithField("prefix", "main").Fatalf("failed to parse VID: %s", err)
 	}
 
-	mtp.SetLogger(log)
+	pid, err := strconv.ParseInt(strings.ReplaceAll(*productID, "0x", ""), 16, 64)
+	if err != nil {
+		log.Root.WithField("prefix", "main").Fatalf("failed to parse PID: %s", err)
+	}
+
+	mtp.SetLogger(logChildren)
 	var dev mtp.Device
 
 	if *serverOnly {
-		log.WithField("prefix", "mtp").Info("server-only mode is activated, skipping USB initialization")
+		log.Root.WithField("prefix", "mtp").Info("server-only mode is activated, skipping USB initialization")
 	} else {
 		if *backendGo {
 			ctx := gousb.NewContext()
@@ -69,26 +67,21 @@ func main() {
 
 			devGo, err := mtp.SelectDeviceGoUSB(ctx, uint16(vid), uint16(pid))
 			if err != nil {
-				log.WithField("prefix", "mtp").Fatalf("failed to detect MTP device: %s", err)
+				log.Root.WithField("prefix", "mtp").Fatalf("failed to detect MTP device: %s", err)
 			}
 			defer devGo.Close()
 			dev = devGo
 		} else {
 			devDirect, err := mtp.SelectDeviceDirect(uint16(vid), uint16(pid))
 			if err != nil {
-				log.WithField("prefix", "mtp").Fatalf("failed to detect MTP devices: %v", err)
+				log.Root.WithField("prefix", "mtp").Fatalf("failed to detect MTP devices: %v", err)
 			}
 			defer devDirect.Close()
 			dev = devDirect
 		}
 
-		dev.SetDebug(mtp.DebugFlags{
-			MTP:  debugs["mtp"],
-			USB:  debugs["data"],
-			Data: debugs["usb"],
-		})
 		if err = dev.Configure(); err != nil {
-			log.WithField("prefix", "mtp").Fatalf("configure failed: %v", err)
+			log.Root.WithField("prefix", "mtp").Fatalf("configure failed: %v", err)
 		}
 	}
 
@@ -102,13 +95,13 @@ func main() {
 			case <-ctx.Done():
 				return nil
 			case s := <-sigChan:
-				log.WithField("prefix", "signal").Infof("caught signal: %s", s)
+				log.Root.WithField("prefix", "signal").Infof("caught signal: %s", s)
 				return errors.New(s.String())
 			}
 		}
 	})
 
-	lvs := mtp.NewLVServer(dev, log, ctx)
+	lvs := mtp.NewLVServer(dev, ctx)
 	eg.Go(lvs.Run)
 
 	router := http.NewServeMux()
@@ -126,12 +119,12 @@ func main() {
 
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%d", *host, *port),
-		Handler: logging(router),
+		Handler: log.HTTPLogHandler(router),
 	}
 
 	eg.Go(func() error {
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			log.WithField("prefix", "http").Error(err)
+			log.Root.WithField("prefix", "http").Error(err)
 			return err
 		}
 		return nil
@@ -145,11 +138,11 @@ func main() {
 		return srv.Shutdown(ctx)
 	})
 
-	log.WithField("prefix", "main").Info("started")
+	log.Root.WithField("prefix", "main").Info("started")
 
 	err = eg.Wait()
 	if err != nil {
-		log.WithField("prefix", "main").Error(err)
+		log.Root.WithField("prefix", "main").Error(err)
 		os.Exit(1)
 	}
 }

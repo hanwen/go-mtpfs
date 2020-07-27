@@ -1,9 +1,9 @@
 package mtp
 
-import "github.com/sirupsen/logrus"
+import log_ "github.com/puhitaku/mtplvcap/log"
 
-var log *logrus.Logger
+var log *log_.Children
 
-func SetLogger(l *logrus.Logger) {
+func SetLogger(l *log_.Children) {
 	log = l
 }

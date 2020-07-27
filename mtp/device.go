@@ -7,7 +7,6 @@ import (
 
 type Device interface {
 	Configure() error
-	SetDebug(flags DebugFlags)
 	RunTransactionWithNoParams(code uint16) error
 	RunTransaction(req *Container, rep *Container, dest io.Writer, src io.Reader, writeSize int64) error
 	GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error

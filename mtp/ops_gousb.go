@@ -47,8 +47,8 @@ func (d *DeviceGoUSB) GetData(req *Container, info interface{}) error {
 		return err
 	}
 	err := Decode(&buf, info)
-	if d.Debug.MTP && err == nil {
-		log.WithField("prefix", "mtp").Debugf("mTP decoded %#v", info)
+	if err == nil {
+		log.MTP.Debugf("mTP decoded %#v", info)
 	}
 	return err
 }
@@ -58,9 +58,7 @@ func (d *DeviceGoUSB) SendData(req *Container, rep *Container, value interface{}
 	if err := Encode(&buf, value); err != nil {
 		return err
 	}
-	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("encoded %#v", value)
-	}
+	log.MTP.Debugf("encoded %#v", value)
 	return d.RunTransaction(req, rep, nil, &buf, int64(buf.Len()))
 }
 

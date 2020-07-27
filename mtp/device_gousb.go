@@ -36,16 +36,10 @@ type DeviceGoUSB struct {
 	eventEP *gousb.InEndpoint
 
 	session *sessionData
-
-	Debug DebugFlags
 }
 
 func (d *DeviceGoUSB) connected() bool {
 	return d.sendEP != nil
-}
-
-func (d *DeviceGoUSB) SetDebug(flags DebugFlags) {
-	d.Debug = flags
 }
 
 // Close releases the interface, and closes the device.
@@ -60,15 +54,15 @@ func (d *DeviceGoUSB) Close() error {
 		// RunTransaction runs close, so can't use CloseSession().
 
 		err := d.runTransaction(&req, &rep, nil, nil, 0)
-		if err != nil && d.Debug.USB {
-			log.WithField("prefix", "usb").Errorf("failed to close session")
+		if err != nil {
+			log.USB.Errorf("failed to close session")
 		}
 		d.session = nil
 	}
 
 	err := d.config.Close()
-	if err != nil && d.Debug.USB {
-		log.WithField("prefix", "usb").Errorf("failed to close configuration: %s", err)
+	if err != nil {
+		log.USB.Errorf("failed to close configuration: %s", err)
 	}
 	d.iface.Close()
 
@@ -120,22 +114,22 @@ func (d *DeviceGoUSB) Open() error {
 	if len(d.ifaceDesc.AltSettings) == 0 {
 		info := DeviceInfo{}
 		err = d.GetDeviceInfo(&info)
-		if err != nil && d.Debug.USB {
-			log.WithField("prefix", "usb").Errorf("failed to get device info: %s", err)
+		if err != nil {
+			log.USB.Errorf("failed to get device info: %s", err)
 		}
 
 		if !strings.Contains(info.MTPExtension, "microsoft") {
 			err = d.Close()
-			if err != nil && d.Debug.USB {
-				log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
+			if err != nil {
+				log.USB.Errorf("failed to close device: %s", err)
 			}
 			return fmt.Errorf("no MTP extensions in %s", info.MTPExtension)
 		}
 	} else {
 		if iface.Setting.Class != gousb.ClassPTP {
 			err = d.Close()
-			if err != nil && d.Debug.USB {
-				log.WithField("prefix", "usb").Errorf("failed to close device: %s", err)
+			if err != nil {
+				log.USB.Errorf("failed to close device: %s", err)
 			}
 			return fmt.Errorf("interface has no MTP/PTP/Image class")
 		}
@@ -257,14 +251,10 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 		d.session.tid++
 	}
 
-	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("request %s %v\n", OC_names[int(req.Code)], req.Param)
-	}
+	log.MTP.Debugf("request %s %v\n", OC_names[int(req.Code)], req.Param)
 
 	if err := d.sendReq(req); err != nil {
-		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("sendreq failed: %v\n", err)
-		}
+		log.MTP.Debugf("sendreq failed: %v\n", err)
 		return err
 	}
 
@@ -293,13 +283,9 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 		if dest == nil {
 			dest = &NullWriter{}
 			unexpectedData = true
-			if d.Debug.MTP {
-				log.WithField("prefix", "mtp").Debugf("discarding unexpected data 0x%x bytes", h.Length)
-			}
+			log.MTP.Debugf("discarding unexpected data 0x%x bytes", h.Length)
 		}
-		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("data 0x%x bytes", h.Length)
-		}
+		log.MTP.Debugf("data 0x%x bytes", h.Length)
 
 		dest.Write(rest)
 
@@ -314,9 +300,7 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 
 		h = &usbBulkHeader{}
 		if len(finalPacket) > 0 {
-			if d.Debug.MTP {
-				log.WithField("prefix", "mtp").Debugf("reusing final packet")
-			}
+			log.MTP.Debugf("reusing final packet")
 			rest = finalPacket
 			finalBuf := bytes.NewBuffer(finalPacket[:len(finalPacket)])
 			err = binary.Read(finalBuf, binary.LittleEndian, h)
@@ -326,9 +310,7 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 	}
 
 	err = d.decodeRep(h, rest, rep)
-	if d.Debug.MTP {
-		log.WithField("prefix", "mtp").Debugf("response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
-	}
+	log.MTP.Debugf("response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	if unexpectedData {
 		return SyncError(fmt.Sprintf("unexpected data for code %s", getName(RC_names, int(req.Code))))
 	}
@@ -346,7 +328,7 @@ func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 
 // Prints data going over the USB connection.
 func (d *DeviceGoUSB) dataPrint(epDesc gousb.EndpointDesc, data []byte) {
-	if !d.Debug.Data {
+	if !log.Data.IsDebug() {
 		return
 	}
 	ep := uint8(epDesc.Address)
@@ -438,9 +420,7 @@ func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err err
 				break
 			}
 		}
-		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("bulk read 0x%x bytes.", lastRead)
-		}
+		log.MTP.Debugf("bulk read 0x%x bytes.", lastRead)
 		if lastRead < len(toread) {
 			// short read.
 			break
@@ -453,9 +433,7 @@ func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err err
 		// the final packet and inspect it in the calling function.
 		var nullReadSize int
 		nullReadSize, err = d.bulkTransferIn(d.fetchEP, buf[:])
-		if d.Debug.MTP {
-			log.WithField("prefix", "mtp").Debugf("expected null packet, read %d bytes", nullReadSize)
-		}
+		log.MTP.Debugf("expected null packet, read %d bytes", nullReadSize)
 		return n, buf[:nullReadSize], err
 	}
 	return n, buf[:0], err
@@ -485,7 +463,7 @@ func (d *DeviceGoUSB) Configure() error {
 	}
 
 	if err != nil {
-		log.WithField("prefix", "mtp").Warningf("failed to open session: %v, attempting reset", err)
+		log.MTP.Warningf("failed to open session: %v, attempting reset", err)
 		d.Close()
 
 		// Give the device some rest.
