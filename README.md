@@ -105,6 +105,7 @@ Continue with care.**
     ```
    
     - Make sure your camera opens up its shutter
+    - Perhaps you have to specify GOROOT like `GOROOT=/mingw64/lib/go go build .`
 
 1. Done!
     - The binary can be moved and redistributed easily
