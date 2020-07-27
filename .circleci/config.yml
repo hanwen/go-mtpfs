@@ -11,32 +11,47 @@ aliases:
       PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
       CGO_CFLAGS: -Wno-deprecated-declarations
       GOROOT: "/c/tools/msys64/mingw64/lib/go"
-  filter-dev: &filter-dev
+  filter-all: &filter-all
     filters:
       tags:
-        only: /^v\d+\.\d+\.\d+$/
+        only: /.*/
+  filter-rc: &filter-rc
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /^v\d+\.\d+\.\d+-rc\d+$/
   filter-release: &filter-release
     filters:
       branches:
         ignore: /.*/
       tags:
         only: /^v\d+\.\d+\.\d+$/
+  release-template: &release-template
+    docker:
+      - image: circleci/golang:buster
+    resource_class: small
+
 
 workflows:
   version: 2
   build:
     jobs:
       - build-linux:
-          <<: *filter-dev
+          <<: *filter-all
       - build-win:
           <<: *filter-release
       - build-mac:
           <<: *filter-release
+      - prerelease:
+          <<: *filter-rc
+          requires:
+            - build-linux
       - release:
           <<: *filter-release
           requires:
             - build-linux
-            #- build-win
+            - build-win
             - build-mac
 
 jobs:
@@ -123,10 +138,23 @@ jobs:
           paths:
             - mtplvcap_linux_amd64
 
+  prerelease:
+    <<: *release-template
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Compress
+          command: |
+            mkdir zip
+            zip -r mtplvcap_linux_amd64 mtplvcap_linux_amd64
+            mv *.zip ./zip/
+      - github-release/create:
+          path: ./zip/
+          prerelease: true
+
   release:
-    docker:
-      - image: circleci/golang:buster
-    resource_class: small
+    <<: *release-template
     steps:
       - attach_workspace:
           at: .
