@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>DSLR Controller</title>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="stylesheet" href="/assets/bootstrap.min.css">
+  <link rel="stylesheet" href="/assets/bootstrap4-toggle.min.css">
+  <script src="/assets/jquery-3.5.1.slim.min.js"></script>
+  <script src="/assets/popper.min.js"></script>
+  <script src="/assets/bootstrap.min.js"></script>
+  <script src="/assets/bootstrap4-toggle.min.js"></script>
+
+  <style>
+    .container.top-container {
+      padding-top: 15px;
+    }
+
+    .card-header.card-header-sm {
+      padding: 0.25rem 0.75rem;
+    }
+
+    .card-body > div {
+      margin-bottom: 0.5rem;
+    }
+
+    .card-body > .btn-block + .btn-block {
+      margin-top: 0;
+    }
+
+    .card-body > :last-child {
+      margin-bottom: 0;
+    }
+
+    table {
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    #preview {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+<div class="container top-container">
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          General
+        </div>
+        <div class="card-body">
+          <label class=input-group-text" for="iso" id="iso-label">ISO ?</label>
+          <input type="range" class="custom-range" min="0" max="10" step="1" id="iso">
+          <label class=input-group-text" for="fn" id="fn-label">F ?</label>
+          <input type="range" class="custom-range" min="0" max="10" step="1" id="fn">
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Periodic Auto Focus
+        </div>
+        <div class="card-body">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="interval-label">Interval [s]</span>
+            </div>
+            <input id="af-interval" type="text" class="form-control" placeholder="more than 0" aria-label="seconds"
+                   aria-describedby="interval-label" value="5">
+          </div>
+          <div class="btn-group btn-block" role="group" aria-label="af-activation">
+            <input type="checkbox" data-toggle="toggle" data-on="Enabled" data-off="Disabled" data-onstyle="primary" data-offstyle="secondary" id="af">
+          </div>
+          <button id="af-now" class="btn btn-success btn-block">Focus Now</button>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Rate Limit
+        </div>
+        <div class="card-body">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="lr-label">FPS</span>
+            </div>
+            <input id="lr-fps" type="text" class="form-control" placeholder="more than 0" aria-label="frames"
+                   aria-describedby="interval-label" value="30">
+          </div>
+          <div class="btn-group btn-block" role="group" aria-label="lr-activation">
+            <input type="checkbox" data-toggle="toggle" data-on="Limited" data-off="Unlimited" data-onstyle="primary" data-offstyle="secondary" id="lr">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="card">
+        <div class="card-header card-header-sm">
+          Information
+        </div>
+        <div class="card-body">
+          <table class="table table-sm">
+            <tbody>
+            <tr>
+              <th scope="row">Width</th>
+              <td id="width">0px</td>
+            </tr>
+            <tr>
+              <th scope="row">Height</th>
+              <td id="height">0px</td>
+            </tr>
+            <tr>
+              <th scope="row">Frame rate</th>
+              <td id="fps">0</td>
+            </tr>
+            </tbody>
+          </table>
+          <img id="preview" src="" alt="preview">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  var first = true;
+  var img = document.getElementById('lv');
+  var socket = new WebSocket("ws://" + window.location.host + "/control");
+  var isos = new Array(0);
+  var fns = new Array(0);
+
+  socket.onopen = function () {
+    console.log("Connected");
+  };
+
+  socket.onmessage = function (e) {
+    console.log("Got a message");
+    let j = JSON.parse(e.data);
+    $("#width").html(j.width.toString() + " px");
+    $("#height").html(j.height.toString() + " px");
+    $("#fps").html(j.fps.toString() + " fps");
+    $("#preview").attr("src", "data:image/jpeg;base64," + j.frame);
+
+    isos = j.isos;
+    $iso = $("#iso");
+    $iso.attr("max", isos.length-1);
+
+    fns = j.fns;
+    $fn = $("#fn");
+    $fn.attr("max", fns.length-1);
+
+    if (first) {
+      $("#af-interval").val(j.af === 0 ? 5 : j.af);
+      $("#af").bootstrapToggle(j.af ? "on" : "off");
+      $("#lr-fps").val(j.lr === 0 ? 30 : j.lr);
+      $("#lr").bootstrapToggle(j.lr ? "on" : "off");
+
+      $iso[0].value = isos.indexOf(j.iso);
+      $("#iso-label").html(`ISO ${j.iso}`);
+      $fn[0].value = fns.indexOf(j.fn);
+      $("#fn-label").html(`F ${j.fn}`);
+      first = false;
+    }
+  };
+
+  $('#af').change(function(){
+    if (first) {
+      return;
+    }
+    let interval = $(this).prop('checked') ? parseInt($("#af-interval").val(), 10) : 0;
+    socket.send(JSON.stringify({
+      "af_interval": interval,
+    }));
+  });
+
+  $('#lr').change(function(){
+    if (first) {
+      return;
+    }
+    let fps = $(this).prop('checked') ? parseInt($("#lr-fps").val(), 10) : 0;
+    socket.send(JSON.stringify({
+      "lr_fps": fps,
+    }));
+  });
+
+  $("#af-now").on("click", function(){
+    socket.send(JSON.stringify({
+      "af_focus_now": true,
+    }));
+  });
+
+  let $iso = $("#iso");
+  $iso.on("input change", function(){
+    let chose = isos[parseInt($iso.val())];
+    $("#iso-label").html(`ISO ${chose}`);
+    socket.send(JSON.stringify({
+      "iso": chose,
+    }))
+  });
+
+  let $fn = $("#fn");
+  $fn.on("input keyup", function(){
+    let chose = fns[$fn.val()];
+    $("#fn-label").html(`F ${chose}`);
+    socket.send(JSON.stringify({
+      "fn": chose,
+    }))
+  });
+</script>
+</body>
+</html>

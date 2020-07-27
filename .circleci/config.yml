@@ -1,0 +1,170 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@2.2.0
+  github-release: izumin5210/github-release@0.0.1
+
+aliases:
+  windows-default: &windows-default
+    shell: C:\\tools\\msys64\\usr\\bin\\bash
+    environment:
+      PATH: "/c/tools/msys64/usr/bin:/c/tools/msys64/mingw64/bin:/c/tools/msys64/mingw64/lib/go/bin"
+      CGO_CFLAGS: -Wno-deprecated-declarations
+      GOROOT: "/c/tools/msys64/mingw64/lib/go"
+  filter-all: &filter-all
+    filters:
+      tags:
+        only: /.*/
+  filter-rc: &filter-rc
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /^v\d+\.\d+\.\d+-rc\d+$/
+  filter-release: &filter-release
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /^v\d+\.\d+\.\d+$/
+  release-template: &release-template
+    docker:
+      - image: circleci/golang:buster
+    resource_class: small
+
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build-linux:
+          <<: *filter-all
+      - build-win:
+          <<: *filter-release
+      - build-mac:
+          <<: *filter-release
+      - prerelease:
+          <<: *filter-rc
+          requires:
+            - build-linux
+      - release:
+          <<: *filter-release
+          requires:
+            - build-linux
+            - build-win
+            - build-mac
+
+jobs:
+  build-win:
+    executor:
+      name: win/default
+      size: medium
+
+    steps:
+      - checkout
+      - run:
+          name: Install MSYS2
+          shell: powershell.exe
+          command: |
+            choco install -y msys2
+      - run:
+          <<: *windows-default
+          name: Install prerequisites
+          command: |
+            /c/tools/msys64/usr/bin/pacman -Sy --noconfirm \\
+            mingw-w64-x86_64-toolchain \\
+            mingw-w64-x86_64-libusb \\
+            mingw-w64-x86_64-go \\
+            mingw-w64-x86_64-pkg-config \\
+            git
+      - run:
+          <<: *windows-default
+          name: Build
+          command: |
+            mkdir mtplvcap_windows_amd64
+            go build -o ./mtplvcap_windows_amd64/mtplvcap .
+      - run:
+          <<: *windows-default
+          name: Copy DLL
+          command: |
+            cp /mingw64/bin/libusb-1.0.dll ./mtplvcap_windows_amd64/
+      - persist_to_workspace:
+          root: .
+          paths:
+            - mtplvcap_windows_amd64
+
+  build-mac:
+    macos:
+      xcode: 10.1.0
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: Update Homebrew
+          command: brew update
+      - run:
+          name: Install prerequisites
+          command: brew install libusb golang pkg-config
+      - run:
+          name: Build
+          environment:
+            CGO_CFLAGS: -Wno-deprecated-declarations
+          command: |
+            mkdir mtplvcap_macos_amd64
+            go build -o ./mtplvcap_macos_amd64/mtplvcap .
+      - persist_to_workspace:
+          root: .
+          paths:
+            - mtplvcap_macos_amd64
+
+  build-linux:
+    docker:
+      - image: circleci/golang:buster
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Install prerequisites
+          command: sudo apt install libusb-1.0.0-dev
+      - run:
+          name: Build
+          environment:
+            CGO_CFLAGS: -Wno-deprecated-declarations
+          command: |
+            mkdir mtplvcap_linux_amd64
+            go build -o ./mtplvcap_linux_amd64/mtplvcap .
+      - persist_to_workspace:
+          root: .
+          paths:
+            - mtplvcap_linux_amd64
+
+  prerelease:
+    <<: *release-template
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Compress
+          command: |
+            mkdir zip
+            zip -r mtplvcap_linux_amd64 mtplvcap_linux_amd64
+            mv *.zip ./zip/
+      - github-release/create:
+          path: ./zip/
+          prerelease: true
+
+  release:
+    <<: *release-template
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Compress
+          command: |
+            mkdir zip
+            zip -r mtplvcap_windows_amd64 mtplvcap_windows_amd64
+            zip -r mtplvcap_macos_amd64 mtplvcap_macos_amd64
+            zip -r mtplvcap_linux_amd64 mtplvcap_linux_amd64
+            mv *.zip ./zip/
+      - github-release/create:
+          path: ./zip/

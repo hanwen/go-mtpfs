@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 )
@@ -19,168 +18,14 @@ func VerboseTest() bool {
 	return flag != nil && flag.Value.String() == "true"
 }
 
-func setDebug(dev *Device) {
-	dev.DataDebug = VerboseTest()
-	dev.MTPDebug = VerboseTest()
-	dev.USBDebug = VerboseTest()
-}
-
-func TestAndroid(t *testing.T) {
-	dev, err := SelectDevice("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dev.Close()
-	setDebug(dev)
-
-	info := DeviceInfo{}
-	err = dev.GetDeviceInfo(&info)
-	if err != nil {
-		t.Fatal("GetDeviceInfo failed:", err)
-	}
-
-	if !strings.Contains(info.MTPExtension, "android.com:") {
-		t.Log("no android extensions", info.MTPExtension)
-		return
-	}
-
-	if err = dev.Configure(); err != nil {
-		t.Fatal("Configure failed:", err)
-	}
-
-	sids := Uint32Array{}
-	err = dev.GetStorageIDs(&sids)
-	if err != nil {
-		t.Fatalf("GetStorageIDs failed: %v", err)
-	}
-
-	if len(sids.Values) == 0 {
-		t.Fatalf("No storages")
-	}
-
-	id := sids.Values[0]
-
-	// 500 + 512 triggers the null read case on both sides.
-	const testSize = 500 + 512
-	name := fmt.Sprintf("mtp-doodle-test%x", rand.Int31())
-
-	send := ObjectInfo{
-		StorageID:        id,
-		ObjectFormat:     OFC_Undefined,
-		ParentObject:     0xFFFFFFFF,
-		Filename:         name,
-		CompressedSize:   uint32(testSize),
-		ModificationDate: time.Now(),
-		Keywords:         "bla",
-	}
-	data := make([]byte, testSize)
-	for i := range data {
-		data[i] = byte('0' + i%10)
-	}
-
-	_, _, handle, err := dev.SendObjectInfo(id, 0xFFFFFFFF, &send)
-	if err != nil {
-		t.Fatal("SendObjectInfo failed:", err)
-	} else {
-		buf := bytes.NewBuffer(data)
-		t.Logf("Sent objectinfo handle: 0x%x\n", handle)
-		err = dev.SendObject(buf, int64(len(data)))
-		if err != nil {
-			t.Log("SendObject failed:", err)
-		}
-	}
-
-	magicStr := "life universe"
-	magicOff := 21
-	magicSize := 42
-
-	err = dev.AndroidBeginEditObject(handle)
-	if err != nil {
-		t.Errorf("AndroidBeginEditObject: %v", err)
-		return
-	}
-	err = dev.AndroidTruncate(handle, int64(magicSize))
-	if err != nil {
-		t.Errorf("AndroidTruncate: %v", err)
-	}
-	buf := bytes.NewBufferString(magicStr)
-	err = dev.AndroidSendPartialObject(handle, int64(magicOff), uint32(buf.Len()), buf)
-	if err != nil {
-		t.Errorf("AndroidSendPartialObject: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("buffer not consumed")
-	}
-	err = dev.AndroidEndEditObject(handle)
-	if err != nil {
-		t.Errorf("AndroidEndEditObject: %v", err)
-	}
-
-	buf = &bytes.Buffer{}
-	err = dev.GetObject(handle, buf)
-	if err != nil {
-		t.Errorf("GetObject: %v", err)
-	}
-
-	if buf.Len() != magicSize {
-		t.Errorf("truncate failed:: %v", err)
-	}
-	for i := 0; i < len(magicStr); i++ {
-		data[i+magicOff] = magicStr[i]
-	}
-	want := string(data[:magicSize])
-	if buf.String() != want {
-		t.Errorf("read result was %q, want %q", buf.String(), want)
-	}
-
-	buf = &bytes.Buffer{}
-	err = dev.AndroidGetPartialObject64(handle, buf, int64(magicOff), 5)
-	if err != nil {
-		t.Errorf("AndroidGetPartialObject64: %v", err)
-	}
-	want = magicStr[:5]
-	got := buf.String()
-	if got != want {
-		t.Errorf("AndroidGetPartialObject64: got %q want %q", got, want)
-	}
-
-	// Try write at end of file.
-	err = dev.AndroidBeginEditObject(handle)
-	if err != nil {
-		t.Errorf("AndroidBeginEditObject: %v", err)
-		return
-	}
-	buf = bytes.NewBufferString(magicStr)
-	err = dev.AndroidSendPartialObject(handle, int64(magicSize), uint32(buf.Len()), buf)
-	if err != nil {
-		t.Errorf("AndroidSendPartialObject: %v", err)
-	}
-	if buf.Len() > 0 {
-		t.Errorf("buffer not consumed")
-	}
-	err = dev.AndroidEndEditObject(handle)
-	if err != nil {
-		t.Errorf("AndroidEndEditObject: %v", err)
-	}
-	buf = &bytes.Buffer{}
-	err = dev.GetObject(handle, buf)
-	if err != nil {
-		t.Errorf("GetObject: %v", err)
-	}
-	want = string(data[:magicSize]) + magicStr
-	got = buf.String()
-	if got != want {
-		t.Errorf("GetObject: got %q want %q", got, want)
-	}
-
-	err = dev.DeleteObject(handle)
-	if err != nil {
-		t.Fatalf("DeleteObject failed: %v", err)
-	}
+func setDebug(dev *DeviceDirect) {
+	dev.Debug.Data = VerboseTest()
+	dev.Debug.MTP = VerboseTest()
+	dev.Debug.USB = VerboseTest()
 }
 
 func TestDeviceProperties(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +34,7 @@ func TestDeviceProperties(t *testing.T) {
 	setDebug(dev)
 	err = dev.Configure()
 	if err != nil {
-		t.Fatal("Configure failed:", err)
+		t.Fatal("configure failed:", err)
 	}
 
 	// Test non-supported device property first.
@@ -205,7 +50,7 @@ func TestDeviceProperties(t *testing.T) {
 	var friendly DevicePropDesc
 	err = dev.GetDevicePropDesc(DPC_MTP_DeviceFriendlyName, &friendly)
 	if err != nil {
-		t.Fatal("GetDevicePropDesc FriendlyName failed:", err)
+		t.Fatal("getDevicePropDesc FriendlyName failed:", err)
 	} else {
 		t.Logf("%s: %#v\n", DPC_names[DPC_MTP_DeviceFriendlyName], friendly)
 	}
@@ -215,13 +60,13 @@ func TestDeviceProperties(t *testing.T) {
 	str := StringValue{newVal}
 	err = dev.SetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
-		t.Error("SetDevicePropValue failed:", err)
+		t.Error("setDevicePropValue failed:", err)
 	}
 
 	str.Value = ""
 	err = dev.GetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
-		t.Error("GetDevicePropValue failed:", err)
+		t.Error("getDevicePropValue failed:", err)
 	}
 	if str.Value != newVal {
 		t.Logf("got %q for property value, want %q\n", str.Value, newVal)
@@ -237,14 +82,14 @@ func TestDeviceProperties(t *testing.T) {
 	str = StringValue{before}
 	err = dev.SetDevicePropValue(DPC_MTP_DeviceFriendlyName, &str)
 	if err != nil {
-		t.Error("SetDevicePropValue failed:", err)
+		t.Error("setDevicePropValue failed:", err)
 	}
 
 	// Test object properties.
 	props := Uint16Array{}
 	err = dev.GetObjectPropsSupported(OFC_Undefined, &props)
 	if err != nil {
-		t.Errorf("GetObjectPropsSupported failed: %v\n", err)
+		t.Errorf("getObjectPropsSupported failed: %v\n", err)
 	} else {
 		t.Logf("GetObjectPropsSupported (OFC_Undefined) value: %s\n", getNames(OPC_names, props.Values))
 	}
@@ -259,7 +104,7 @@ func TestDeviceProperties(t *testing.T) {
 		err = dev.GetObjectPropDesc(p, OFC_Undefined, &objPropDesc)
 		name := OPC_names[int(p)]
 		if err != nil {
-			t.Errorf("GetObjectPropDesc(%s) failed: %v\n", name, err)
+			t.Errorf("getObjectPropDesc(%s) failed: %v\n", name, err)
 		} else {
 			t.Logf("GetObjectPropDesc(%s) value: %#v %T\n", name, objPropDesc,
 				InstantiateType(objPropDesc.DataType).Interface())
@@ -269,7 +114,7 @@ func TestDeviceProperties(t *testing.T) {
 }
 
 func TestDeviceInfo(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,14 +126,14 @@ func TestDeviceInfo(t *testing.T) {
 	info := DeviceInfo{}
 	err = dev.GetDeviceInfo(&info)
 	if err != nil {
-		t.Error("GetDeviceInfo failed:", err)
+		t.Error("getDeviceInfo failed:", err)
 	} else {
 		t.Logf("%v\n", &info)
 	}
 }
 
 func TestDeviceStorage(t *testing.T) {
-	dev, err := SelectDevice("")
+	dev, err := SelectDeviceDirect(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,33 +153,33 @@ func TestDeviceStorage(t *testing.T) {
 
 	err = dev.Configure()
 	if err != nil {
-		t.Fatal("Configure failed:", err)
+		t.Fatal("configure failed:", err)
 	}
 
 	sids := Uint32Array{}
 	err = dev.GetStorageIDs(&sids)
 	if err != nil {
-		t.Fatalf("GetStorageIDs failed: %v", err)
+		t.Fatalf("getStorageIDs failed: %v", err)
 	} else {
 		t.Logf("%#v\n", sids)
 	}
 
 	if len(sids.Values) == 0 {
-		t.Fatalf("No storages")
+		t.Fatalf("no storages")
 	}
 
 	id := sids.Values[0]
 	var storageInfo StorageInfo
 	dev.GetStorageInfo(id, &storageInfo)
 	if err != nil {
-		t.Fatalf("GetStorageInfo failed: %s", err)
+		t.Fatalf("getStorageInfo failed: %s", err)
 	} else {
 		t.Logf("%#v\n", storageInfo)
 	}
 
 	resp, err := dev.GetNumObjects(id, 0x0, 0x0)
 	if err != nil {
-		t.Fatalf("GenericRPC failed: %s", err)
+		t.Fatalf("genericRPC failed: %s", err)
 	} else {
 		t.Logf("num objects %#v\n", resp)
 	}
@@ -360,7 +205,7 @@ func TestDeviceStorage(t *testing.T) {
 
 	_, _, handle, err := dev.SendObjectInfo(id, 0xFFFFFFFF, &send)
 	if err != nil {
-		t.Fatalf("SendObjectInfo failed: %s", err)
+		t.Fatalf("sendObjectInfo failed: %s", err)
 	} else {
 		t.Logf("Sent objectinfo handle: 0x%x\n", handle)
 		err = dev.SendObject(buf, int64(len(data)))
@@ -376,7 +221,7 @@ func TestDeviceStorage(t *testing.T) {
 		0xFFFFFFFF, &hs)
 
 	if err != nil {
-		t.Fatalf("GetObjectHandles failed: %v", err)
+		t.Fatalf("getObjectHandles failed: %v", err)
 	} else {
 		found := false
 		for _, h := range hs.Values {
@@ -394,7 +239,7 @@ func TestDeviceStorage(t *testing.T) {
 	var backInfo ObjectInfo
 	err = dev.GetObjectInfo(handle, &backInfo)
 	if err != nil {
-		t.Fatalf("GetObjectInfo failed: %v", err)
+		t.Fatalf("getObjectInfo failed: %v", err)
 	} else {
 		t.Logf("info %#v\n", backInfo)
 	}
@@ -402,7 +247,7 @@ func TestDeviceStorage(t *testing.T) {
 	var objSize Uint64Value
 	err = dev.GetObjectPropValue(handle, OPC_ObjectSize, &objSize)
 	if err != nil {
-		t.Fatalf("GetObjectPropValue failed: %v", err)
+		t.Fatalf("getObjectPropValue failed: %v", err)
 	} else {
 		t.Logf("info %#v\n", objSize)
 	}
@@ -414,7 +259,7 @@ func TestDeviceStorage(t *testing.T) {
 	backBuf := &bytes.Buffer{}
 	err = dev.GetObject(handle, backBuf)
 	if err != nil {
-		t.Fatalf("GetObject failed: %v", err)
+		t.Fatalf("getObject failed: %v", err)
 	} else {
 		if bytes.Compare(backBuf.Bytes(), data) != 0 {
 			t.Fatalf("back comparison failed.")
@@ -429,6 +274,6 @@ func TestDeviceStorage(t *testing.T) {
 
 	err = dev.DeleteObject(handle)
 	if err != nil {
-		t.Fatalf("DeleteObject failed: %v", err)
+		t.Fatalf("deleteObject failed: %v", err)
 	}
 }

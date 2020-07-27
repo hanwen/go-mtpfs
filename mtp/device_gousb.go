@@ -5,74 +5,46 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/google/gousb"
+
 	"github.com/hanwen/usb"
 )
 
-// An MTP device.
-type Device struct {
-	h   *usb.DeviceHandle
-	dev *usb.Device
+// DeviceGoUSB implements mtp.Device.
+// It accesses libusb driver via gousb.
+type DeviceGoUSB struct {
+	dev         *gousb.Device
+	devDesc     *gousb.DeviceDesc
+	configDesc  gousb.ConfigDesc
+	ifaceDesc   gousb.InterfaceDesc
+	sendEPDesc  gousb.EndpointDesc
+	fetchEPDesc gousb.EndpointDesc
+	eventEPDesc gousb.EndpointDesc
 
-	claimed bool
+	iConfiguration int
+	iInterface     int
+	iAltSetting    int
 
-	// split off descriptor?
-	devDescr    usb.DeviceDescriptor
-	ifaceDescr  usb.InterfaceDescriptor
-	sendEP      byte
-	fetchEP     byte
-	eventEP     byte
-	configValue byte
-
-	// In milliseconds. Defaults to 2 seconds.
-	Timeout int
-
-	// Print request/response codes.
-	MTPDebug bool
-
-	// Print USB calls.
-	USBDebug bool
-
-	// Print data as it passes over the USB connection.
-	DataDebug bool
-
-	// If set, send header in separate write.
-	SeparateHeader bool
+	config  gousb.Config
+	iface   gousb.Interface
+	sendEP  *gousb.OutEndpoint
+	fetchEP *gousb.InEndpoint
+	eventEP *gousb.InEndpoint
 
 	session *sessionData
 }
 
-type sessionData struct {
-	tid uint32
-	sid uint32
-}
-
-// RCError are return codes from the Container.Code field.
-type RCError uint16
-
-func (e RCError) Error() string {
-	n, ok := RC_names[int(e)]
-	if ok {
-		return n
-	}
-	return fmt.Sprintf("RetCode %x", uint16(e))
-}
-
-func (d *Device) fetchMaxPacketSize() int {
-	return d.dev.GetMaxPacketSize(d.fetchEP)
-}
-
-func (d *Device) sendMaxPacketSize() int {
-	return d.dev.GetMaxPacketSize(d.sendEP)
+func (d *DeviceGoUSB) connected() bool {
+	return d.sendEP != nil
 }
 
 // Close releases the interface, and closes the device.
-func (d *Device) Close() error {
-	if d.h == nil {
+func (d *DeviceGoUSB) Close() error {
+	if !d.connected() {
 		return nil // or error?
 	}
 
@@ -81,122 +53,92 @@ func (d *Device) Close() error {
 		req.Code = OC_CloseSession
 		// RunTransaction runs close, so can't use CloseSession().
 
-		if err := d.runTransaction(&req, &rep, nil, nil, 0); err != nil {
-			err := d.h.Reset()
-			if d.USBDebug {
-				log.Printf("USB: Reset, err: %v", err)
-			}
-		}
-	}
-
-	if d.claimed {
-		err := d.h.ReleaseInterface(d.ifaceDescr.InterfaceNumber)
-		if d.USBDebug {
-			log.Printf("USB: ReleaseInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
-		}
-	}
-	err := d.h.Close()
-	d.h = nil
-
-	if d.USBDebug {
-		log.Printf("USB: Close, err: %v", err)
-	}
-	return err
-}
-
-// Done releases the libusb device reference.
-func (d *Device) Done() {
-	d.dev.Unref()
-	d.dev = nil
-}
-
-// Claims the USB interface of the device.
-func (d *Device) claim() error {
-	if d.h == nil {
-		return fmt.Errorf("mtp: claim: device not open")
-	}
-
-	err := d.h.ClaimInterface(d.ifaceDescr.InterfaceNumber)
-	if d.USBDebug {
-		log.Printf("USB: ClaimInterface 0x%x, err: %v", d.ifaceDescr.InterfaceNumber, err)
-	}
-	if err == nil {
-		d.claimed = true
-	}
-
-	return err
-}
-
-// Open opens an MTP device.
-func (d *Device) Open() error {
-	if d.Timeout == 0 {
-		d.Timeout = 2000
-	}
-
-	if d.h != nil {
-		return fmt.Errorf("already open")
-	}
-
-	var err error
-	d.h, err = d.dev.Open()
-	if d.USBDebug {
-		log.Printf("USB: Open, err: %v", err)
-	}
-	if err != nil {
-		return err
-	}
-
-	if d.ifaceDescr.InterfaceStringIndex == 0 {
-		// Some of the win8phones have no interface field.
-		info := DeviceInfo{}
-		d.GetDeviceInfo(&info)
-
-		if !strings.Contains(info.MTPExtension, "microsoft/WindowsPhone") {
-			d.Close()
-			return fmt.Errorf("mtp: no MTP extensions in %s", info.MTPExtension)
-		}
-	} else {
-		iface, err := d.h.GetStringDescriptorASCII(d.ifaceDescr.InterfaceStringIndex)
+		err := d.runTransaction(&req, &rep, nil, nil, 0)
 		if err != nil {
-			d.Close()
-			return err
+			log.USB.Errorf("failed to close session")
 		}
-
-		if !strings.Contains(iface, "MTP") {
-			d.Close()
-			return fmt.Errorf("has no MTP in interface string")
-		}
+		d.session = nil
 	}
 
-	d.claim()
+	err := d.config.Close()
+	if err != nil {
+		log.USB.Errorf("failed to close configuration: %s", err)
+	}
+	d.iface.Close()
+
+	d.sendEP = nil
+	d.fetchEP = nil
+	d.eventEP = nil
 	return nil
 }
 
-// ID is the manufacturer + product + serial
-func (d *Device) ID() (string, error) {
-	if d.h == nil {
-		return "", fmt.Errorf("mtp: ID: device not open")
+// Open opens an MTP device.
+func (d *DeviceGoUSB) Open() error {
+	// Unusual closing...
+	cfg, err := d.dev.Config(d.iConfiguration)
+	if err != nil {
+		return fmt.Errorf("failed to open configuration: %s", err)
 	}
 
-	var ids []string
-	for _, b := range []byte{
-		d.devDescr.Manufacturer,
-		d.devDescr.Product,
-		d.devDescr.SerialNumber} {
-		s, err := d.h.GetStringDescriptorASCII(b)
+	iface, err := cfg.Interface(d.iInterface, d.iAltSetting)
+	if err != nil {
+		cfg.Close()
+		return fmt.Errorf("failed to open interface: %s", err)
+	}
+
+	d.sendEP, err = iface.OutEndpoint(int(d.sendEPDesc.Address))
+	if err != nil {
+		cfg.Close()
+		iface.Close()
+		return fmt.Errorf("failed to open send EP: %s", err)
+	}
+
+	d.fetchEP, err = iface.InEndpoint(int(d.fetchEPDesc.Address))
+	if err != nil {
+		cfg.Close()
+		iface.Close()
+		return fmt.Errorf("failed to open fetch EP: %s", err)
+	}
+
+	d.eventEP, err = iface.InEndpoint(int(d.eventEPDesc.Number))
+	if err != nil {
+		cfg.Close()
+		iface.Close()
+		return fmt.Errorf("failed to open event EP: %s", err)
+	}
+
+	info := DeviceInfo{}
+	err = d.GetDeviceInfo(&info)
+
+	// Some of the win8phones have no interface field.
+	if len(d.ifaceDesc.AltSettings) == 0 {
+		info := DeviceInfo{}
+		err = d.GetDeviceInfo(&info)
 		if err != nil {
-			if d.USBDebug {
-				log.Printf("USB: GetStringDescriptorASCII, err: %v", err)
-			}
-			return "", err
+			log.USB.Errorf("failed to get device info: %s", err)
 		}
-		ids = append(ids, s)
+
+		if !strings.Contains(info.MTPExtension, "microsoft") {
+			err = d.Close()
+			if err != nil {
+				log.USB.Errorf("failed to close device: %s", err)
+			}
+			return fmt.Errorf("no MTP extensions in %s", info.MTPExtension)
+		}
+	} else {
+		if iface.Setting.Class != gousb.ClassPTP {
+			err = d.Close()
+			if err != nil {
+				log.USB.Errorf("failed to close device: %s", err)
+			}
+			return fmt.Errorf("interface has no MTP/PTP/Image class")
+		}
 	}
 
-	return strings.Join(ids, " "), nil
+	return nil
 }
 
-func (d *Device) sendReq(req *Container) error {
+func (d *DeviceGoUSB) sendReq(req *Container) error {
 	c := usbBulkContainer{
 		usbBulkHeader: usbBulkHeader{
 			Length:        uint32(usbHdrLen + 4*len(req.Param)),
@@ -217,8 +159,8 @@ func (d *Device) sendReq(req *Container) error {
 		panic(err)
 	}
 
-	d.dataPrint(d.sendEP, buf.Bytes())
-	_, err := d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
+	d.dataPrint(d.sendEPDesc, buf.Bytes())
+	_, err := d.bulkTransferOut(d.sendEP, buf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -227,10 +169,10 @@ func (d *Device) sendReq(req *Container) error {
 
 // Fetches one USB packet. The header is split off, and the remainder is returned.
 // dest should be at least 512bytes.
-func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
-	n, err := d.h.BulkTransfer(d.fetchEP, dest[:d.fetchMaxPacketSize()], d.Timeout)
+func (d *DeviceGoUSB) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, err error) {
+	n, err := d.bulkTransferIn(d.fetchEP, dest[:d.fetchEPDesc.MaxPacketSize])
 	if n > 0 {
-		d.dataPrint(d.fetchEP, dest[:n])
+		d.dataPrint(d.fetchEPDesc, dest[:n])
 	}
 
 	if err != nil {
@@ -244,7 +186,7 @@ func (d *Device) fetchPacket(dest []byte, header *usbBulkHeader) (rest []byte, e
 	return buf.Bytes(), nil
 }
 
-func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
+func (d *DeviceGoUSB) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error {
 	if h.Type != USB_CONTAINER_RESPONSE {
 		return SyncError(fmt.Sprintf("got type %d (%s) in response, want CONTAINER_RESPONSE.", h.Type, USB_names[int(h.Type)]))
 	}
@@ -268,12 +210,11 @@ func (d *Device) decodeRep(h *usbBulkHeader, rest []byte, rep *Container) error 
 	return nil
 }
 
-// SyncError is an error type that indicates lost transaction
-// synchronization in the protocol.
-type SyncError string
-
-func (s SyncError) Error() string {
-	return string(s)
+func (d *DeviceGoUSB) RunTransactionWithNoParams(code uint16) error {
+	var req, rep Container
+	req.Code = code
+	req.Param = []uint32{}
+	return d.RunTransaction(&req, &rep, nil, nil, 0)
 }
 
 // Runs a single MTP transaction. dest and src cannot be specified at
@@ -286,18 +227,13 @@ func (s SyncError) Error() string {
 // closing the connection. Such errors include: invalid transaction
 // IDs, USB errors (BUSY, IO, ACCESS etc.), and receiving data for
 // operations that expect no data.
-func (d *Device) RunTransaction(req *Container, rep *Container,
+func (d *DeviceGoUSB) RunTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
-	if d.h == nil {
-		return fmt.Errorf("mtp: cannot run operation %v, device is not open",
-			OC_names[int(req.Code)])
-	}
 	if err := d.runTransaction(req, rep, dest, src, writeSize); err != nil {
 		_, ok2 := err.(SyncError)
 		_, ok1 := err.(usb.Error)
 		if ok1 || ok2 {
-			log.Printf("fatal error %v; closing connection.", err)
-			d.Close()
+			return Catastrophic(fmt.Sprintf("fatal error: %s", err))
 		}
 		return err
 	}
@@ -306,7 +242,7 @@ func (d *Device) RunTransaction(req *Container, rep *Container,
 
 // runTransaction is like RunTransaction, but without sanity checking
 // before and after the call.
-func (d *Device) runTransaction(req *Container, rep *Container,
+func (d *DeviceGoUSB) runTransaction(req *Container, rep *Container,
 	dest io.Writer, src io.Reader, writeSize int64) error {
 	var finalPacket []byte
 	if d.session != nil {
@@ -315,14 +251,10 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 		d.session.tid++
 	}
 
-	if d.MTPDebug {
-		log.Printf("MTP request %s %v\n", OC_names[int(req.Code)], req.Param)
-	}
+	log.MTP.Debugf("request %s %v\n", OC_names[int(req.Code)], req.Param)
 
 	if err := d.sendReq(req); err != nil {
-		if d.MTPDebug {
-			log.Printf("MTP sendreq failed: %v\n", err)
-		}
+		log.MTP.Debugf("sendreq failed: %v\n", err)
 		return err
 	}
 
@@ -339,7 +271,7 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 			return err
 		}
 	}
-	fetchPacketSize := d.fetchMaxPacketSize()
+	fetchPacketSize := d.fetchEPDesc.MaxPacketSize
 	data := make([]byte, fetchPacketSize)
 	h := &usbBulkHeader{}
 	rest, err := d.fetchPacket(data[:], h)
@@ -351,13 +283,9 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 		if dest == nil {
 			dest = &NullWriter{}
 			unexpectedData = true
-			if d.MTPDebug {
-				log.Printf("MTP discarding unexpected data 0x%x bytes", h.Length)
-			}
+			log.MTP.Debugf("discarding unexpected data 0x%x bytes", h.Length)
 		}
-		if d.MTPDebug {
-			log.Printf("MTP data 0x%x bytes", h.Length)
-		}
+		log.MTP.Debugf("data 0x%x bytes", h.Length)
 
 		dest.Write(rest)
 
@@ -372,9 +300,7 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 
 		h = &usbBulkHeader{}
 		if len(finalPacket) > 0 {
-			if d.MTPDebug {
-				log.Printf("Reusing final packet")
-			}
+			log.MTP.Debugf("reusing final packet")
 			rest = finalPacket
 			finalBuf := bytes.NewBuffer(finalPacket[:len(finalPacket)])
 			err = binary.Read(finalBuf, binary.LittleEndian, h)
@@ -384,9 +310,7 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 	}
 
 	err = d.decodeRep(h, rest, rep)
-	if d.MTPDebug {
-		log.Printf("MTP response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
-	}
+	log.MTP.Debugf("response %s %v", getName(RC_names, int(rep.Code)), rep.Param)
 	if unexpectedData {
 		return SyncError(fmt.Sprintf("unexpected data for code %s", getName(RC_names, int(req.Code))))
 	}
@@ -403,10 +327,11 @@ func (d *Device) runTransaction(req *Container, rep *Container,
 }
 
 // Prints data going over the USB connection.
-func (d *Device) dataPrint(ep byte, data []byte) {
-	if !d.DataDebug {
+func (d *DeviceGoUSB) dataPrint(epDesc gousb.EndpointDesc, data []byte) {
+	if !log.Data.IsDebug() {
 		return
 	}
+	ep := uint8(epDesc.Address)
 	dir := "send"
 	if 0 != ep&usb.ENDPOINT_IN {
 		dir = "recv"
@@ -415,12 +340,9 @@ func (d *Device) dataPrint(ep byte, data []byte) {
 	hexDump(data)
 }
 
-// The linux usb stack can send 16kb per call, according to libusb.
-const rwBufSize = 0x4000
-
 // bulkWrite returns the number of non-header bytes written.
-func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
-	packetSize := d.sendMaxPacketSize()
+func (d *DeviceGoUSB) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
+	packetSize := d.sendEPDesc.MaxPacketSize
 	if hdr != nil {
 		if size+usbHdrLen > 0xFFFFFFFF {
 			hdr.Length = 0xFFFFFFFF
@@ -430,11 +352,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 
 		packetArr := make([]byte, packetSize)
 		var packet []byte
-		if d.SeparateHeader {
-			packet = packetArr[:usbHdrLen]
-		} else {
-			packet = packetArr[:]
-		}
+		packet = packetArr[:]
 
 		buf := bytes.NewBuffer(packet[:0])
 		binary.Write(buf, byteOrder, hdr)
@@ -444,8 +362,8 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 		}
 
 		_, err = io.CopyN(buf, r, cpSize)
-		d.dataPrint(d.sendEP, buf.Bytes())
-		_, err = d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
+		d.dataPrint(d.sendEPDesc, buf.Bytes())
+		_, err = d.bulkTransferOut(d.sendEP, buf.Bytes())
 		if err != nil {
 			return cpSize, err
 		}
@@ -468,8 +386,8 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 		}
 		size -= int64(m)
 
-		d.dataPrint(d.sendEP, buf[:m])
-		lastTransfer, err = d.h.BulkTransfer(d.sendEP, buf[:m], d.Timeout)
+		d.dataPrint(d.sendEPDesc, buf[:m])
+		lastTransfer, err = d.bulkTransferOut(d.sendEP, buf[:m])
 		n += int64(lastTransfer)
 
 		if err != nil || lastTransfer == 0 {
@@ -478,23 +396,23 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 	}
 	if lastTransfer%packetSize == 0 {
 		// write a short packet just to be sure.
-		d.h.BulkTransfer(d.sendEP, buf[:0], d.Timeout)
+		d.bulkTransferOut(d.sendEP, buf[:0])
 	}
 
 	return n, err
 }
 
-func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
+func (d *DeviceGoUSB) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 	var buf [rwBufSize]byte
 	var lastRead int
 	for {
 		toread := buf[:]
-		lastRead, err = d.h.BulkTransfer(d.fetchEP, toread, d.Timeout)
+		lastRead, err = d.bulkTransferIn(d.fetchEP, toread)
 		if err != nil {
 			break
 		}
 		if lastRead > 0 {
-			d.dataPrint(d.fetchEP, buf[:lastRead])
+			d.dataPrint(d.fetchEPDesc, buf[:lastRead])
 
 			w, err := w.Write(buf[:lastRead])
 			n += int64(w)
@@ -502,36 +420,38 @@ func (d *Device) bulkRead(w io.Writer) (n int64, lastPacket []byte, err error) {
 				break
 			}
 		}
-		if d.MTPDebug {
-			log.Printf("MTP bulk read 0x%x bytes.", lastRead)
-		}
+		log.MTP.Debugf("bulk read 0x%x bytes.", lastRead)
 		if lastRead < len(toread) {
 			// short read.
 			break
 		}
 	}
-	packetSize := d.fetchMaxPacketSize()
+	packetSize := d.fetchEPDesc.MaxPacketSize
 	if lastRead%packetSize == 0 {
 		// This should be a null packet, but on Linux + XHCI it's actually
 		// CONTAINER_OK instead. To be liberal with the XHCI behavior, return
 		// the final packet and inspect it in the calling function.
 		var nullReadSize int
-		nullReadSize, err = d.h.BulkTransfer(d.fetchEP, buf[:], d.Timeout)
-		if d.MTPDebug {
-			log.Printf("Expected null packet, read %d bytes", nullReadSize)
-		}
+		nullReadSize, err = d.bulkTransferIn(d.fetchEP, buf[:])
+		log.MTP.Debugf("expected null packet, read %d bytes", nullReadSize)
 		return n, buf[:nullReadSize], err
 	}
 	return n, buf[:0], err
 }
 
+func (d *DeviceGoUSB) bulkTransferIn(ep *gousb.InEndpoint, buf []byte) (int, error) {
+	return ep.Read(buf)
+}
+
+func (d *DeviceGoUSB) bulkTransferOut(ep *gousb.OutEndpoint, buf []byte) (int, error) {
+	return ep.Write(buf)
+}
+
 // Configure is a robust version of OpenSession. On failure, it resets
 // the device and reopens the device and the session.
-func (d *Device) Configure() error {
-	if d.h == nil {
-		if err := d.Open(); err != nil {
-			return err
-		}
+func (d *DeviceGoUSB) Configure() error {
+	if err := d.Open(); err != nil {
+		return err
 	}
 
 	err := d.OpenSession()
@@ -543,10 +463,7 @@ func (d *Device) Configure() error {
 	}
 
 	if err != nil {
-		log.Printf("OpenSession failed: %v; attempting reset", err)
-		if d.h != nil {
-			d.h.Reset()
-		}
+		log.MTP.Warningf("failed to open session: %v, attempting reset", err)
 		d.Close()
 
 		// Give the device some rest.
@@ -555,7 +472,7 @@ func (d *Device) Configure() error {
 			return fmt.Errorf("opening after reset: %v", err)
 		}
 		if err := d.OpenSession(); err != nil {
-			return fmt.Errorf("OpenSession after reset: %v", err)
+			return fmt.Errorf("openSession after reset: %v", err)
 		}
 	}
 	return nil

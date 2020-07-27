@@ -116,7 +116,7 @@ type StorageInfo struct {
 }
 
 func (d *StorageInfo) IsHierarchical() bool {
-        return d.FilesystemType == FST_GenericHierarchical
+	return d.FilesystemType == FST_GenericHierarchical
 }
 
 func (d *StorageInfo) IsDCF() bool {
@@ -124,8 +124,7 @@ func (d *StorageInfo) IsDCF() bool {
 }
 
 func (d *StorageInfo) IsRemovable() bool {
-	return (d.StorageType == ST_RemovableROM ||
-		d.StorageType == ST_RemovableRAM)
+	return d.StorageType == ST_RemovableROM || d.StorageType == ST_RemovableRAM
 }
 
 type ObjectInfo struct {
