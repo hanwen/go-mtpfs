@@ -11,15 +11,22 @@ mtplvcap + OBS turn your cameras into web cameras without HDMI capture device. E
 
 ## Verified environments
 
-Cameras:
+### Cameras
+
  - Nikon D5300
  - Nikon D3300 (thanks @unasuke)
  - I welcome feedback! Please tell me if your camera works or not.
 
-OSes:
- - Windows 10 version 1909, OS build 18363.900, MSYS2 (MinGW x86_64), amd64
- - macOS 10.15.5 Catalina, amd64
- - Debian GNU/Linux 10 Buster, amd64
+
+### OSes and other softwares
+
+|OS|OBS|Virtual camera|Browser|
+|:-|:-|:-|:-|
+|Windows 10 version 1909, Build 18363.900, amd64|25.0.8|OBS Virtualcam 2.0.5|Microsoft Edge 84.0.522.44 (Chromium Edge)|
+|macOS 10.15.5 Catalina, amd64|25.0.8|obs-mac-virtualcam 3ca8f62 v1.2.0|Google Chrome 84.0.4147.89, Microsoft Edge 84.0.522.44|
+|Debian GNU/Linux 10 Buster, amd64|25.0.7-442-ge3942061|obs-v4l2sink 1ec3c8a|Mozilla Firefox 68.10.0esr|
+
+Note: Browsers listed here are used to check if virtual cams work well. Any other browsers should work.
 
 
 ## How to install
