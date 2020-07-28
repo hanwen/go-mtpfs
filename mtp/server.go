@@ -236,13 +236,15 @@ func (s *LVServer) Run() error {
 
 	isos, _, err := s.getISOs()
 	if err != nil {
-		return fmt.Errorf("failed to obtain ISO list: %s", err)
+		log.LV.Warningf("failed to obtain ISO list: %s", err)
+		isos = []int{0}
 	}
 	s.info.ISOs = isos
 
 	fns, _, err := s.getFNs()
 	if err != nil {
-		return fmt.Errorf("failed to obtain F-values: %s", err)
+		log.LV.Warningf("failed to obtain F-values: %s", err)
+		fns = []string{"0"}
 	}
 	s.info.FNs = fns
 
@@ -349,16 +351,16 @@ func (s *LVServer) frameCaptorSakura() error {
 		}
 		_, currentISO, err := s.getISOs()
 		if err != nil {
-			log.LV.Errorf("frameCaptor: failed to get current ISO: %s", err)
-			time.Sleep(time.Second)
-			continue
+			log.LV.Warningf("frameCaptor: failed to get current ISO: %s", err)
+			currentISO = 0
 		}
+
 		_, currentFN, err := s.getFNs()
 		if err != nil {
-			log.LV.Errorf("frameCaptor: failed to get current f-number: %s", err)
-			time.Sleep(time.Second)
-			continue
+			log.LV.Warningf("frameCaptor: failed to get current f-number: %s", err)
+			currentFN = "0"
 		}
+
 		set(lv, currentISO, currentFN)
 		s.fpsRate.Incr(1)
 	}
