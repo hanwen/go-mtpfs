@@ -9,16 +9,23 @@ mtplvcap is a multi-platform (Windows/Mac/Linux) software that relays the Live V
 mtplvcap + OBS turn your cameras into web cameras without HDMI capture device. Enjoy video chatting on Google Hangouts/Meet/Zoom etc. with your favorite cameras!
 
 
-## Verified environments
+## Environments
 
-### Cameras
+### Cameras (verified)
 
  - Nikon D5300
- - Nikon D3300 (thanks @unasuke)
+ - Nikon D3300 (thanks [@unasuke](https://github.com/unasuke))
+ - Nikon D7000
  - I welcome feedback! Please tell me if your camera works or not.
 
 
-### OSes and other softwares
+### Cameras (not working; investigating)
+
+ - [Nikon D7200](https://github.com/puhitaku/mtplvcap/issues/2)
+ - [Nikon 1 J5](https://github.com/puhitaku/mtplvcap/issues/4)
+
+
+### Verified OSes and other software
 
 |OS|OBS|Virtual camera|Browser|
 |:-|:-|:-|:-|

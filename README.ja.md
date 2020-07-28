@@ -11,14 +11,21 @@ mtplvcapとOBSを組み合わせることで、NikonのカメラをHDMIキャプ
 
 ## 動作を確認しているもの
 
-### カメラ
+### カメラ（確認済み）
 
  - Nikon D5300
- - Nikon D3300 (thanks @unasuke)
+ - Nikon D3300 (thanks [@unasuke](https://github.com/unasuke))
+ - Nikon D7000
  - フィードバック歓迎！お手持ちのカメラの動作可否を是非Issueにあげてください。
 
 
-### OSとその他のソフト
+### カメラ（現在動作せず・調査中）
+
+ - [Nikon D7200](https://github.com/puhitaku/mtplvcap/issues/2)
+ - [Nikon 1 J5](https://github.com/puhitaku/mtplvcap/issues/4)
+
+
+### 確認済みのOSとその他のソフト
 
 |OS|OBS|仮想カメラ|ブラウザ|
 |:-|:-|:-|:-|
