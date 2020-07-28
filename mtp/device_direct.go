@@ -131,7 +131,7 @@ func (d *DeviceDirect) Open() error {
 
 		if !strings.Contains(info.MTPExtension, "microsoft") {
 			d.Close()
-			return fmt.Errorf("mtp: no MTP extensions in %s", info.MTPExtension)
+			return fmt.Errorf("mtp: no MTP extensions in '%s'", info.MTPExtension)
 		}
 	} else {
 		iface, err := d.h.GetStringDescriptorASCII(d.ifaceDescr.InterfaceStringIndex)
