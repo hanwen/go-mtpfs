@@ -168,7 +168,7 @@ func SelectDeviceDirect(vid, pid uint16) (*DeviceDirect, error) {
 	}
 
 	if err := dev.Open(); err != nil {
-		return nil, fmt.Errorf("could not open %04x:%04x", dev.devDescr.IdVendor, dev.devDescr.IdProduct)
+		return nil, fmt.Errorf("could not open %04x:%04x: %s", dev.devDescr.IdVendor, dev.devDescr.IdProduct, err)
 	}
 
 	config, err := dev.h.GetConfiguration()
