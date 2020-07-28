@@ -129,7 +129,7 @@ func (d *DeviceDirect) Open() error {
 		info := DeviceInfo{}
 		d.GetDeviceInfo(&info)
 
-		if !strings.Contains(info.MTPExtension, "microsoft") {
+		if !strings.Contains(info.MTPExtension, "icrosoft") {
 			d.Close()
 			return fmt.Errorf("mtp: no MTP extensions in '%s'", info.MTPExtension)
 		}
