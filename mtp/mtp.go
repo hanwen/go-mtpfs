@@ -145,7 +145,7 @@ func (d *Device) Open() error {
 	if err != nil {
 		return err
 	}
-	
+
 	d.claim()
 
 	if d.ifaceDescr.InterfaceStringIndex == 0 {
@@ -164,7 +164,8 @@ func (d *Device) Open() error {
 			return err
 		}
 
-		if !strings.Contains(iface, "MTP") {
+		// support for older samsung phones
+		if !strings.Contains(iface, "MTP") && !strings.Contains(iface, "CDC") && !strings.Contains(iface, "ACM") {
 			d.Close()
 			return fmt.Errorf("has no MTP in interface string")
 		}
