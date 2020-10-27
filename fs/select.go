@@ -4,7 +4,7 @@ import (
 	"log"
 	"regexp"
 
-	"github.com/hanwen/go-mtpfs/mtp"
+	"github.com/hanwen/ganeshrvel/mtp"
 )
 
 func SelectStorages(dev *mtp.Device, pat string) ([]uint32, error) {

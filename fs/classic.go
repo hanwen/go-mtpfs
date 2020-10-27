@@ -11,7 +11,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/hanwen/go-mtpfs/mtp"
+	"github.com/hanwen/ganeshrvel/mtp"
 )
 
 type classicNode struct {
