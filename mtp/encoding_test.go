@@ -55,10 +55,7 @@ func parseHex(s string) []byte {
 }
 
 func diffIndex(a, b []byte) error {
-	l := len(b)
-	if len(a) < len(b) {
-		l = len(a)
-	}
+	l := min(len(a), len(b))
 
 	for i := 0; i < l; i++ {
 		if a[i] != b[i] {

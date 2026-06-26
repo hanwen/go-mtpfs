@@ -38,7 +38,7 @@ type DeviceInfo struct {
 // DataTypeSelector is the special type to indicate the actual type of
 // fields of DataDependentType.
 type DataTypeSelector uint16
-type DataDependentType interface{}
+type DataDependentType any
 
 // The Decoder interface is for types that need special decoding
 // support, eg. the ones using DataDependentType.
@@ -71,7 +71,7 @@ type DevicePropDescFixed struct {
 
 type DevicePropDesc struct {
 	DevicePropDescFixed
-	Form interface{}
+	Form any
 }
 
 type ObjectPropDescFixed struct {
@@ -85,7 +85,7 @@ type ObjectPropDescFixed struct {
 
 type ObjectPropDesc struct {
 	ObjectPropDescFixed
-	Form interface{}
+	Form any
 }
 
 type Uint32Array struct {
@@ -116,7 +116,7 @@ type StorageInfo struct {
 }
 
 func (d *StorageInfo) IsHierarchical() bool {
-        return d.FilesystemType == FST_GenericHierarchical
+	return d.FilesystemType == FST_GenericHierarchical
 }
 
 func (d *StorageInfo) IsDCF() bool {

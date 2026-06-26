@@ -309,7 +309,7 @@ func encodeField(w io.Writer, f reflect.Value) error {
 }
 
 // Decode MTP data stream into data structure.
-func Decode(r io.Reader, iface interface{}) error {
+func Decode(r io.Reader, iface any) error {
 	decoder, ok := iface.(Decoder)
 	if ok {
 		return decoder.Decode(r)
@@ -319,7 +319,7 @@ func Decode(r io.Reader, iface interface{}) error {
 	return decodeWithSelector(r, iface, typeSel)
 }
 
-func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector) error {
+func decodeWithSelector(r io.Reader, iface any, typeSel DataTypeSelector) error {
 	val := reflect.ValueOf(iface)
 	if val.Kind() != reflect.Ptr {
 		return fmt.Errorf("need ptr argument: %T", iface)
@@ -340,7 +340,7 @@ func decodeWithSelector(r io.Reader, iface interface{}, typeSel DataTypeSelector
 }
 
 // Encode MTP data stream into data structure.
-func Encode(w io.Writer, iface interface{}) error {
+func Encode(w io.Writer, iface any) error {
 	encoder, ok := iface.(Encoder)
 	if ok {
 		return encoder.Encode(w)
@@ -366,7 +366,7 @@ func Encode(w io.Writer, iface interface{}) error {
 
 // Instantiates an object of wanted type as addressable value.
 func InstantiateType(t DataTypeSelector) reflect.Value {
-	var val interface{}
+	var val any
 	switch t {
 	case DTC_INT8:
 		v := int8(0)

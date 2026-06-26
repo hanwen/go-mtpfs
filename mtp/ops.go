@@ -49,7 +49,7 @@ func (d *Device) CloseSession() error {
 	return err
 }
 
-func (d *Device) GetData(req *Container, info interface{}) error {
+func (d *Device) GetData(req *Container, info any) error {
 	var buf bytes.Buffer
 	var rep Container
 	if err := d.RunTransaction(req, &rep, &buf, nil, 0); err != nil {
@@ -81,21 +81,21 @@ func (d *Device) GetObjectPropDesc(objPropCode, objFormatCode uint16, info *Obje
 	return d.GetData(&req, info)
 }
 
-func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
+func (d *Device) GetObjectPropValue(objHandle uint32, objPropCode uint16, value any) error {
 	var req Container
 	req.Code = OC_MTP_GetObjectPropValue
 	req.Param = []uint32{objHandle, uint32(objPropCode)}
 	return d.GetData(&req, value)
 }
 
-func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value interface{}) error {
+func (d *Device) SetObjectPropValue(objHandle uint32, objPropCode uint16, value any) error {
 	var req, rep Container
 	req.Code = OC_MTP_SetObjectPropValue
 	req.Param = []uint32{objHandle, uint32(objPropCode)}
 	return d.SendData(&req, &rep, value)
 }
 
-func (d *Device) SendData(req *Container, rep *Container, value interface{}) error {
+func (d *Device) SendData(req *Container, rep *Container, value any) error {
 	var buf bytes.Buffer
 	if err := Encode(&buf, value); err != nil {
 		return err
@@ -121,14 +121,14 @@ func (d *Device) GetDevicePropDesc(propCode uint16, info *DevicePropDesc) error 
 	return d.GetData(&req, info)
 }
 
-func (d *Device) SetDevicePropValue(propCode uint32, src interface{}) error {
+func (d *Device) SetDevicePropValue(propCode uint32, src any) error {
 	var req, rep Container
 	req.Code = OC_SetDevicePropValue
 	req.Param = []uint32{propCode}
 	return d.SendData(&req, &rep, src)
 }
 
-func (d *Device) GetDevicePropValue(propCode uint32, dest interface{}) error {
+func (d *Device) GetDevicePropValue(propCode uint32, dest any) error {
 	var req Container
 	req.Code = OC_GetDevicePropValue
 	req.Param = []uint32{propCode}

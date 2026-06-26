@@ -10,17 +10,11 @@ import (
 func hexDump(data []byte) {
 	i := 0
 	for i < len(data) {
-		next := i + 16
-		if next > len(data) {
-			next = len(data)
-		}
+		next := min(i+16, len(data))
 		ss := []string{}
 		s := fmt.Sprintf("%x", data[i:next])
 		for j := 0; j < len(s); j += 4 {
-			e := j + 4
-			if len(s) < e {
-				e = len(s)
-			}
+			e := min(len(s), j+4)
 			ss = append(ss, s[j:e])
 		}
 		chars := make([]byte, next-i)

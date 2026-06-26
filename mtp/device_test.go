@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -378,13 +379,7 @@ func TestDeviceStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetObjectHandles failed: %v", err)
 	} else {
-		found := false
-		for _, h := range hs.Values {
-			if h == handle {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(hs.Values, handle)
 
 		if !found {
 			t.Fatalf("uploaded file is not there")

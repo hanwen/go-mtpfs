@@ -438,10 +438,7 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 
 		buf := bytes.NewBuffer(packet[:0])
 		binary.Write(buf, byteOrder, hdr)
-		cpSize := int64(len(packet) - usbHdrLen)
-		if cpSize > size {
-			cpSize = size
-		}
+		cpSize := min(int64(len(packet)-usbHdrLen), size)
 
 		_, err = io.CopyN(buf, r, cpSize)
 		d.dataPrint(d.sendEP, buf.Bytes())
