@@ -421,6 +421,9 @@ const rwBufSize = 0x4000
 // bulkWrite returns the number of non-header bytes written.
 func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64, err error) {
 	packetSize := d.sendMaxPacketSize()
+	// Length of the last bulk transfer of the data phase, to decide
+	// whether a terminating zero-length packet is needed.
+	var lastChunk int
 	if hdr != nil {
 		if size+usbHdrLen > 0xFFFFFFFF {
 			hdr.Length = 0xFFFFFFFF
@@ -442,10 +445,12 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 
 		_, err = io.CopyN(buf, r, cpSize)
 		d.dataPrint(d.sendEP, buf.Bytes())
-		_, err = d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
+		var sent int
+		sent, err = d.h.BulkTransfer(d.sendEP, buf.Bytes(), d.Timeout)
 		if err != nil {
 			return cpSize, err
 		}
+		lastChunk = sent
 		size -= cpSize
 		n += cpSize
 	}
@@ -468,13 +473,19 @@ func (d *Device) bulkWrite(hdr *usbBulkHeader, r io.Reader, size int64) (n int64
 		d.dataPrint(d.sendEP, buf[:m])
 		lastTransfer, err = d.h.BulkTransfer(d.sendEP, buf[:m], d.Timeout)
 		n += int64(lastTransfer)
+		if lastTransfer > 0 {
+			lastChunk = lastTransfer
+		}
 
 		if err != nil || lastTransfer == 0 {
 			break
 		}
 	}
-	if lastTransfer%packetSize == 0 {
-		// write a short packet just to be sure.
+	// End the data phase on a short packet: send a ZLP iff the last
+	// transfer was a nonzero multiple of the packet size. A spurious
+	// ZLP stalls some devices (Pixel 9) until the USB timeout; a
+	// missing one hangs the device read (SeparateHeader payloads).
+	if lastChunk > 0 && lastChunk%packetSize == 0 {
 		d.h.BulkTransfer(d.sendEP, buf[:0], d.Timeout)
 	}
 

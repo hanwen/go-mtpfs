@@ -12,6 +12,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/hanwen/go-mtpfs/mtp"
+	"golang.org/x/sys/unix"
 )
 
 type classicNode struct {
@@ -194,6 +195,20 @@ type pendingFile struct {
 	node     *classicNode
 }
 
+// loopbackFromFile moves f's descriptor into a LoopbackFile and
+// closes f. Passing f.Fd() directly and dropping f leaks the
+// *os.File to the GC, whose finalizer closes the fd behind the
+// loopback handle (EBADF on later writes). F_DUPFD_CLOEXEC keeps
+// the duplicate close-on-exec, like the *os.File it came from.
+func loopbackFromFile(f *os.File) (fs.FileHandle, error) {
+	fd, err := unix.FcntlInt(f.Fd(), unix.F_DUPFD_CLOEXEC, 0)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	return fs.NewLoopbackFile(fd), nil
+}
+
 func (p *pendingFile) rwLoopback() (fs.FileHandle, syscall.Errno) {
 	if p.loopback == nil {
 		if err := p.node.fetch(); err != nil {
@@ -204,7 +219,11 @@ func (p *pendingFile) rwLoopback() (fs.FileHandle, syscall.Errno) {
 			return nil, fs.ToErrno(err)
 		}
 
-		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
+		lb, err := loopbackFromFile(f)
+		if err != nil {
+			return nil, fs.ToErrno(err)
+		}
+		p.loopback = lb
 	}
 	return p.loopback, 0
 }
@@ -221,7 +240,11 @@ func (p *pendingFile) Read(ctx context.Context, data []byte, off int64) (fuse.Re
 		if err != nil {
 			return nil, fs.ToErrno(err)
 		}
-		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
+		lb, err := loopbackFromFile(f)
+		if err != nil {
+			return nil, fs.ToErrno(err)
+		}
+		p.loopback = lb
 	}
 	return p.loopback.(fs.FileReader).Read(ctx, data, off)
 }
@@ -357,6 +380,9 @@ func (fs *deviceFS) setupClassic() error {
 
 func (dfs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file fs.FileHandle, node fs.InodeEmbedder, err error) {
 	backingFile, err := ioutil.TempFile(dfs.options.Dir, "")
+	if err != nil {
+		return nil, nil, err
+	}
 	cl := &classicNode{
 		mtpNodeImpl: mtpNodeImpl{
 			obj: &obj,
@@ -365,8 +391,13 @@ func (dfs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file fs.FileHandle, 
 		dirty:   true,
 		backing: backingFile.Name(),
 	}
+	lb, err := loopbackFromFile(backingFile)
+	if err != nil {
+		os.Remove(cl.backing)
+		return nil, nil, err
+	}
 	file = &pendingFile{
-		loopback: fs.NewLoopbackFile(int(backingFile.Fd())),
+		loopback: lb,
 		node:     cl,
 	}
 
