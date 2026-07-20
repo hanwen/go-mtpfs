@@ -204,7 +204,7 @@ func (p *pendingFile) rwLoopback() (fs.FileHandle, syscall.Errno) {
 			return nil, fs.ToErrno(err)
 		}
 
-		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
+		p.loopback = fs.NewLoopbackFileFromOS(f)
 	}
 	return p.loopback, 0
 }
@@ -221,7 +221,7 @@ func (p *pendingFile) Read(ctx context.Context, data []byte, off int64) (fuse.Re
 		if err != nil {
 			return nil, fs.ToErrno(err)
 		}
-		p.loopback = fs.NewLoopbackFile(int(f.Fd()))
+		p.loopback = fs.NewLoopbackFileFromOS(f)
 	}
 	return p.loopback.(fs.FileReader).Read(ctx, data, off)
 }
@@ -366,7 +366,7 @@ func (dfs *deviceFS) createClassicFile(obj mtp.ObjectInfo) (file fs.FileHandle, 
 		backing: backingFile.Name(),
 	}
 	file = &pendingFile{
-		loopback: fs.NewLoopbackFile(int(backingFile.Fd())),
+		loopback: fs.NewLoopbackFileFromOS(backingFile),
 		node:     cl,
 	}
 
