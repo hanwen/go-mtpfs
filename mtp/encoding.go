@@ -34,9 +34,23 @@ func decodeStr(r io.Reader) (string, error) {
 	w := 0
 	for i := 0; i < int(2*sz); i += 2 {
 		cp := byteOrder.Uint16(data[i:])
+
+		// Handle UTF-16 surrogate pairs for characters above U+FFFF (e.g. emoji)
+		if cp >= 0xD800 && cp <= 0xDBFF && i+2 < int(2*sz) {
+			// High surrogate found, read the next code unit
+			low := byteOrder.Uint16(data[i+2:])
+			if low >= 0xDC00 && low <= 0xDFFF {
+				// Valid surrogate pair: combine into a single rune
+				combined := (rune(cp-0xD800) << 10) | rune(low-0xDC00) + 0x10000
+				w += utf8.EncodeRune(utfStr[w:], combined)
+				i += 2 // skip the low surrogate
+				continue
+			}
+		}
+
 		w += utf8.EncodeRune(utfStr[w:], rune(cp))
 	}
-	if utfStr[w-1] == 0 {
+	if w > 0 && utfStr[w-1] == 0 {
 		w--
 	}
 	s := string(utfStr[:w])
@@ -52,11 +66,23 @@ func encodeStr(buf []byte, s string) ([]byte, error) {
 	codepoints := 0
 	buf = append(buf[:0], 0)
 
-	var rune [2]byte
 	for _, r := range s {
-		byteOrder.PutUint16(rune[:], uint16(r))
-		buf = append(buf, rune[0], rune[1])
-		codepoints++
+		if r >= 0x10000 {
+			// Character above BMP: encode as UTF-16 surrogate pair
+			r -= 0x10000
+			high := uint16(0xD800 + (r >> 10))
+			low := uint16(0xDC00 + (r & 0x3FF))
+			var pair [4]byte
+			byteOrder.PutUint16(pair[0:2], high)
+			byteOrder.PutUint16(pair[2:4], low)
+			buf = append(buf, pair[0], pair[1], pair[2], pair[3])
+			codepoints += 2 // surrogate pair counts as 2 UTF-16 code units
+		} else {
+			var unit [2]byte
+			byteOrder.PutUint16(unit[:], uint16(r))
+			buf = append(buf, unit[0], unit[1])
+			codepoints++
+		}
 	}
 	buf = append(buf, 0, 0)
 	codepoints++
@@ -69,7 +95,8 @@ func encodeStr(buf []byte, s string) ([]byte, error) {
 }
 
 func encodeStrField(w io.Writer, f reflect.Value) error {
-	out := make([]byte, 2*f.Len()+4)
+	// Allocate enough space: each rune can become a surrogate pair (4 bytes) + length byte + null terminator
+	out := make([]byte, 4*f.Len()+4)
 	enc, err := encodeStr(out, f.Interface().(string))
 	if err != nil {
 		return err
